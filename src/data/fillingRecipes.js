@@ -1,191 +1,226 @@
 export const fillingRecipes = [
   {
-    id: 'red-bean-paste',
-    name: '红豆沙',
-    description: '传统红豆沙馅料',
+    id: "抹茶爆浆可颂奶油",
+    name: "抹茶爆浆可颂奶油",
+    description:
+      "将抹茶粉、芝士奶酪、砂糖打发软化至无颗粒。注意奶油储存温度控制在2-7度，搅拌缸温度2-7度，奶油打发至八成。",
     ingredients: [
-      { ingredientId: 'red-beans', quantity: 500, unit: '克' },
-      { ingredientId: 'sugar', quantity: 300, unit: '克' },
-      { ingredientId: 'oil', quantity: 100, unit: '克' },
-      { ingredientId: 'water', quantity: 1000, unit: '毫升' }
+      { ingredientId: "kiri奶油奶酪", quantity: 50, unit: "克" },
+      { ingredientId: "琪雷萨马斯卡彭", quantity: 50, unit: "克" },
+      { ingredientId: "TS韩国幼砂糖", quantity: 30, unit: "克" },
+      { ingredientId: "趁热集合抹茶粉（RS-1）", quantity: 10, unit: "克" },
+      { ingredientId: "安佳淡奶油", quantity: 250, unit: "克" },
     ],
-    yield: 850,
-    unit: '克',
-    subFillings: []
+    yield: 390,
+    unit: "克",
+    subFillings: [],
   },
   {
-    id: 'sweet-cream',
-    name: '甜奶油',
-    description: '香甜的奶油馅料',
+    id: "酸奶奶油",
+    name: "酸奶奶油",
+    description: "香甜的奶油馅料",
     ingredients: [
-      { ingredientId: 'heavy-cream', quantity: 500, unit: '毫升' },
-      { ingredientId: 'sugar', quantity: 100, unit: '克' },
-      { ingredientId: 'vanilla-extract', quantity: 10, unit: '毫升' }
+      { ingredientId: "法布芮冰淇淋基底粉", quantity: 5, unit: "克" },
+      { ingredientId: "马斯特萝酸奶预拌粉", quantity: 15, unit: "克" },
+      { ingredientId: "太古一级糖霜A级", quantity: 10, unit: "克" },
+      { ingredientId: "安佳淡奶油", quantity: 200, unit: "克" },
     ],
-    yield: 580,
-    unit: '克',
-    subFillings: []
+    yield: 230,
+    unit: "克",
+    subFillings: [],
   },
   {
-    id: 'chocolate-filling',
-    name: '巧克力馅',
-    description: '浓郁巧克力馅料',
+    id: "巧克力淋面",
+    name: "巧克力淋面",
+    description:
+      "将特调可可酱切成小块，与巧克力放入盆中。隔水加热至融化，过程中不能进水，融化温度不能超过70度。",
     ingredients: [
-      { ingredientId: 'chocolate', quantity: 300, unit: '克' },
-      { ingredientId: 'butter', quantity: 100, unit: '克' },
-      { ingredientId: 'milk', quantity: 100, unit: '毫升' },
-      { ingredientId: 'sugar', quantity: 50, unit: '克' }
+      { ingredientId: "64%巧克力", quantity: 400, unit: "克" },
+      { ingredientId: "特调可可酱", quantity: 600, unit: "克" },
     ],
-    yield: 450,
-    unit: '克',
-    subFillings: []
+    yield: 1000,
+    unit: "克",
+    subFillings: [],
   },
   {
-    id: 'custard',
-    name: '卡仕达酱',
-    description: '经典法式卡仕达酱',
+    id: "哈斗馅",
+    name: "哈斗馅",
+    description: "经典法式卡仕达酱",
     ingredients: [
-      { ingredientId: 'milk', quantity: 500, unit: '毫升' },
-      { ingredientId: 'egg-yolk', quantity: 100, unit: '克' },
-      { ingredientId: 'sugar', quantity: 120, unit: '克' },
-      { ingredientId: 'cornstarch', quantity: 30, unit: '克' },
-      { ingredientId: 'vanilla-extract', quantity: 5, unit: '毫升' }
+      { ingredientId: "百利凝胶片", quantity: 6, unit: "克" },
+      { ingredientId: "纯牛奶", quantity: 150, unit: "克" },
+      { ingredientId: "安佳淡奶油", quantity: 600, unit: "克" },
+      { ingredientId: "西树可可64%巧克力", quantity: 600, unit: "克" },
+      { ingredientId: "安佳淡奶油", quantity: 600, unit: "克" },
+      { ingredientId: "甘露咖啡力娇酒系列", quantity: 13, unit: "克" },
+    ],
+    yield: 1969,
+    unit: "克",
+    subFillings: [],
+  },
+  {
+    id: "奶贝糖粉",
+    name: "奶贝糖粉",
+    description: "带有杏仁风味的奶油馅",
+    ingredients: [
+      { ingredientId: "防潮糖粉", quantity: 100, unit: "克" },
+      { ingredientId: "新西兰全脂奶粉", quantity: 100, unit: "克" },
+    ],
+    yield: 200,
+    unit: "克",
+    subFillings: [],
+  },
+  {
+    id: "甘纳许-巧克力淋面",
+    name: "甘纳许-巧克力淋面",
+    description: "带有抹茶风味的卡仕达酱",
+    ingredients: [
+      { ingredientId: "64%巧克力", quantity: 80, unit: "克" },
+      { ingredientId: "纯牛奶", quantity: 38, unit: "克" },
+      { ingredientId: "安佳淡奶油", quantity: 25, unit: "克" },
+      { ingredientId: "龙眼蜂蜜", quantity: 8, unit: "克" },
+      { ingredientId: "安佳无盐大黄油", quantity: 15, unit: "克" },
+    ],
+    yield: 166,
+    unit: "克",
+    subFillings: [],
+  },
+  {
+    id: "甘纳许-巧克力淋面",
+    name: "甘纳许-巧克力淋面",
+    description: "带有抹茶风味的卡仕达酱",
+    ingredients: [
+      { ingredientId: "64%巧克力", quantity: 80, unit: "克" },
+      { ingredientId: "纯牛奶", quantity: 38, unit: "克" },
+      { ingredientId: "安佳淡奶油", quantity: 25, unit: "克" },
+      { ingredientId: "龙眼蜂蜜", quantity: 8, unit: "克" },
+      { ingredientId: "安佳无盐大黄油", quantity: 15, unit: "克" },
+    ],
+    yield: 166,
+    unit: "克",
+    subFillings: [],
+  },
+  {
+    id: "开心果妙香奶油",
+    name: "水果酱",
+    description: "混合水果酱",
+    ingredients: [
+      { ingredientId: "开心果酱", quantity: 500, unit: "克" },
+      { ingredientId: "纯牛奶", quantity: 200, unit: "克" },
+      {
+        ingredientId: "新悦纯牧超高温灭菌搅打稀奶油",
+        quantity: 30,
+        unit: "克",
+      },
     ],
     yield: 600,
-    unit: '克',
-    subFillings: []
-  },
-  {
-    id: 'almond-cream',
-    name: '杏仁奶油',
-    description: '带有杏仁风味的奶油馅',
-    ingredients: [
-      { ingredientId: 'butter', quantity: 200, unit: '克' },
-      { ingredientId: 'sugar', quantity: 200, unit: '克' },
-      { ingredientId: 'egg', quantity: 200, unit: '克' },
-      { ingredientId: 'almond-powder', quantity: 200, unit: '克' },
-      { ingredientId: 'flour', quantity: 50, unit: '克' }
+    unit: "克",
+    subFillings: [
+      {
+        subFillingId: "香草卡仕达",
+        name: "香草卡仕达",
+        quantity: 50,
+        unit: "克",
+        recipeId: "香草卡仕达",
+      },
     ],
-    yield: 620,
-    unit: '克',
-    subFillings: []
   },
   {
-    id: 'matcha-custard',
-    name: '抹茶卡仕达',
-    description: '带有抹茶风味的卡仕达酱',
+    id: "香草卡仕达",
+    name: "香草卡仕达",
+    description: "带有榛子风味的巧克力馅",
     ingredients: [
-      { ingredientId: 'milk', quantity: 400, unit: '毫升' },
-      { ingredientId: 'egg-yolk', quantity: 80, unit: '克' },
-      { ingredientId: 'sugar', quantity: 100, unit: '克' },
-      { ingredientId: 'cornstarch', quantity: 25, unit: '克' },
-      { ingredientId: 'matcha-powder', quantity: 20, unit: '克' }
+      { ingredientId: "纯牛奶", quantity: 675, unit: "克" },
+      { ingredientId: "香草味调味料", quantity: 15, unit: "克" },
+      {
+        ingredientId: "蛋黄液",
+        quantity: 170,
+        unit: "克",
+      },
+      { ingredientId: "TS韩国幼砂糖", quantity: 162, unit: "克" },
+      { ingredientId: "家乐鹰栗粉（玉米淀粉）", quantity: 63, unit: "克" },
+      {
+        ingredientId: "MG黄油",
+        quantity: 27,
+        unit: "克",
+      },
     ],
-    yield: 500,
-    unit: '克',
-    subFillings: []
+    yield: 1112,
+    unit: "克",
+    subFillings: [],
   },
   {
-    id: 'fruit-compote',
-    name: '水果酱',
-    description: '混合水果酱',
+    id: "apple-cinnamon",
+    name: "苹果肉桂馅",
+    description: "苹果与肉桂的经典组合",
     ingredients: [
-      { ingredientId: 'mixed-fruits', quantity: 500, unit: '克' },
-      { ingredientId: 'sugar', quantity: 200, unit: '克' },
-      { ingredientId: 'lemon-juice', quantity: 30, unit: '毫升' },
-      { ingredientId: 'water', quantity: 50, unit: '毫升' }
-    ],
-    yield: 600,
-    unit: '克',
-    subFillings: []
-  },
-  {
-    id: 'hazelnut-chocolate',
-    name: '榛子巧克力',
-    description: '带有榛子风味的巧克力馅',
-    ingredients: [
-      { ingredientId: 'chocolate', quantity: 250, unit: '克' },
-      { ingredientId: 'hazelnut', quantity: 100, unit: '克' },
-      { ingredientId: 'butter', quantity: 50, unit: '克' },
-      { ingredientId: 'sugar', quantity: 50, unit: '克' }
-    ],
-    yield: 400,
-    unit: '克',
-    subFillings: []
-  },
-  {
-    id: 'apple-cinnamon',
-    name: '苹果肉桂馅',
-    description: '苹果与肉桂的经典组合',
-    ingredients: [
-      { ingredientId: 'apple', quantity: 600, unit: '克' },
-      { ingredientId: 'sugar', quantity: 150, unit: '克' },
-      { ingredientId: 'cinnamon', quantity: 5, unit: '克' },
-      { ingredientId: 'lemon-juice', quantity: 20, unit: '毫升' },
-      { ingredientId: 'butter', quantity: 30, unit: '克' },
-      { ingredientId: 'flour', quantity: 20, unit: '克' }
+      { ingredientId: "apple", quantity: 600, unit: "克" },
+      { ingredientId: "sugar", quantity: 150, unit: "克" },
+      { ingredientId: "cinnamon", quantity: 5, unit: "克" },
+      { ingredientId: "lemon-juice", quantity: 20, unit: "毫升" },
+      { ingredientId: "butter", quantity: 30, unit: "克" },
+      { ingredientId: "flour", quantity: 20, unit: "克" },
     ],
     yield: 650,
-    unit: '克',
-    subFillings: []
+    unit: "克",
+    subFillings: [],
   },
   {
-    id: 'cream-cheese',
-    name: '奶油奶酪馅',
-    description: '浓郁的奶油奶酪馅',
+    id: "cream-cheese",
+    name: "奶油奶酪馅",
+    description: "浓郁的奶油奶酪馅",
     ingredients: [
-      { ingredientId: 'cream-cheese', quantity: 500, unit: '克' },
-      { ingredientId: 'sugar', quantity: 150, unit: '克' },
-      { ingredientId: 'egg', quantity: 100, unit: '克' },
-      { ingredientId: 'vanilla-extract', quantity: 5, unit: '毫升' }
+      { ingredientId: "cream-cheese", quantity: 500, unit: "克" },
+      { ingredientId: "sugar", quantity: 150, unit: "克" },
+      { ingredientId: "egg", quantity: 100, unit: "克" },
+      { ingredientId: "vanilla-extract", quantity: 5, unit: "毫升" },
     ],
     yield: 620,
-    unit: '克',
+    unit: "克",
     subFillings: [
       {
-        subFillingId: 'fruit-topping',
-        name: '水果浇头',
+        subFillingId: "fruit-topping",
+        name: "水果浇头",
         quantity: 150,
-        unit: '克',
-        recipeId: 'fruit-compote'
-      }
-    ]
+        unit: "克",
+        recipeId: "fruit-compote",
+      },
+    ],
   },
   {
-    id: 'triple-chocolate',
-    name: '三重巧克力',
-    description: '黑巧克力、牛奶巧克力与白巧克力的组合',
+    id: "triple-chocolate",
+    name: "三重巧克力",
+    description: "黑巧克力、牛奶巧克力与白巧克力的组合",
     ingredients: [
-      { ingredientId: 'dark-chocolate', quantity: 100, unit: '克' },
-      { ingredientId: 'milk-chocolate', quantity: 100, unit: '克' },
-      { ingredientId: 'white-chocolate', quantity: 100, unit: '克' },
-      { ingredientId: 'heavy-cream', quantity: 150, unit: '毫升' },
-      { ingredientId: 'butter', quantity: 50, unit: '克' }
+      { ingredientId: "dark-chocolate", quantity: 100, unit: "克" },
+      { ingredientId: "milk-chocolate", quantity: 100, unit: "克" },
+      { ingredientId: "white-chocolate", quantity: 100, unit: "克" },
+      { ingredientId: "heavy-cream", quantity: 150, unit: "毫升" },
+      { ingredientId: "butter", quantity: 50, unit: "克" },
     ],
     yield: 400,
-    unit: '克',
+    unit: "克",
     subFillings: [
       {
-        subFillingId: 'hazelnut-crunch',
-        name: '榛子脆片',
+        subFillingId: "hazelnut-crunch",
+        name: "榛子脆片",
         quantity: 50,
-        unit: '克',
-        recipeId: 'red-bean-paste'
-      }
-    ]
+        unit: "克",
+        recipeId: "red-bean-paste",
+      },
+    ],
   },
   {
-    id: 'hazelnut-crunch',
-    name: '榛子脆片',
-    description: '碾碎的榛子与焦糖混合',
+    id: "hazelnut-crunch",
+    name: "榛子脆片",
+    description: "碾碎的榛子与焦糖混合",
     ingredients: [
-      { ingredientId: 'hazelnut', quantity: 100, unit: '克' },
-      { ingredientId: 'sugar', quantity: 50, unit: '克' },
-      { ingredientId: 'water', quantity: 20, unit: '毫升' }
+      { ingredientId: "hazelnut", quantity: 100, unit: "克" },
+      { ingredientId: "sugar", quantity: 50, unit: "克" },
+      { ingredientId: "water", quantity: 20, unit: "毫升" },
     ],
     yield: 120,
-    unit: '克',
-    subFillings: []
-  }
+    unit: "克",
+    subFillings: [],
+  },
 ];
-  

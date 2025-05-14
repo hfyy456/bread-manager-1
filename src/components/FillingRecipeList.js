@@ -69,8 +69,11 @@ const FillingRecipeList = () => {
                             variant="body2"
                             sx={{ fontFamily: "Inter, sans-serif" }}
                           >
-                            - {ingredient?.name || "未知配料"}: {ing.quantity}
-                            {ingredient?.unit || ""}
+                            -{" "}
+                            {ingredient?.name ||
+                              "未知配料" + "-" + ing.ingredientId}
+                            : {ing.quantity}
+                            {ing?.unit || ""}
                           </Typography>
                         );
                       })}
