@@ -25,7 +25,7 @@ const BreadList = () => {
           
           // 构建装饰信息
           const decorationInfo = bread.decorations?.map(decoration => {
-            const ingredient = ingredients.find(ing => ing.id === decoration.ingredientId);
+            const ingredient = ingredients.find(ing => ing.name === decoration.ingredientId);
             return `${ingredient?.name || '未知配料'} (${decoration.quantity}${decoration.unit})`;
           }).join(', ') || '无';
           

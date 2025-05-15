@@ -435,4 +435,100 @@ export const doughRecipes = [
     unit: "克",
     preFerments: [],
   },
+  {
+    id: "软法面团",
+    name: "软法面团",
+    description: "使用中种法制作的面团",
+    ingredients: [
+      { ingredientId: "顶焙良品精制面包粉", quantity: 300, unit: "克" },
+      { ingredientId: "趁热红立方小麦粉", quantity: 700, unit: "克" },
+      { ingredientId: "燕子鲜酵母（金燕）", quantity: 30, unit: "克" },
+      {
+        ingredientId: "新西兰全脂奶粉",
+        quantity: 22,
+        unit: "克",
+      },
+      {
+        ingredientId: "中盐精制盐(加碘)",
+        quantity: 17,
+        unit: "克",
+      },
+      {
+        ingredientId: "科麦麦芽糖浆",
+        quantity: 3,
+        unit: "克",
+      },
+      {
+        ingredientId: "培乐道S500面包改良剂",
+        quantity: 3,
+        unit: "克",
+      },
+      {
+        ingredientId: "鸡蛋",
+        quantity: 34,
+        unit: "克",
+      },
+      {
+        ingredientId: "水",
+        quantity: 670,
+        unit: "克",
+      },
+      {
+        ingredientId: "MG黄油",
+        quantity: 75,
+        unit: "克",
+      },
+    ],
+    yield: 1954,
+    unit: "克",
+    preFerments: [{ ingredientId: "贝果烫种", quantity: 100, unit: "克" }],
+  },
+  {
+    id: "软法法棍面团",
+    name: "软法法棍面团",
+    description: "使用中种法制作的面团",
+    ingredients: [
+      { ingredientId: "顶焙良品精制面包粉", quantity: 300, unit: "克" },
+      { ingredientId: "趁热红立方小麦粉", quantity: 700, unit: "克" },
+      { ingredientId: "燕子鲜酵母（金燕）", quantity: 30, unit: "克" },
+      {
+        ingredientId: "新西兰全脂奶粉",
+        quantity: 22,
+        unit: "克",
+      },
+      {
+        ingredientId: "中盐精制盐(加碘)",
+        quantity: 17,
+        unit: "克",
+      },
+      {
+        ingredientId: "科麦麦芽糖浆",
+        quantity: 3,
+        unit: "克",
+      },
+      {
+        ingredientId: "培乐道S500面包改良剂",
+        quantity: 3,
+        unit: "克",
+      },
+      {
+        ingredientId: "鸡蛋",
+        quantity: 34,
+        unit: "克",
+      },
+      {
+        ingredientId: "水",
+        quantity: 620,
+        unit: "克",
+      },
+      {
+        ingredientId: "MG黄油",
+        quantity: 75,
+        unit: "克",
+      },
+    ],
+    yield: 1904,
+    unit: "克",
+    preFerments: [{ ingredientId: "贝果烫种", quantity: 100, unit: "克" }],
+  },
 ];

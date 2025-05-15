@@ -138,10 +138,10 @@ const FillingInfo = ({ fillings, costBreakdown }) => {
                                           {ingredient?.name || '未知配料'}
                                         </TableCell>
                                         <TableCell align="right" sx={{ fontFamily: 'Inter, sans-serif' }}>
-                                          {ing.quantity}{ingredient?.unit || ''}
+                                          {ing.quantity}{ing?.unit || ''}
                                         </TableCell>
                                         <TableCell align="right" sx={{ fontFamily: 'Inter, sans-serif' }}>
-                                          ¥{unitCost.toFixed(4)}/{ingredient?.unit || ''}
+                                          ¥{unitCost.toFixed(4)}/{ing?.unit || ''}
                                         </TableCell>
                                         <TableCell align="right" sx={{ fontFamily: 'Inter, sans-serif' }}>
                                           ¥{totalCost.toFixed(2)}
@@ -192,10 +192,10 @@ const FillingInfo = ({ fillings, costBreakdown }) => {
                               {ingredient?.name || '未知配料'}
                             </TableCell>
                             <TableCell align="right" sx={{ fontFamily: 'Inter, sans-serif' }}>
-                              {ing.quantity}{ingredient?.unit || ''}
+                              {ing.quantity}{ing?.unit || ''}
                             </TableCell>
                             <TableCell align="right" sx={{ fontFamily: 'Inter, sans-serif' }}>
-                              ¥{unitCost.toFixed(4)}/{ingredient?.unit || ''}
+                              ¥{unitCost.toFixed(4)}/{ing?.unit || ''}
                             </TableCell>
                             <TableCell align="right" sx={{ fontFamily: 'Inter, sans-serif' }}>
                               ¥{totalCost.toFixed(2)}
