@@ -20,18 +20,18 @@ import {
   findIngredientById,
   calculatePreFermentCost,
   calculateDoughCost,
-} from "../utils/calculator"; // 新增导入
+} from "../utils/calculator";
 
 const DoughInfo = ({ doughId, doughWeight, costBreakdown }) => {
   const [expandedPreFerments, setExpandedPreFerments] = useState({});
   const doughRecipe = doughRecipes.find((r) => r.id === doughId);
 
   useEffect(() => {
-    // 初始化预发酵种展开状态
     const preFermentState = {};
     if (
       doughRecipe &&
       doughRecipe.preFerments &&
+      Array.isArray(doughRecipe.preFerments) &&
       doughRecipe.preFerments.length > 0
     ) {
       doughRecipe.preFerments.forEach((preFerment) => {
@@ -49,8 +49,22 @@ const DoughInfo = ({ doughId, doughWeight, costBreakdown }) => {
   };
 
   if (!doughRecipe) {
-    return null;
+    return <Typography variant="body2">未找到面团配方</Typography>;
   }
+
+  // 确保配料数据存在且为数组
+  const hasValidPreFerments =
+    doughRecipe.preFerments &&
+    Array.isArray(doughRecipe.preFerments) &&
+    doughRecipe.preFerments.length > 0;
+
+  // 计算主面团成本（排除预发酵种）
+  const mainDoughCost =
+    calculateDoughCost(doughRecipe) -
+    (doughRecipe.preFerments?.reduce(
+      (total, preFerment) => total + calculatePreFermentCost(preFerment),
+      0
+    ) || 0);
 
   return (
     <Card sx={{ mt: 4 }}>
@@ -79,7 +93,7 @@ const DoughInfo = ({ doughId, doughWeight, costBreakdown }) => {
           </Typography>
 
           {/* 预发酵种信息 */}
-          {doughRecipe.preFerments && doughRecipe.preFerments.length > 0 && (
+          {hasValidPreFerments && (
             <Box
               sx={{
                 mt: 3,
@@ -97,123 +111,120 @@ const DoughInfo = ({ doughId, doughWeight, costBreakdown }) => {
                   alignItems: "center",
                 }}
               >
-                酵种
+                预发酵种
               </Typography>
-              {doughRecipe.preFerments.map((preFerment) => {
-                const preFermentRecipe = doughRecipes.find(
-                  (r) => r.id === preFerment.ingredientId
-                );
-                const preFermentQuantity = preFerment.quantity;
-                const preFermentUnit = preFerment.unit || "g";
-                return (
-                  <Box
-                    key={preFerment.id}
+              {doughRecipe.preFerments.map((preFerment) => (
+                <Box
+                  key={preFerment.id || preFerment.ingredientId}
+                  sx={{
+                    mt: 2,
+                    borderBottom: "1px solid #e0e0e0",
+                    pb: 2,
+                    "&:last-child": { borderBottom: "none" },
+                  }}
+                >
+                  <Typography
+                    variant="body1"
                     sx={{
-                      mt: 2,
-                      borderBottom: "1px solid #e0e0e0",
-                      pb: 2,
-                      "&:last-child": { borderBottom: "none" },
+                      fontFamily: "Inter, sans-serif",
+                      fontWeight: 500,
+                      display: "flex",
+                      alignItems: "center",
                     }}
                   >
-                    <Typography
-                      variant="body1"
-                      sx={{
-                        fontFamily: "Inter, sans-serif",
-                        fontWeight: 500,
-                        display: "flex",
-                        alignItems: "center",
-                      }}
+                    {preFerment.name}
+                    <IconButton
+                      size="small"
+                      onClick={() => handlePreFermentToggle(preFerment.id)}
                     >
-                      {preFermentRecipe
-                        ? preFermentRecipe.name
-                        : preFerment.ingredientId}
-                      <IconButton
-                        size="small"
-                        onClick={() => handlePreFermentToggle(preFerment.id)}
-                      >
-                        {expandedPreFerments[preFerment.id] ? (
-                          <ExpandLess />
-                        ) : (
-                          <ExpandMore />
-                        )}
-                      </IconButton>
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ fontFamily: "Inter, sans-serif" }}
-                    >
-                      用量: {preFermentQuantity}
-                      {preFermentUnit}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ fontFamily: "Inter, sans-serif" }}
-                    >
-                      成本: ¥
-                      {calculatePreFermentCost(
-                        preFermentRecipe || preFerment,
-                        doughRecipe
-                      ).toFixed(2)}
-                    </Typography>
+                      {expandedPreFerments[preFerment.id] ? (
+                        <ExpandLess />
+                      ) : (
+                        <ExpandMore />
+                      )}
+                    </IconButton>
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontFamily: "Inter, sans-serif" }}
+                  >
+                    成本: ¥{calculatePreFermentCost(preFerment).toFixed(2)}
+                  </Typography>
 
-                    <Collapse
-                      in={expandedPreFerments[preFerment.id]}
-                      timeout="auto"
-                      unmountOnExit
-                    >
-                      <TableContainer component={Paper} sx={{ mt: 2 }}>
-                        <Table size="small">
-                          <TableHead>
-                            <TableRow>
-                              <TableCell
-                                sx={{
-                                  fontFamily: "Inter, sans-serif",
-                                  fontWeight: 600,
-                                }}
-                              >
-                                配料
-                              </TableCell>
-                              <TableCell
-                                align="right"
-                                sx={{
-                                  fontFamily: "Inter, sans-serif",
-                                  fontWeight: 600,
-                                }}
-                              >
-                                用量
-                              </TableCell>
-                              <TableCell
-                                align="right"
-                                sx={{
-                                  fontFamily: "Inter, sans-serif",
-                                  fontWeight: 600,
-                                }}
-                              >
-                                单位成本
-                              </TableCell>
-                              <TableCell
-                                align="right"
-                                sx={{
-                                  fontFamily: "Inter, sans-serif",
-                                  fontWeight: 600,
-                                }}
-                              >
-                                总成本
-                              </TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {preFermentRecipe?.ingredients.map((ing) => {
+                  <Collapse
+                    in={expandedPreFerments[preFerment.id]}
+                    timeout="auto"
+                    unmountOnExit
+                  >
+                    <TableContainer component={Paper} sx={{ mt: 2 }}>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell
+                              sx={{
+                                fontFamily: "Inter, sans-serif",
+                                fontWeight: 600,
+                              }}
+                            >
+                              配料
+                            </TableCell>
+                            <TableCell
+                              align="right"
+                              sx={{
+                                fontFamily: "Inter, sans-serif",
+                                fontWeight: 600,
+                              }}
+                            >
+                              面团单倍用量
+                            </TableCell>
+                            <TableCell
+                              align="right"
+                              sx={{
+                                fontFamily: "Inter, sans-serif",
+                                fontWeight: 600,
+                              }}
+                            >
+                              产品用量
+                            </TableCell>
+                            <TableCell
+                              align="right"
+                              sx={{
+                                fontFamily: "Inter, sans-serif",
+                                fontWeight: 600,
+                              }}
+                            >
+                              单位成本
+                            </TableCell>
+                            <TableCell
+                              align="right"
+                              sx={{
+                                fontFamily: "Inter, sans-serif",
+                                fontWeight: 600,
+                              }}
+                            >
+                              总成本
+                            </TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {preFerment.ingredients &&
+                          Array.isArray(preFerment.ingredients) &&
+                          preFerment.ingredients.length > 0 ? (
+                            preFerment.ingredients.map((ing) => {
                               const ingredient = findIngredientById(
-                                ing.ingredientId,
-                                doughRecipe?.ingredients
+                                ing.ingredientId
                               );
                               const unitCost = ingredient?.pricePerUnit || 0;
                               const totalCost = unitCost * ing.quantity;
                               return (
-                                <TableRow key={ing.ingredientId}>
+                                <TableRow
+                                  key={
+                                    ing.ingredientId ||
+                                    ing.id ||
+                                    `pre-${Math.random()}`
+                                  }
+                                >
                                   <TableCell
                                     component="th"
                                     scope="row"
@@ -232,6 +243,14 @@ const DoughInfo = ({ doughId, doughWeight, costBreakdown }) => {
                                     align="right"
                                     sx={{ fontFamily: "Inter, sans-serif" }}
                                   >
+                                    {ing.quantity *
+                                      (doughWeight / doughRecipe.yield)}
+                                    {ingredient?.unit || ""}
+                                  </TableCell>
+                                  <TableCell
+                                    align="right"
+                                    sx={{ fontFamily: "Inter, sans-serif" }}
+                                  >
                                     ¥{unitCost.toFixed(4)}/
                                     {ingredient?.unit || ""}
                                   </TableCell>
@@ -243,50 +262,63 @@ const DoughInfo = ({ doughId, doughWeight, costBreakdown }) => {
                                   </TableCell>
                                 </TableRow>
                               );
-                            })}
+                            })
+                          ) : (
                             <TableRow>
-                              <TableCell
-                                component="th"
-                                scope="row"
-                                sx={{
-                                  fontFamily: "Inter, sans-serif",
-                                  fontWeight: 600,
-                                }}
-                              >
-                                总计
-                              </TableCell>
-                              <TableCell
-                                align="right"
-                                sx={{
-                                  fontFamily: "Inter, sans-serif",
-                                  fontWeight: 600,
-                                }}
-                              >
-                                {preFermentRecipe?.yield}
-                                {preFermentRecipe?.unit || "g"}
-                              </TableCell>
-                              <TableCell align="right"></TableCell>
-                              <TableCell
-                                align="right"
-                                sx={{
-                                  fontFamily: "Inter, sans-serif",
-                                  fontWeight: 600,
-                                }}
-                              >
-                                ¥
-                                {calculatePreFermentCost(
-                                  preFermentRecipe || preFerment,
-                                  doughRecipe
-                                ).toFixed(2)}
+                              <TableCell colSpan={5} align="center">
+                                无配料信息
                               </TableCell>
                             </TableRow>
-                          </TableBody>
-                        </Table>
-                      </TableContainer>
-                    </Collapse>
-                  </Box>
-                );
-              })}
+                          )}
+                          <TableRow>
+                            <TableCell
+                              component="th"
+                              scope="row"
+                              sx={{
+                                fontFamily: "Inter, sans-serif",
+                                fontWeight: 600,
+                              }}
+                            >
+                              总计
+                            </TableCell>
+                            <TableCell
+                              align="right"
+                              sx={{
+                                fontFamily: "Inter, sans-serif",
+                                fontWeight: 600,
+                              }}
+                            >
+                              {preFerment.yield || 0}
+                              {preFerment.unit || "g"}
+                            </TableCell>
+                            <TableCell
+                              align="right"
+                              sx={{
+                                fontFamily: "Inter, sans-serif",
+                                fontWeight: 600,
+                              }}
+                            >
+                              {(preFerment.yield || 0) *
+                                (doughWeight / doughRecipe.yield)}
+                              {preFerment.unit || "g"}
+                            </TableCell>
+                            <TableCell align="right"></TableCell>
+                            <TableCell
+                              align="right"
+                              sx={{
+                                fontFamily: "Inter, sans-serif",
+                                fontWeight: 600,
+                              }}
+                            >
+                              ¥{calculatePreFermentCost(preFerment).toFixed(2)}
+                            </TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Collapse>
+                </Box>
+              ))}
             </Box>
           )}
 
@@ -304,7 +336,13 @@ const DoughInfo = ({ doughId, doughWeight, costBreakdown }) => {
                     align="right"
                     sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }}
                   >
-                    用量
+                    单倍用量
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }}
+                  >
+                    产品用量
                   </TableCell>
                   <TableCell
                     align="right"
@@ -321,44 +359,62 @@ const DoughInfo = ({ doughId, doughWeight, costBreakdown }) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {doughRecipe.ingredients.map((ing) => {
-                  const ingredient = findIngredientById(
-                    ing.ingredientId,
-                    doughRecipe.ingredients
-                  );
-                  const unitCost = ingredient?.pricePerUnit || 0;
-                  const totalCost = unitCost * ing.quantity;
-                  return (
-                    <TableRow key={ing.ingredientId}>
-                      <TableCell
-                        component="th"
-                        scope="row"
-                        sx={{ fontFamily: "Inter, sans-serif" }}
+                {doughRecipe.ingredients &&
+                Array.isArray(doughRecipe.ingredients) &&
+                doughRecipe.ingredients.length > 0 ? (
+                  doughRecipe.ingredients.map((ing) => {
+                    const ingredient = findIngredientById(ing.ingredientId);
+                    const unitCost = ingredient?.pricePerUnit || 0;
+                    const totalCost = unitCost * ing.quantity;
+                    return (
+                      <TableRow
+                        key={
+                          ing.ingredientId || ing.id || `main-${Math.random()}`
+                        }
                       >
-                        {ingredient?.name || "未知配料"}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{ fontFamily: "Inter, sans-serif" }}
-                      >
-                        {ing.quantity}
-                        {ingredient?.unit || ""}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{ fontFamily: "Inter, sans-serif" }}
-                      >
-                        ¥{unitCost.toFixed(4)}/{ingredient?.unit || ""}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{ fontFamily: "Inter, sans-serif" }}
-                      >
-                        ¥{totalCost.toFixed(2)}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                        <TableCell
+                          component="th"
+                          scope="row"
+                          sx={{ fontFamily: "Inter, sans-serif" }}
+                        >
+                          {ingredient?.name || "未知配料"}
+                        </TableCell>
+                        <TableCell
+                          align="right"
+                          sx={{ fontFamily: "Inter, sans-serif" }}
+                        >
+                          {ing.quantity}
+                          {ingredient?.unit || ""}
+                        </TableCell>
+                        <TableCell
+                          align="right"
+                          sx={{ fontFamily: "Inter, sans-serif" }}
+                        >
+                          {ing.quantity * (doughWeight / doughRecipe.yield)}
+                          {ingredient?.unit || ""}
+                        </TableCell>
+                        <TableCell
+                          align="right"
+                          sx={{ fontFamily: "Inter, sans-serif" }}
+                        >
+                          ¥{unitCost.toFixed(4)}/{ingredient?.unit || ""}
+                        </TableCell>
+                        <TableCell
+                          align="right"
+                          sx={{ fontFamily: "Inter, sans-serif" }}
+                        >
+                          ¥{totalCost.toFixed(2)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      无配料信息
+                    </TableCell>
+                  </TableRow>
+                )}
                 <TableRow>
                   <TableCell
                     component="th"
@@ -371,23 +427,20 @@ const DoughInfo = ({ doughId, doughWeight, costBreakdown }) => {
                     align="right"
                     sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }}
                   >
-                    {doughRecipe.yield}g
+                    {doughRecipe.yield || 0}g
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }}
+                  >
+                    {doughWeight}g
                   </TableCell>
                   <TableCell align="right"></TableCell>
                   <TableCell
                     align="right"
                     sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }}
                   >
-                    ¥
-                    {(
-                      calculateDoughCost(doughRecipe) -
-                      (doughRecipe.preFerments?.reduce(
-                        (total, preFerment) =>
-                          total +
-                          calculatePreFermentCost(preFerment, doughRecipe),
-                        0
-                      ) || 0)
-                    ).toFixed(2)}
+                    ¥{mainDoughCost.toFixed(2)}
                   </TableCell>
                 </TableRow>
               </TableBody>
@@ -399,7 +452,10 @@ const DoughInfo = ({ doughId, doughWeight, costBreakdown }) => {
             sx={{ mt: 3, fontFamily: "Inter, sans-serif" }}
           >
             面团单位成本: ¥
-            {(calculateDoughCost(doughRecipe) / doughRecipe.yield).toFixed(4)}/g
+            {(
+              calculateDoughCost(doughRecipe) / (doughRecipe.yield || 1)
+            ).toFixed(4)}
+            /g
           </Typography>
           <Typography variant="body2" sx={{ fontFamily: "Inter, sans-serif" }}>
             此面包面团成本: ¥{(costBreakdown?.dough?.cost || 0).toFixed(2)}
