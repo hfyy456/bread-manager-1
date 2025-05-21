@@ -4140,7 +4140,7 @@ export const ingredients = [
     price: 8,
     create_time: "2024/12/20 22:35",
     min: "斤",
-    norms: 1,
+    norms: 500,
     post: [5, 7, 8],
     thumb: "",
     store: [
@@ -5018,6 +5018,8 @@ export const ingredients = [
     specs: "吨",
     unit: "kg",
     self: "是",
+    min: "g",
+    norms: 1000000,
     create_time: {
       $date: "2025-04-23T08:42:31.100Z",
     },

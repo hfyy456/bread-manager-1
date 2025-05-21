@@ -83,7 +83,21 @@ const DoughRecipeList = () => {
                       配料:
                     </Typography>
                     <Box sx={{ mt: 1, ml: 2 }}>
-                      {recipe.ingredients.map((ing) => {
+                      {recipe.ingredients.map((ing, index) => {
+                        if (!ing || !ing.ingredientId) {
+                          return (
+                            <Typography
+                              key={`ingredient-missing-id-${index}`}
+                              variant="body2"
+                              sx={{
+                                fontFamily: "Inter, sans-serif",
+                                color: "orange",
+                              }}
+                            >
+                              - 配料条目ID缺失
+                            </Typography>
+                          );
+                        }
                         const ingredient = findIngredientById(ing.ingredientId);
                         // 检查配料是否存在
                         if (!ingredient) {
@@ -113,14 +127,43 @@ const DoughRecipeList = () => {
                         );
                       })}
                       {recipe.preFerments &&
-                        recipe.preFerments.map((dough) => {
+                        recipe.preFerments.map((dough, index) => {
+                          if (!dough || !dough.id) {
+                            return (
+                              <Typography
+                                key={`pre-ferment-missing-id-${index}`}
+                                variant="body2"
+                                sx={{
+                                  fontFamily: "Inter, sans-serif",
+                                  color: "orange",
+                                }}
+                              >
+                                - 预发酵物条目ID缺失
+                              </Typography>
+                            );
+                          }
                           const doughInfo = findDoughRecipeById(
-                            dough.ingredientId
+                            dough.id
                           );
+
+                          if (!doughInfo) {
+                            return (
+                              <Typography
+                                key={dough.id}
+                                variant="body2"
+                                sx={{
+                                  fontFamily: "Inter, sans-serif",
+                                  color: "red",
+                                }}
+                              >
+                                - 未知预发酵物 (ID: {dough.id})
+                              </Typography>
+                            );
+                          }
 
                           return (
                             <Typography
-                              key={dough.ingredientId}
+                              key={dough.id}
                               variant="body2"
                               sx={{ fontFamily: "Inter, sans-serif" }}
                             >

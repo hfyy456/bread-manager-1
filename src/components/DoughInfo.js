@@ -18,13 +18,19 @@ import { ExpandMore, ExpandLess } from "@mui/icons-material";
 import { doughRecipes } from "../data/doughRecipes";
 import {
   findIngredientById,
-  calculatePreFermentCost,
   calculateDoughCost,
+  findDoughRecipeById,
 } from "../utils/calculator";
 
 const DoughInfo = ({ doughId, doughWeight, costBreakdown }) => {
   const [expandedPreFerments, setExpandedPreFerments] = useState({});
+  const [highlightedSourceDough, setHighlightedSourceDough] = useState(null);
   const doughRecipe = doughRecipes.find((r) => r.id === doughId);
+
+  // Calculate parent dough to product scaling factor, ensures doughRecipe.yield is valid
+  const parentToProductScale = (doughRecipe && typeof doughRecipe.yield === 'number' && Number.isFinite(doughRecipe.yield) && doughRecipe.yield > 0 && typeof doughWeight === 'number' && Number.isFinite(doughWeight)) 
+    ? (doughWeight / doughRecipe.yield) 
+    : 0;
 
   useEffect(() => {
     const preFermentState = {};
@@ -43,28 +49,150 @@ const DoughInfo = ({ doughId, doughWeight, costBreakdown }) => {
 
   const handlePreFermentToggle = (preFermentId) => {
     setExpandedPreFerments((prev) => ({
-      ...prev,
-      [preFermentId]: !prev[preFermentId],
+     ...prev,
+      [preFermentId]:!prev[preFermentId],
     }));
+  };
+
+  const getFullPreFermentRecipe = (preFermentId) => {
+    return findDoughRecipeById(preFermentId);
   };
 
   if (!doughRecipe) {
     return <Typography variant="body2">未找到面团配方</Typography>;
   }
 
-  // 确保配料数据存在且为数组
   const hasValidPreFerments =
     doughRecipe.preFerments &&
     Array.isArray(doughRecipe.preFerments) &&
     doughRecipe.preFerments.length > 0;
 
-  // 计算主面团成本（排除预发酵种）
-  const mainDoughCost =
-    calculateDoughCost(doughRecipe) -
-    (doughRecipe.preFerments?.reduce(
-      (total, preFerment) => total + calculatePreFermentCost(preFerment),
-      0
-    ) || 0);
+  const getCostOfPreFermentUsage = (pfUsage) => {
+    const pfRecipe = getFullPreFermentRecipe(pfUsage.id);
+
+    // Stronger check for yield
+    if (!pfRecipe || typeof pfRecipe.yield !== 'number' || !Number.isFinite(pfRecipe.yield) || pfRecipe.yield <= 0) {
+      console.error(`Pre-ferment recipe "${pfUsage.id}" (name: ${pfRecipe?.name}) not found or yield (${pfRecipe?.yield}) is invalid for cost calculation.`);
+      return 0;
+    }
+
+    const batchCalcResult = calculateDoughCost(pfRecipe); 
+
+    if (batchCalcResult == null || typeof batchCalcResult.cost !== 'number' || !Number.isFinite(batchCalcResult.cost)) {
+        console.error(`Failed to calculate batch cost for pre-ferment "${pfRecipe.name}" (id: ${pfUsage.id}). Cost is ${batchCalcResult?.cost}`);
+        return 0;
+    }
+
+    const costPerGram = batchCalcResult.cost / pfRecipe.yield;
+
+    if (!Number.isFinite(costPerGram)) {
+        console.error(`Calculated costPerGram for pre-ferment "${pfRecipe.name}" is not finite. Cost: ${batchCalcResult.cost}, Yield: ${pfRecipe.yield}`);
+        return 0; 
+    }
+    
+    const quantity = Number(pfUsage.quantity);
+    if (typeof pfUsage.quantity !== 'number' || !Number.isFinite(quantity) || quantity < 0) {
+        console.warn(`Invalid quantity (${pfUsage.quantity}) for pre-ferment usage of "${pfRecipe.name}". Defaulting quantity to 0 for cost calc.`);
+        return 0;
+    }
+
+    return costPerGram * quantity;
+  };
+  
+  const totalPreFermentsCostInRecipe = doughRecipe.preFerments?.reduce(
+    (total, pf) => total + getCostOfPreFermentUsage(pf),
+    0
+  ) || 0;
+
+  const mainIngredientsOnlyCost = doughRecipe.ingredients?.reduce((total, ingUsage) => {
+    const ingData = findIngredientById(ingUsage.ingredientId);
+    const ingId = ingUsage.ingredientId || 'unknown ingredient';
+
+    if (!ingData) {
+      console.warn(`Ingredient data for main ingredient "${ingId}" not found. Skipping cost contribution.`);
+      return total;
+    }
+    if (typeof ingData.price !== 'number' || !Number.isFinite(ingData.price) || ingData.price < 0) {
+      console.warn(`Invalid price (${ingData.price}) for main ingredient "${ingId}" (${ingData.name}). Skipping cost contribution.`);
+      return total;
+    }
+    if (typeof ingData.norms !== 'number' || !Number.isFinite(ingData.norms) || ingData.norms <= 0) {
+      console.warn(`Invalid norms (${ingData.norms}) for main ingredient "${ingId}" (${ingData.name}). Skipping cost contribution.`);
+      return total;
+    }
+
+    const pricePerMinUnit = ingData.price / ingData.norms;
+    if (!Number.isFinite(pricePerMinUnit)) {
+        console.warn(`Calculated pricePerMinUnit for main ingredient "${ingId}" (${ingData.name}) is not finite. Price: ${ingData.price}, Norms: ${ingData.norms}. Skipping cost contribution.`);
+        return total;
+    }
+
+    const quantity = Number(ingUsage.quantity);
+    if (typeof ingUsage.quantity !== 'number' || !Number.isFinite(quantity) || quantity < 0) {
+        console.warn(`Invalid quantity (${ingUsage.quantity}) for main ingredient "${ingId}" (${ingData.name}). Skipping cost contribution.`);
+        return total;
+    }
+    return total + (pricePerMinUnit * quantity);
+  }, 0) || 0;
+
+  // --- START: New logic to build a flat list of all dough ingredients ---
+  const allDoughIngredientsForDisplay = [];
+
+  // 1. Add direct ingredients of the main dough
+  doughRecipe.ingredients?.forEach((ingUsage, index) => {
+    const ingredientData = findIngredientById(ingUsage.ingredientId);
+    let pricePerMinUnit = 0;
+    if (ingredientData && typeof ingredientData.price === 'number' && Number.isFinite(ingredientData.price) && typeof ingredientData.norms === 'number' && Number.isFinite(ingredientData.norms) && ingredientData.norms > 0) {
+      pricePerMinUnit = ingredientData.price / ingredientData.norms;
+    }
+    if (!Number.isFinite(pricePerMinUnit)) pricePerMinUnit = 0;
+
+    const productUsageQty = (Number(ingUsage.quantity) || 0) * parentToProductScale;
+    
+    allDoughIngredientsForDisplay.push({
+      key: `direct-${ingUsage.ingredientId}-${index}`,
+      name: ingredientData?.name || ingUsage.ingredientId,
+      source: doughRecipe.name, // Main dough name
+      productUsageQty: productUsageQty,
+      displayUnit: ingUsage.unit || ingredientData?.min || 'g',
+      unitCost: pricePerMinUnit,
+      productTotalCost: productUsageQty * pricePerMinUnit,
+    });
+  });
+
+  // 2. Add ingredients from pre-ferments
+  doughRecipe.preFerments?.forEach((pfUsageInMainDough, pfIndex) => {
+    const pfRecipe = getFullPreFermentRecipe(pfUsageInMainDough.id);
+    if (pfRecipe && pfRecipe.ingredients) {
+      const pfBatchQtyInMainDough = Number(pfUsageInMainDough.quantity) || 0;
+
+      pfRecipe.ingredients.forEach((pfIngUsage, pfIngIndex) => {
+        const ingredientData = findIngredientById(pfIngUsage.ingredientId);
+        let pricePerMinUnit = 0;
+        if (ingredientData && typeof ingredientData.price === 'number' && Number.isFinite(ingredientData.price) && typeof ingredientData.norms === 'number' && Number.isFinite(ingredientData.norms) && ingredientData.norms > 0) {
+          pricePerMinUnit = ingredientData.price / ingredientData.norms;
+        }
+        if (!Number.isFinite(pricePerMinUnit)) pricePerMinUnit = 0;
+
+        let productUsageQty = 0;
+        if (typeof pfRecipe.yield === 'number' && Number.isFinite(pfRecipe.yield) && pfRecipe.yield > 0 && Number.isFinite(pfBatchQtyInMainDough) && Number.isFinite(parentToProductScale)) {
+          productUsageQty = ( (Number(pfIngUsage.quantity) || 0) / pfRecipe.yield ) * pfBatchQtyInMainDough * parentToProductScale;
+        }
+        if(!Number.isFinite(productUsageQty)) productUsageQty = 0;
+
+        allDoughIngredientsForDisplay.push({
+          key: `pf-${pfUsageInMainDough.id}-${pfIngUsage.ingredientId}-${pfIngIndex}`,
+          name: ingredientData?.name || pfIngUsage.ingredientId,
+          source: pfRecipe.name,
+          productUsageQty: productUsageQty,
+          displayUnit: pfIngUsage.unit || ingredientData?.min || 'g',
+          unitCost: pricePerMinUnit,
+          productTotalCost: productUsageQty * pricePerMinUnit,
+        });
+      });
+    }
+  });
+  // --- END: New logic --- 
 
   return (
     <Card sx={{ mt: 4 }}>
@@ -92,322 +220,47 @@ const DoughInfo = ({ doughId, doughWeight, costBreakdown }) => {
             使用量: {doughWeight}g
           </Typography>
 
-          {/* 预发酵种信息 */}
-          {hasValidPreFerments && (
-            <Box
-              sx={{
-                mt: 3,
-                border: "1px solid #e0e0e0",
-                borderRadius: "4px",
-                p: 2,
-              }}
-            >
-              <Typography
-                variant="subtitle2"
-                sx={{
-                  fontFamily: "Inter, sans-serif",
-                  fontWeight: 500,
-                  display: "flex",
-                  alignItems: "center",
-                }}
-              >
-                预发酵种
-              </Typography>
-              {doughRecipe.preFerments.map((preFerment) => (
-                <Box
-                  key={preFerment.id || preFerment.ingredientId}
-                  sx={{
-                    mt: 2,
-                    borderBottom: "1px solid #e0e0e0",
-                    pb: 2,
-                    "&:last-child": { borderBottom: "none" },
-                  }}
-                >
-                  <Typography
-                    variant="body1"
-                    sx={{
-                      fontFamily: "Inter, sans-serif",
-                      fontWeight: 500,
-                      display: "flex",
-                      alignItems: "center",
-                    }}
-                  >
-                    {preFerment.name}
-                    <IconButton
-                      size="small"
-                      onClick={() => handlePreFermentToggle(preFerment.id)}
-                    >
-                      {expandedPreFerments[preFerment.id] ? (
-                        <ExpandLess />
-                      ) : (
-                        <ExpandMore />
-                      )}
-                    </IconButton>
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ fontFamily: "Inter, sans-serif" }}
-                  >
-                    成本: ¥{calculatePreFermentCost(preFerment).toFixed(2)}
-                  </Typography>
-
-                  <Collapse
-                    in={expandedPreFerments[preFerment.id]}
-                    timeout="auto"
-                    unmountOnExit
-                  >
-                    <TableContainer component={Paper} sx={{ mt: 2 }}>
-                      <Table size="small">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell
-                              sx={{
-                                fontFamily: "Inter, sans-serif",
-                                fontWeight: 600,
-                              }}
-                            >
-                              配料
-                            </TableCell>
-                            <TableCell
-                              align="right"
-                              sx={{
-                                fontFamily: "Inter, sans-serif",
-                                fontWeight: 600,
-                              }}
-                            >
-                              面团单倍用量
-                            </TableCell>
-                            <TableCell
-                              align="right"
-                              sx={{
-                                fontFamily: "Inter, sans-serif",
-                                fontWeight: 600,
-                              }}
-                            >
-                              产品用量
-                            </TableCell>
-                            <TableCell
-                              align="right"
-                              sx={{
-                                fontFamily: "Inter, sans-serif",
-                                fontWeight: 600,
-                              }}
-                            >
-                              单位成本
-                            </TableCell>
-                            <TableCell
-                              align="right"
-                              sx={{
-                                fontFamily: "Inter, sans-serif",
-                                fontWeight: 600,
-                              }}
-                            >
-                              总成本
-                            </TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {preFerment.ingredients &&
-                          Array.isArray(preFerment.ingredients) &&
-                          preFerment.ingredients.length > 0 ? (
-                            preFerment.ingredients.map((ing) => {
-                              const ingredient = findIngredientById(
-                                ing.ingredientId
-                              );
-                              const unitCost = ingredient?.pricePerUnit || 0;
-                              const totalCost = unitCost * ing.quantity;
-                              return (
-                                <TableRow
-                                  key={
-                                    ing.ingredientId ||
-                                    ing.id ||
-                                    `pre-${Math.random()}`
-                                  }
-                                >
-                                  <TableCell
-                                    component="th"
-                                    scope="row"
-                                    sx={{ fontFamily: "Inter, sans-serif" }}
-                                  >
-                                    {ingredient?.name || "未知配料"}
-                                  </TableCell>
-                                  <TableCell
-                                    align="right"
-                                    sx={{ fontFamily: "Inter, sans-serif" }}
-                                  >
-                                    {ing.quantity}
-                                    {ingredient?.unit || ""}
-                                  </TableCell>
-                                  <TableCell
-                                    align="right"
-                                    sx={{ fontFamily: "Inter, sans-serif" }}
-                                  >
-                                    {ing.quantity *
-                                      (doughWeight / doughRecipe.yield)}
-                                    {ingredient?.unit || ""}
-                                  </TableCell>
-                                  <TableCell
-                                    align="right"
-                                    sx={{ fontFamily: "Inter, sans-serif" }}
-                                  >
-                                    ¥{unitCost.toFixed(4)}/
-                                    {ingredient?.unit || ""}
-                                  </TableCell>
-                                  <TableCell
-                                    align="right"
-                                    sx={{ fontFamily: "Inter, sans-serif" }}
-                                  >
-                                    ¥{totalCost.toFixed(2)}
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })
-                          ) : (
-                            <TableRow>
-                              <TableCell colSpan={5} align="center">
-                                无配料信息
-                              </TableCell>
-                            </TableRow>
-                          )}
-                          <TableRow>
-                            <TableCell
-                              component="th"
-                              scope="row"
-                              sx={{
-                                fontFamily: "Inter, sans-serif",
-                                fontWeight: 600,
-                              }}
-                            >
-                              总计
-                            </TableCell>
-                            <TableCell
-                              align="right"
-                              sx={{
-                                fontFamily: "Inter, sans-serif",
-                                fontWeight: 600,
-                              }}
-                            >
-                              {preFerment.yield || 0}
-                              {preFerment.unit || "g"}
-                            </TableCell>
-                            <TableCell
-                              align="right"
-                              sx={{
-                                fontFamily: "Inter, sans-serif",
-                                fontWeight: 600,
-                              }}
-                            >
-                              {(preFerment.yield || 0) *
-                                (doughWeight / doughRecipe.yield)}
-                              {preFerment.unit || "g"}
-                            </TableCell>
-                            <TableCell align="right"></TableCell>
-                            <TableCell
-                              align="right"
-                              sx={{
-                                fontFamily: "Inter, sans-serif",
-                                fontWeight: 600,
-                              }}
-                            >
-                              ¥{calculatePreFermentCost(preFerment).toFixed(2)}
-                            </TableCell>
-                          </TableRow>
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </Collapse>
-                </Box>
-              ))}
-            </Box>
-          )}
-
-          {/* 主面团配料 */}
+          {/* 主面团配料 - THIS TABLE WILL BE MODIFIED */}
           <TableContainer component={Paper} sx={{ mt: 3 }}>
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell
-                    sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }}
-                  >
-                    配料
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }}
-                  >
-                    单倍用量
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }}
-                  >
-                    产品用量
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }}
-                  >
-                    单位成本
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }}
-                  >
-                    总成本
-                  </TableCell>
+                  <TableCell sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }}>配料名称</TableCell>
+                  <TableCell sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }}>来源</TableCell>
+                  <TableCell align="right" sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }}>产品用量</TableCell>
+                  <TableCell align="right" sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }}>单位成本</TableCell>
+                  <TableCell align="right" sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }}>总成本 (产品中)</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {doughRecipe.ingredients &&
-                Array.isArray(doughRecipe.ingredients) &&
-                doughRecipe.ingredients.length > 0 ? (
-                  doughRecipe.ingredients.map((ing) => {
-                    const ingredient = findIngredientById(ing.ingredientId);
-                    const unitCost = ingredient?.pricePerUnit || 0;
-                    const totalCost = unitCost * ing.quantity;
-                    return (
-                      <TableRow
-                        key={
-                          ing.ingredientId || ing.id || `main-${Math.random()}`
-                        }
-                      >
-                        <TableCell
-                          component="th"
-                          scope="row"
-                          sx={{ fontFamily: "Inter, sans-serif" }}
-                        >
-                          {ingredient?.name || "未知配料"}
-                        </TableCell>
-                        <TableCell
-                          align="right"
-                          sx={{ fontFamily: "Inter, sans-serif" }}
-                        >
-                          {ing.quantity}
-                          {ingredient?.unit || ""}
-                        </TableCell>
-                        <TableCell
-                          align="right"
-                          sx={{ fontFamily: "Inter, sans-serif" }}
-                        >
-                          {ing.quantity * (doughWeight / doughRecipe.yield)}
-                          {ingredient?.unit || ""}
-                        </TableCell>
-                        <TableCell
-                          align="right"
-                          sx={{ fontFamily: "Inter, sans-serif" }}
-                        >
-                          ¥{unitCost.toFixed(4)}/{ingredient?.unit || ""}
-                        </TableCell>
-                        <TableCell
-                          align="right"
-                          sx={{ fontFamily: "Inter, sans-serif" }}
-                        >
-                          ¥{totalCost.toFixed(2)}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
+                {allDoughIngredientsForDisplay.length > 0 ? (
+                  allDoughIngredientsForDisplay.map((item) => (
+                    <TableRow 
+                      key={item.key}
+                      onMouseEnter={() => setHighlightedSourceDough(item.source)}
+                      onMouseLeave={() => setHighlightedSourceDough(null)}
+                      sx={{
+                        ...(item.source === highlightedSourceDough && { backgroundColor: 'rgba(0,0,0,0.04)' }),
+                        transition: 'background-color 0.1s ease-in-out',
+                      }}
+                    >
+                      <TableCell component="th" scope="row" sx={{ fontFamily: "Inter, sans-serif" }}>
+                        {item.name}
+                      </TableCell>
+                      <TableCell sx={{ fontFamily: "Inter, sans-serif" }}>
+                        {item.source}
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontFamily: "Inter, sans-serif" }}>
+                        {item.productUsageQty.toFixed(1)}{item.displayUnit}
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontFamily: "Inter, sans-serif" }}>
+                        ¥{item.unitCost.toFixed(6)}/{item.displayUnit}
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontFamily: "Inter, sans-serif" }}>
+                        ¥{item.productTotalCost.toFixed(2)}
+                      </TableCell>
+                    </TableRow>
+                  ))
                 ) : (
                   <TableRow>
                     <TableCell colSpan={5} align="center">
@@ -415,32 +268,20 @@ const DoughInfo = ({ doughId, doughWeight, costBreakdown }) => {
                     </TableCell>
                   </TableRow>
                 )}
-                <TableRow>
-                  <TableCell
-                    component="th"
-                    scope="row"
-                    sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }}
-                  >
-                    主面团总计
+                {/* REMOVE OLD TOTALS ROWS FOR MAIN INGREDIENTS AND OVERALL DOUGH FROM HERE */}
+                {/* New totals rows will need to be calculated from allDoughIngredientsForDisplay if desired */}
+                 <TableRow>
+                  <TableCell component="th" scope="row" sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }} colSpan={2}>
+                    面团总计 (所有来源)
                   </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }}
-                  >
-                    {doughRecipe.yield || 0}g
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }}
-                  >
-                    {doughWeight}g
+                  <TableCell align="right" sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }}>
+                    {/* Sum of item.productUsageQty */}
+                    {allDoughIngredientsForDisplay.reduce((sum, item) => sum + item.productUsageQty, 0).toFixed(1)}g
                   </TableCell>
                   <TableCell align="right"></TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }}
-                  >
-                    ¥{mainDoughCost.toFixed(2)}
+                  <TableCell align="right" sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600 }}>
+                    {/* Sum of item.productTotalCost */}
+                    ¥{allDoughIngredientsForDisplay.reduce((sum, item) => sum + item.productTotalCost, 0).toFixed(2)}
                   </TableCell>
                 </TableRow>
               </TableBody>
@@ -451,14 +292,27 @@ const DoughInfo = ({ doughId, doughWeight, costBreakdown }) => {
             variant="body2"
             sx={{ mt: 3, fontFamily: "Inter, sans-serif" }}
           >
-            面团单位成本: ¥
-            {(
-              calculateDoughCost(doughRecipe) / (doughRecipe.yield || 1)
-            ).toFixed(4)}
+            面团单位成本 (含预发酵种): ¥
+            {(() => {
+              let unitDoughCostVal = 0;
+              const overallDoughBatchCostResult = calculateDoughCost(doughRecipe);
+              if (doughRecipe && 
+                  typeof doughRecipe.yield === 'number' && 
+                  Number.isFinite(doughRecipe.yield) && 
+                  doughRecipe.yield > 0 &&
+                  overallDoughBatchCostResult && 
+                  typeof overallDoughBatchCostResult.cost === 'number' && 
+                  Number.isFinite(overallDoughBatchCostResult.cost)) {
+                  unitDoughCostVal = overallDoughBatchCostResult.cost / doughRecipe.yield;
+              } else {
+                  console.warn(`Cannot calculate unit dough cost. Dough ID: ${doughRecipe?.id}, Dough yield: ${doughRecipe?.yield}, Dough batch cost: ${overallDoughBatchCostResult?.cost}`);
+              }
+              return unitDoughCostVal.toFixed(6);
+            })()}
             /g
           </Typography>
           <Typography variant="body2" sx={{ fontFamily: "Inter, sans-serif" }}>
-            此面包面团成本: ¥{(costBreakdown?.dough?.cost || 0).toFixed(2)}
+            此面包中面团总成本: ¥{(costBreakdown?.dough?.cost || 0).toFixed(2)}
           </Typography>
         </Box>
       </CardContent>

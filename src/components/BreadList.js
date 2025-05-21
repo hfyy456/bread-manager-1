@@ -4,7 +4,7 @@ import { breadTypes } from '../data/breadTypes';
 import { doughRecipes } from '../data/doughRecipes';
 import { fillingRecipes } from '../data/fillingRecipes';
 import { ingredients } from '../data/ingredients';
-import { calculateBreadCost } from '../utils/calculator';
+import { getBreadCostBreakdown } from '../utils/calculator';
 import { Link } from 'react-router-dom';
 
 const BreadList = () => {
@@ -29,7 +29,9 @@ const BreadList = () => {
             return `${ingredient?.name || '未知配料'} (${decoration.quantity}${decoration.unit})`;
           }).join(', ') || '无';
           
-          const cost = calculateBreadCost(bread);
+          const costBreakdown = getBreadCostBreakdown(bread);
+          const cost = costBreakdown.total || 0;
+          
           // 修复：添加对fillings的空值检查
           const totalWeight = bread.doughWeight + 
                              (bread.fillings?.reduce((total, filling) => total + filling.quantity, 0) || 0);

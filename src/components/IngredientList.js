@@ -29,7 +29,7 @@ const IngredientList = () => {
 
   // 打开添加对话框
   const handleAdd = () => {
-    setSelectedIngredient({ id: '', name: '', unit: '克', pricePerUnit: 0, category: '基础材料' });
+    setSelectedIngredient({ _id: { $oid: '' }, name: '', unit: '克', price: 0, specs: '' });
     setIsEditing(false);
     setDialogOpen(true);
   };
@@ -42,26 +42,24 @@ const IngredientList = () => {
   };
 
   // 处理删除
-  const handleDelete = (id) => {
+  const handleDelete = (ingredientId) => {
     if (window.confirm('确定要删除这个配料吗？')) {
-      // 实际应用中这里应该调用API删除数据
-      console.log(`删除配料: ${id}`);
+      console.log(`删除配料: ${typeof ingredientId === 'object' ? ingredientId.$oid : ingredientId}`);
     }
   };
 
   // 处理表单提交
   const handleSubmit = () => {
-    if (!selectedIngredient.name || !selectedIngredient.pricePerUnit) {
+    if (!selectedIngredient || !selectedIngredient.name || selectedIngredient.price === undefined) {
       alert('名称和价格是必填项');
       return;
     }
     
     if (isEditing) {
-      // 实际应用中这里应该调用API更新数据
       console.log('更新配料:', selectedIngredient);
     } else {
-      // 实际应用中这里应该调用API添加数据
-      console.log('添加配料:', selectedIngredient);
+      const newIngredient = { ...selectedIngredient, _id: { $oid: `new_${Date.now()}` } };
+      console.log('添加配料:', newIngredient);
     }
     
     setDialogOpen(false);
@@ -109,19 +107,21 @@ const IngredientList = () => {
               <TableCell sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 600 }}>ID</TableCell>
               <TableCell sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 600 }}>名称</TableCell>
               <TableCell sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 600 }}>单位</TableCell>
-              <TableCell sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 600 }}>单价(元/{'{'}单位{'}'})</TableCell>
-              <TableCell sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 600 }}>类别</TableCell>
+              <TableCell sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 600 }}>单价(元)</TableCell>
+              <TableCell sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 600 }}>规格</TableCell>
               <TableCell sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 600 }}>操作</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {filteredIngredients().map((ingredient) => (
-              <TableRow key={ingredient.id} hover>
-                <TableCell sx={{ fontFamily: 'Inter, sans-serif' }}>{ingredient.id}</TableCell>
+              <TableRow key={ingredient._id.$oid} hover>
+                <TableCell sx={{ fontFamily: 'Inter, sans-serif' }}>{ingredient._id.$oid}</TableCell>
                 <TableCell sx={{ fontFamily: 'Inter, sans-serif' }}>{ingredient.name}</TableCell>
                 <TableCell sx={{ fontFamily: 'Inter, sans-serif' }}>{ingredient.unit}</TableCell>
-                <TableCell sx={{ fontFamily: 'Inter, sans-serif' }}>{ingredient.pricePerUnit.toFixed(4)}</TableCell>
-                <TableCell sx={{ fontFamily: 'Inter, sans-serif' }}>{ingredient.category}</TableCell>
+                <TableCell sx={{ fontFamily: 'Inter, sans-serif' }}>
+                  { (Number.isFinite(Number(ingredient.price)) ? Number(ingredient.price) : 0).toFixed(2) }
+                </TableCell>
+                <TableCell sx={{ fontFamily: 'Inter, sans-serif' }}>{ingredient.specs}</TableCell>
                 <TableCell>
                   <IconButton color="primary" onClick={() => handleEdit(ingredient)}>
                     <EditIcon />
@@ -145,24 +145,23 @@ const IngredientList = () => {
           {selectedIngredient && (
             <Box sx={{ width: 400, display: 'flex', flexDirection: 'column', gap: 2 }}>
               <TextField
-                label="ID"
+                label="ID ($oid)"
                 variant="outlined"
-                value={selectedIngredient.id}
-                onChange={(e) => setSelectedIngredient({ ...selectedIngredient, id: e.target.value })}
-                disabled={isEditing}
+                value={selectedIngredient._id?.$oid || ''} 
+                disabled 
                 sx={{ fontFamily: 'Inter, sans-serif' }}
               />
               <TextField
                 label="名称"
                 variant="outlined"
-                value={selectedIngredient.name}
+                value={selectedIngredient.name || ''}
                 onChange={(e) => setSelectedIngredient({ ...selectedIngredient, name: e.target.value })}
                 sx={{ fontFamily: 'Inter, sans-serif' }}
               />
               <TextField
                 label="单位"
                 variant="outlined"
-                value={selectedIngredient.unit}
+                value={selectedIngredient.unit || ''}
                 onChange={(e) => setSelectedIngredient({ ...selectedIngredient, unit: e.target.value })}
                 sx={{ fontFamily: 'Inter, sans-serif' }}
               />
@@ -170,23 +169,17 @@ const IngredientList = () => {
                 label="单价"
                 variant="outlined"
                 type="number"
-                value={selectedIngredient.pricePerUnit}
-                onChange={(e) => setSelectedIngredient({ ...selectedIngredient, pricePerUnit: parseFloat(e.target.value) })}
+                value={selectedIngredient.price === undefined ? '' : selectedIngredient.price}
+                onChange={(e) => setSelectedIngredient({ ...selectedIngredient, price: parseFloat(e.target.value) || 0 })}
                 sx={{ fontFamily: 'Inter, sans-serif' }}
               />
-              <FormControl variant="outlined">
-                <InputLabel sx={{ fontFamily: 'Inter, sans-serif' }}>类别</InputLabel>
-                <Select
-                  value={selectedIngredient.category}
-                  onChange={(e) => setSelectedIngredient({ ...selectedIngredient, category: e.target.value })}
-                  label="类别"
-                  sx={{ fontFamily: 'Inter, sans-serif' }}
-                >
-                  {categories.map(cat => (
-                    <MenuItem key={cat} value={cat} sx={{ fontFamily: 'Inter, sans-serif' }}>{cat}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <TextField
+                label="规格"
+                variant="outlined"
+                value={selectedIngredient.specs || ''}
+                onChange={(e) => setSelectedIngredient({ ...selectedIngredient, specs: e.target.value })}
+                sx={{ fontFamily: 'Inter, sans-serif' }}
+              />
             </Box>
           )}
         </DialogContent>

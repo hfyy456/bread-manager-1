@@ -16,14 +16,13 @@ export const doughRecipes = [
       { ingredientId: "燕子鲜酵母（金燕）", quantity: 20, unit: "克" },
       { ingredientId: "安佳无盐大黄油25kg", quantity: 80, unit: "克" },
       { ingredientId: "理研乳化剂", quantity: 10, unit: "克" },
-      { ingredientId: "热集白三路核桃仁", quantity: 5, unit: "克" },
+      { ingredientId: "热集白三路核桃仁", quantity: 50, unit: "克" },
     ],
-
     yield: 2030,
     unit: "克",
     preFerments: [
-      { ingredientId: "马里奥冷种", quantity: 650, unit: "克" },
-      { ingredientId: "酒渍提子干", quantity: 100, unit: "克" },
+      { id: "马里奥冷种", quantity: 650, unit: "克" },
+      { id: "酒渍提子干", quantity: 100, unit: "克" },
     ],
   },
   {
@@ -46,10 +45,10 @@ export const doughRecipes = [
     name: "酒渍提子干",
     description: "用于制作甜面包的面团",
     ingredients: [
-      { ingredientId: "趁热集合火焰提子干（中）", quantity: 10000, unit: "克" },
-      { ingredientId: "百加得黑朗姆酒", quantity: 1000, unit: "克" },
+      { ingredientId: "趁热集合火焰提子干（中）", quantity: 10, unit: "克" },
+      { ingredientId: "百加得黑朗姆酒", quantity: 1, unit: "克" },
     ],
-    yield: 11000,
+    yield: 11,
     unit: "克",
     preFerments: [],
   },
@@ -80,9 +79,9 @@ export const doughRecipes = [
       { ingredientId: "安佳无盐大黄油25kg", quantity: 120, unit: "克" },
       { ingredientId: "理研乳化剂", quantity: 40, unit: "克" },
     ],
-    yield: 866,
+    yield: 4205,
     unit: "克",
-    preFerments: [{ ingredientId: "吐司烫种", quantity: 880, unit: "克" }],
+    preFerments: [{ id: "吐司烫种", quantity: 880, unit: "克" }],
   },
   {
     id: "吐司烫种",
@@ -114,8 +113,8 @@ export const doughRecipes = [
     yield: 1015,
     unit: "克",
     preFerments: [
-      { ingredientId: "贝果烫种", quantity: 150, unit: "克" },
-      { ingredientId: "法国老面", quantity: 100, unit: "克" },
+      { id: "贝果烫种", quantity: 150, unit: "克" },
+      { id: "法国老面", quantity: 100, unit: "克" },
     ],
   },
   {
@@ -191,8 +190,8 @@ export const doughRecipes = [
     yield: 663,
     unit: "克",
     preFerments: [
-      { ingredientId: "酒渍蔓越莓", quantity: 252, unit: "克" },
-      { ingredientId: "酒渍提子干", quantity: 252, unit: "克" },
+      { id: "酒渍蔓越莓", quantity: 252, unit: "克" },
+      { id: "酒渍提子干", quantity: 252, unit: "克" },
     ],
   },
   {
@@ -283,9 +282,7 @@ export const doughRecipes = [
     ],
     yield: 846,
     unit: "克",
-    preFerments: [
-      { ingredientId: "新品吐司类种面", quantity: 1812, unit: "克" },
-    ],
+    preFerments: [{ id: "新品吐司类种面", quantity: 1812, unit: "克" }],
   },
   {
     id: "新品吐司类种面",
@@ -361,6 +358,8 @@ export const doughRecipes = [
       { ingredientId: "中盐精制盐(加碘)", quantity: 30, unit: "克" },
       { ingredientId: "老虎复配冷冻面团改良剂", quantity: 16, unit: "克" },
       { ingredientId: "水", quantity: 352, unit: "克" },
+      { ingredientId: "鸡蛋", quantity: 76, unit: "克" },
+      { ingredientId: "纯牛奶", quantity: 253, unit: "克" },
       { ingredientId: "趁热芝兰雅龙眼蜂蜜", quantity: 22, unit: "克" },
       { ingredientId: "安佳无盐大黄油25kg", quantity: 125, unit: "克" },
       {
@@ -368,8 +367,13 @@ export const doughRecipes = [
         quantity: 66,
         unit: "克",
       },
+      {
+        ingredientId: "安佳黄油薄片",
+        quantity: 1000,
+        unit: "克",
+      },
     ],
-    yield: 2700,
+    yield: 3700,
     unit: "克",
     preFerments: [],
   },
@@ -415,7 +419,7 @@ export const doughRecipes = [
     ],
     yield: 2106,
     unit: "克",
-    preFerments: [{ ingredientId: "酒渍蔓越莓", quantity: 90, unit: "克" }],
+    preFerments: [{ id: "酒渍蔓越莓", quantity: 90, unit: "克" }],
   },
   {
     id: "糯米烫种",
@@ -481,7 +485,7 @@ export const doughRecipes = [
     ],
     yield: 1954,
     unit: "克",
-    preFerments: [{ ingredientId: "贝果烫种", quantity: 100, unit: "克" }],
+    preFerments: [{ id: "贝果烫种", quantity: 100, unit: "克" }],
   },
   {
     id: "软法法棍面团",
@@ -529,6 +533,6 @@ export const doughRecipes = [
     ],
     yield: 1904,
     unit: "克",
-    preFerments: [{ ingredientId: "贝果烫种", quantity: 100, unit: "克" }],
+    preFerments: [{ id: "贝果烫种", quantity: 100, unit: "克" }],
   },
 ];
