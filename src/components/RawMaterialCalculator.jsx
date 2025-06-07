@@ -1,11 +1,10 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useContext } from 'react';
 import { Container, Typography, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Grid, Box, IconButton, Tooltip, CircularProgress, Chip, Snackbar, Alert as MuiAlert } from '@mui/material';
 import { Replay as ReplayIcon, Clear as ClearIcon, FileUpload as FileUploadIcon, Download, InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
 import * as XLSX from 'xlsx';
-import { breadTypes } from '../data/breadTypes';
 import { Link } from 'react-router-dom';
-// import { ingredients as allIngredients } from '../data/ingredients'; // Removed static import
 import { generateAggregatedRawMaterials, adjustCost, findIngredientById } from '../utils/calculator';
+import { DataContext } from './DataContext.jsx';
 
 const LOCAL_STORAGE_STOCKS_KEY = 'rawMaterialStocks_byPurchaseUnit';
 
@@ -24,6 +23,7 @@ const Alert = React.forwardRef(function Alert(props, ref) {
 });
 
 const RawMaterialCalculator = () => {
+  const { breadTypes, doughRecipesMap, fillingRecipesMap, ingredientsMap, ingredients, loading } = useContext(DataContext);
   const [quantities, setQuantities] = useState({});
   const [aggregatedMaterials, setAggregatedMaterials] = useState([]);
   const [showResults, setShowResults] = useState(false);
@@ -34,45 +34,6 @@ const RawMaterialCalculator = () => {
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState('info'); 
-
-  const [allIngredientsData, setAllIngredientsData] = useState([]);
-  const [loadingIngredients, setLoadingIngredients] = useState(true);
-  const [errorIngredients, setErrorIngredients] = useState(null);
-
-  useEffect(() => {
-    const fetchIngredients = async () => {
-      setLoadingIngredients(true);
-      setErrorIngredients(null);
-      try {
-        const response = await fetch('/api/ingredients/list', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({}), // Empty body for POST as per previous setup
-        });
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const result = await response.json();
-        if (result.success && Array.isArray(result.data)) {
-          setAllIngredientsData(result.data);
-        } else {
-          console.error("Failed to fetch ingredients or data format is incorrect:", result.message || 'Unknown error');
-          setErrorIngredients(result.message || 'Failed to load ingredients or data format is incorrect.');
-          setAllIngredientsData([]); 
-        }
-      } catch (error) {
-        console.error("Error fetching ingredients:", error);
-        setErrorIngredients(`Error fetching ingredients: ${error.message}`);
-        setAllIngredientsData([]); 
-      } finally {
-        setLoadingIngredients(false);
-      }
-    };
-
-    fetchIngredients();
-  }, []); 
 
   useEffect(() => {
     setMaterialStocks(getStocksFromLocalStorage());
@@ -246,188 +207,93 @@ const RawMaterialCalculator = () => {
   };
 
   const calculateTotalRawMaterials = useCallback((showLoader = true) => {
-    if (loadingIngredients) {
-      handleShowSnackbar('原料数据仍在加载中，请稍候...', 'warning');
+    if (loading) {
+      handleShowSnackbar('核心数据仍在加载中，请稍候...', 'warning');
       return;
     }
-    if (errorIngredients) {
-      handleShowSnackbar(`无法计算，原料数据加载失败: ${errorIngredients}`, 'error');
-      return;
-    }
-    if (allIngredientsData.length === 0 && !loadingIngredients) { // Check also !loadingIngredients to avoid premature error
-        handleShowSnackbar('原料数据为空，无法计算。请确保API数据可用或稍后再试。', 'error');
-        return;
-    }
+    if (showLoader) setIsCalculating(true);
 
-    if (showLoader) {
-      setIsCalculating(true);
-    }
-    setAggregatedMaterials([]);
+    const totalAggregated = {};
 
-    setTimeout(() => {
-      try {
-        console.log("Starting raw material calculation with quantities:", quantities, "and ingredients:", allIngredientsData);
-        const aggregated = {};
-
-        breadTypes.forEach((breadType) => {
-          const quantity = parseInt(quantities[breadType.id], 10) || 0;
+    for (const breadId in quantities) {
+      const quantity = quantities[breadId];
           if (quantity > 0) {
-            console.log(`Calculating for ${breadType.name}, quantity: ${quantity}`);
-            // Ensure allIngredientsData is passed here
-            const materialsForBreadType = generateAggregatedRawMaterials(breadType, allIngredientsData);
-            console.log(`Materials for ${breadType.name} (raw from calculator):`, materialsForBreadType);
-
-            materialsForBreadType.forEach((material) => {
-              // Ensure allIngredientsData is passed here
-              const ingData = findIngredientById(material.id, allIngredientsData);
-              if (!ingData) {
-                console.warn(`Ingredient data not found for ${material.id} (name from aggregation: ${material.name}) while aggregating for ${breadType.name}. Skipping.`);
-                return; 
-              }
-
-              const totalQuantityNeeded = material.quantity * quantity;
-              const stockInPurchaseUnit_Raw = materialStocks[material.id] || materialStocks[ingData.name] || 0;
-
-              if (aggregated[material.id]) {
-                aggregated[material.id].rawQuantity += totalQuantityNeeded;
+        const bread = breadTypes.find(b => b.id === breadId);
+        if (bread) {
+          const breadMaterials = generateAggregatedRawMaterials(
+            bread,
+            breadTypes,
+            doughRecipesMap,
+            fillingRecipesMap,
+            ingredients,
+            quantity
+          );
+          
+          breadMaterials.forEach(material => {
+            if (totalAggregated[material.id]) {
+              totalAggregated[material.id].quantity += material.quantity;
             } else {
-                aggregated[material.id] = {
-                id: material.id,
-                  name: ingData.name, 
-                  rawQuantity: totalQuantityNeeded,
-                  baseUnit: ingData.baseUnit || ingData.min, 
-                  purchaseUnit: ingData.unit, 
-                  norms: ingData.norms, 
-                  specs: ingData.specs, 
-                  price: ingData.price, 
-                  currentStockInPurchaseUnit: parseFloat(stockInPurchaseUnit_Raw) || 0,
-              };
+              totalAggregated[material.id] = { ...material };
             }
           });
         }
-      });
-      
-        const finalAggregatedArray = Object.values(aggregated).map(material => {
-          const purchaseUnitQuantity = material.norms > 0 ? material.rawQuantity / material.norms : 0;
-          const deficit = Math.max(0, purchaseUnitQuantity - material.currentStockInPurchaseUnit);
-          const costPerPurchaseUnit = material.price || 0;
-          const totalCostForDeficit = adjustCost(deficit * costPerPurchaseUnit);
-        
-        return {
-          ...material,
-            purchaseUnitQuantity: adjustCost(purchaseUnitQuantity), 
-            deficit: adjustCost(deficit), 
-            totalCostForDeficit: totalCostForDeficit,
-        };
-        }).sort((a, b) => a.name.localeCompare(b.name));
-
-        console.log("Final aggregated materials:", finalAggregatedArray);
-        setAggregatedMaterials(finalAggregatedArray);
-      setShowResults(true);
-      } catch (e) {
-        console.error("Error during raw material calculation:", e);
-        handleShowSnackbar(`计算出错: ${e.message}`, 'error');
-        setShowResults(false);
-      } finally {
-        if (showLoader) {
-          setIsCalculating(false);
-        }
       }
-    }, 50); 
-  }, [quantities, allIngredientsData, materialStocks, loadingIngredients, errorIngredients]); // Added dependencies
+    }
+
+    setAggregatedMaterials(Object.values(totalAggregated));
+      setShowResults(true);
+        if (showLoader) {
+      setTimeout(() => setIsCalculating(false), 300); 
+        }
+  }, [quantities, breadTypes, doughRecipesMap, fillingRecipesMap, ingredients, loading]);
 
   const handleExportExcel = () => {
-    if (loadingIngredients) {
-      handleShowSnackbar('原料数据仍在加载中，无法导出。', 'warning');
-      return;
-    }
-     if (errorIngredients) {
-      handleShowSnackbar(`无法导出，原料数据加载失败: ${errorIngredients}`, 'error');
-      return;
-    }
-    if (allIngredientsData.length === 0 && aggregatedMaterials.length === 0 && !loadingIngredients) {
-        handleShowSnackbar('没有原料数据或计算结果可导出。请确保API连接正常。', 'warning');
-        return;
-    }
     if (aggregatedMaterials.length === 0) {
         handleShowSnackbar('没有计算结果可导出。请先计算。', 'warning');
         return;
     }
-
-    console.log("Exporting data:", aggregatedMaterials);
   
     const dataToExport = aggregatedMaterials.map(material => {
-      // Ensure allIngredientsData is passed here
-      const ingData = findIngredientById(material.id, allIngredientsData); 
+        const ingredientInfo = ingredientsMap.get(material.id.trim());
       return {
         '原料ID': material.id,
         '原料名称': material.name,
-        '规格': ingData?.specs || material.specs || 'N/A',
-        '总需求量(基础单位)': material.rawQuantity.toFixed(3),
-        '基础单位': material.baseUnit,
-        '当前库存(采购单位)': material.currentStockInPurchaseUnit.toFixed(2),
-        '总需求量(采购单位)': material.purchaseUnitQuantity.toFixed(2),
-        '采购单位': material.purchaseUnit,
-        '缺口(采购单位)': material.deficit.toFixed(2),
-        '采购单价': material.price ? material.price.toFixed(2) : 'N/A',
-        '缺口成本': material.totalCostForDeficit.toFixed(2),
+            '总需求量': material.quantity.toFixed(2),
+            '单位': material.unit,
+            '规格': ingredientInfo?.specs || 'N/A',
+            '采购单位': ingredientInfo?.unit || 'N/A',
+            '单价': ingredientInfo?.price ? `¥${(ingredientInfo.price).toFixed(2)}` : 'N/A',
       };
     });
 
-    const totalDeficitCostSum = aggregatedMaterials.reduce((sum, item) => sum + item.totalCostForDeficit, 0);
-    dataToExport.push({}); 
-    dataToExport.push({
-        '原料ID': '总计',
-        '缺口成本': adjustCost(totalDeficitCostSum).toFixed(2)
-    });
-
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-    const colWidths = [
-        { wch: 25 }, 
-        { wch: 30 }, 
-        { wch: 20 }, 
-        { wch: 20 }, 
-        { wch: 10 }, 
-        { wch: 20 }, 
-        { wch: 20 }, 
-        { wch: 10 }, 
-        { wch: 15 }, 
-        { wch: 10 }, 
-        { wch: 10 }, 
+    
+    const columnWidths = [
+        { wch: 25 }, // 原料ID
+        { wch: 20 }, // 原料名称
+        { wch: 12 }, // 总需求量
+        { wch: 8 },  // 单位
+        { wch: 20 }, // 规格
+        { wch: 10 }, // 采购单位
+        { wch: 12 }, // 单价
     ];
-    worksheet['!cols'] = colWidths;
+    worksheet['!cols'] = columnWidths;
 
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, '原料需求表');
+    XLSX.utils.book_append_sheet(workbook, worksheet, '原料需求汇总');
     
-    const today = new Date();
-    const dateStr = `${today.getFullYear()}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`;
-    const timeStr = `${today.getHours().toString().padStart(2, '0')}${today.getMinutes().toString().padStart(2, '0')}`;
-    const fileName = `面包原料需求_${dateStr}_${timeStr}.xlsx`;
-
-    XLSX.writeFile(workbook, fileName);
-    handleShowSnackbar('数据已成功导出到Excel文件！', 'success');
+    const today = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(workbook, `原料需求汇总_${today}.xlsx`);
+    handleShowSnackbar('Excel 文件已成功导出！', 'success');
   };
   
-  if (loadingIngredients && !errorIngredients) {
+  if (loading) {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
         <Box display="flex" justifyContent="center" alignItems="center" minHeight="50vh">
           <CircularProgress />
           <Typography variant="h6" sx={{ ml: 2 }}>正在加载原料数据...</Typography>
         </Box>
-      </Container>
-    );
-  }
-
-  if (errorIngredients) {
-    return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Paper elevation={3} sx={{ p: 3, textAlign: 'center', backgroundColor: 'error.light' }}>
-          <Typography variant="h5" color="error.contrastText">原料数据加载失败</Typography>
-          <Typography color="error.contrastText" sx={{ mt: 1 }}>{errorIngredients}</Typography>
-          <Button variant="contained" onClick={() => window.location.reload()} sx={{mt: 2}}>刷新页面</Button>
-        </Paper>
       </Container>
     );
   }
@@ -479,11 +345,10 @@ const RawMaterialCalculator = () => {
             variant="contained" 
             color="primary" 
             onClick={() => calculateTotalRawMaterials(true)} 
-            disabled={isCalculating || loadingIngredients || !!errorIngredients || Object.values(quantities).every(q => !q || q === '0' || q === 0)}
-            sx={{ flexGrow: { xs: 1, sm: 'initial' } }}
+            disabled={isCalculating || loading || Object.values(quantities).every(q => !q || q === 0)}
+            sx={{ minWidth: 180, height: '56px' }}
           >
-            {isCalculating ? <CircularProgress size={24} color="inherit" sx={{mr:1}} /> : null}
-            {isCalculating ? '正在计算...' : '计算总原料'}
+            {isCalculating ? <CircularProgress size={24} color="inherit" /> : '计算总原料'}
           </Button>
           <Button 
             variant="outlined" 
@@ -520,51 +385,59 @@ const RawMaterialCalculator = () => {
                 color="secondary" 
                 onClick={handleExportExcel} 
                 startIcon={<Download />}
-                disabled={aggregatedMaterials.length === 0 || loadingIngredients || !!errorIngredients}
+                disabled={!aggregatedMaterials.length}
             >
                 导出Excel
             </Button>
               </Box>
           <TableContainer>
-            <Table stickyHeader sx={{ minWidth: 800 }} aria-label="aggregated raw materials table">
+            <Table stickyHeader>
               <TableHead>
                       <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold', backgroundColor: 'grey.200' }}>原料名称 (ID)</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: 'grey.200' }}>规格</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: 'grey.200' }}>总需求 ({aggregatedMaterials[0]?.baseUnit || '基础单位'})</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: 'grey.200' }}>当前库存 ({aggregatedMaterials[0]?.purchaseUnit || '采购单位'})</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: 'grey.200' }}>需求 ({aggregatedMaterials[0]?.purchaseUnit || '采购单位'})</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: 'grey.200' }}>缺口 ({aggregatedMaterials[0]?.purchaseUnit || '采购单位'})</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: 'grey.200' }}>采购单价</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: 'grey.200' }}>缺口成本</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', minWidth: 170 }}>原料名称</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>总需求量</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold', minWidth: 150 }}>当前库存</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>单位</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 'bold', color: 'primary.main', minWidth: 150 }}>需采购量</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {aggregatedMaterials.map((material) => (
-                  <TableRow hover key={material.id}>
+                {aggregatedMaterials
+                  .sort((a,b) => b.quantity - a.quantity)
+                  .map(material => {
+                    const stockData = materialStocks[material.id] || { stock: 0 };
+                    const requiredQuantity = material.quantity || 0;
+                    const currentStock = stockData.stock;
+                    const purchaseNeeded = requiredQuantity - currentStock;
+                    const ingredientInfo = ingredientsMap.get(material.id.trim());
+
+                    return (
+                        <TableRow key={material.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
                     <TableCell component="th" scope="row">
-                      {material.name}
-                      <Typography variant="caption" display="block" color="textSecondary">({material.id})</Typography>
+                                <Typography variant="body2" sx={{ fontWeight: 500 }}>{material.name}</Typography>
+                                <Typography variant="caption" color="text.secondary">{ingredientInfo?.specs}</Typography>
                           </TableCell>
-                    <TableCell align="right">{material.specs || 'N/A'}</TableCell>
-                    <TableCell align="right">{material.rawQuantity.toFixed(3)} {material.baseUnit}</TableCell>
-                    <TableCell align="right">{material.currentStockInPurchaseUnit.toFixed(2)} {material.purchaseUnit}</TableCell>
-                    <TableCell align="right">{material.purchaseUnitQuantity.toFixed(2)} {material.purchaseUnit}</TableCell>
-                    <TableCell align="right" sx={{ color: material.deficit > 0 ? 'error.main' : 'inherit', fontWeight: material.deficit > 0 ? 'bold' : 'normal' }}>
-                      {material.deficit.toFixed(2)} {material.purchaseUnit}
+                            <TableCell align="right">{requiredQuantity.toFixed(2)} {material.unit}</TableCell>
+                            <TableCell align="right">
+                              <TextField 
+                                type="number" 
+                                size="small" 
+                                variant="outlined"
+                                value={currentStock}
+                                onChange={(e) => handleStockChange(material.id, e.target.value)}
+                                sx={{width: '100px'}}
+                                InputProps={{
+                                    endAdornment: <Typography variant="caption" sx={{ ml: 0.5 }}>{ingredientInfo?.unit}</Typography>,
+                                }}
+                              />
                           </TableCell>
-                     <TableCell align="right">{material.price ? `¥${material.price.toFixed(2)}` : 'N/A'}</TableCell>
-                    <TableCell align="right" sx={{ color: material.totalCostForDeficit > 0 ? 'error.main' : 'inherit', fontWeight: material.totalCostForDeficit > 0 ? 'bold' : 'normal' }}>
-                      {material.totalCostForDeficit > 0 ? `¥${material.totalCostForDeficit.toFixed(2)}` : '¥0.00'}
+                            <TableCell align="right">{ingredientInfo?.unit}</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 'bold', color: purchaseNeeded > 0 ? 'error.main' : 'success.main' }}>
+                                {purchaseNeeded > 0 ? purchaseNeeded.toFixed(2) : '库存充足'}
                           </TableCell>
                         </TableRow>
-                      ))}
-                <TableRow sx={{ '& td': { borderTop: '2px solid black', fontWeight: 'bold' } }}>
-                    <TableCell colSpan={7} align="right" sx={{fontSize: '1.1rem'}}>总缺口成本:</TableCell>
-                    <TableCell align="right" sx={{fontSize: '1.1rem', color: aggregatedMaterials.reduce((sum, item) => sum + item.totalCostForDeficit, 0) > 0 ? 'error.main' : 'inherit' }}>
-                        ¥{adjustCost(aggregatedMaterials.reduce((sum, item) => sum + item.totalCostForDeficit, 0)).toFixed(2)}
-                    </TableCell>
-                </TableRow>
+                    );
+                })}
                     </TableBody>
                   </Table>
                 </TableContainer>

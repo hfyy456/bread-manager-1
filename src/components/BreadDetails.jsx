@@ -1,108 +1,49 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Container, Typography, CircularProgress, Paper, Button, Box, Tooltip, IconButton } from '@mui/material';
 import { InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
-import { breadTypes } from '../data/breadTypes';
+import { DataContext } from './DataContext.jsx';
 import { getBreadCostBreakdown, generateAggregatedRawMaterials } from '../utils/calculator';
 import DoughInfo from './DoughInfo';
 import FillingInfo from './FillingInfo';
 import DecorationInfo from './DecorationInfo';
-import CostSummary from './CostSummary';
+import AggregatedMaterials from './AggregatedMaterials';
 
 const BreadDetails = () => {
   const { id } = useParams();
+  const { 
+    breadTypes, 
+    loading, 
+    doughRecipesMap, 
+    fillingRecipesMap, 
+    ingredientsMap 
+  } = useContext(DataContext);
+
   const [bread, setBread] = useState(null);
   const [costBreakdown, setCostBreakdown] = useState(null);
   const [aggregatedMaterials, setAggregatedMaterials] = useState([]);
   const [loadingBread, setLoadingBread] = useState(true);
 
-  const [allIngredientsData, setAllIngredientsData] = useState([]);
-  const [loadingIngredients, setLoadingIngredients] = useState(true);
-  const [errorIngredients, setErrorIngredients] = useState(null);
-
   useEffect(() => {
-    const fetchIngredients = async () => {
-      setLoadingIngredients(true);
-      setErrorIngredients(null);
-      try {
-        const response = await fetch('/api/ingredients/list', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const result = await response.json();
-        if (result.success && Array.isArray(result.data)) {
-          setAllIngredientsData(result.data);
-        } else {
-          throw new Error(result.message || 'Failed to load ingredients or data format is incorrect.');
-        }
-      } catch (err) {
-        console.error("Error fetching ingredients for BreadDetails:", err);
-        setErrorIngredients(err.message);
-        setAllIngredientsData([]);
-      } finally {
-        setLoadingIngredients(false);
-      }
-    };
-    fetchIngredients();
-  }, []);
-
-  useEffect(() => {
-    setLoadingBread(true);
+    // Wait for all data to be loaded from context
+    if (!loading && breadTypes.length > 0 && ingredientsMap.size > 0 && doughRecipesMap.size > 0 && fillingRecipesMap.size > 0) {
     const breadData = breadTypes.find(b => b.id === id);
-    
-    if (breadData && !loadingIngredients && allIngredientsData.length > 0) {
       setBread(breadData);
-      try {
-        const breakdown = getBreadCostBreakdown(breadData, allIngredientsData);
+
+      if (breadData) {
+        // All calculations now use Maps for efficiency and consistency
+        const breakdown = getBreadCostBreakdown(breadData, doughRecipesMap, fillingRecipesMap, ingredientsMap);
       setCostBreakdown(breakdown);
-        const aggMaterials = generateAggregatedRawMaterials(breadData, allIngredientsData);
-      setAggregatedMaterials(aggMaterials);
-      } catch (calcError) {
-        console.error("Error during cost calculation in BreadDetails:", calcError);
-        setErrorIngredients(prevError => prevError ? `${prevError}\nCalculation error: ${calcError.message}` : `Calculation error: ${calcError.message}`); // Append to existing ingredient error or set new
-        setCostBreakdown(null);
-        setAggregatedMaterials([]);
+        
+        const aggregated = generateAggregatedRawMaterials(breadData, breadTypes, doughRecipesMap, fillingRecipesMap, ingredientsMap);
+        setAggregatedMaterials(aggregated);
       }
-    } else if (breadData && (loadingIngredients || allIngredientsData.length === 0)){
-      // Ingredients are still loading or empty after loading, set bread but wait for ingredients for calculations
-      setBread(breadData);
-      setCostBreakdown(null); // Clear previous breakdown if any
-      setAggregatedMaterials([]); // Clear previous materials if any
-    } else {
-      setBread(null);
-      setCostBreakdown(null);
-      setAggregatedMaterials([]);
+      setLoadingBread(false); // Finished processing for this bread
     }
-    setLoadingBread(false);
-  }, [id, loadingIngredients, allIngredientsData]); // Rerun when id changes or ingredients are loaded
+  }, [id, loading, breadTypes, doughRecipesMap, fillingRecipesMap, ingredientsMap]);
 
-  if (loadingBread || loadingIngredients) {
-    return (
-      <Container sx={{ textAlign: 'center', mt: 5 }}>
-        <CircularProgress />
-        <Typography variant="h6" sx={{ mt: 2 }}>
-          {loadingIngredients ? '正在加载原料数据...' : (loadingBread ? '正在加载面包详情...' : '准备中...')}
-        </Typography>
-      </Container>
-    );
-  }
-
-  if (errorIngredients) {
-    return (
-      <Container maxWidth="md" sx={{ py: 4 }}>
-        <Paper elevation={3} sx={{ p: 3, textAlign: 'center', backgroundColor: 'error.light' }}>
-          <Typography variant="h5" color="error.contrastText">加载面包详情时出错</Typography>
-          <Typography color="error.contrastText" sx={{ mt: 1, whiteSpace: 'pre-line' }}>
-            {errorIngredients}
-          </Typography>
-          <Button variant="contained" onClick={() => window.location.reload()} sx={{mt: 2}}>
-            刷新页面
-          </Button>
-        </Paper>
-      </Container>
-    );
+  if (loading || loadingBread) {
+    return <CircularProgress />;
   }
   
   if (!bread) {
@@ -113,8 +54,8 @@ const BreadDetails = () => {
     );
   }
 
-  // Only render children if all data is available and calculations likely succeeded (costBreakdown is not null)
-  const canRenderDetails = bread && !loadingBread && !loadingIngredients && !errorIngredients && costBreakdown && allIngredientsData.length > 0;
+  // We can render details as soon as costBreakdown is calculated.
+  const canRenderDetails = !!costBreakdown;
 
   return (
     <Container maxWidth="xl">
@@ -137,35 +78,26 @@ const BreadDetails = () => {
       <DoughInfo 
         doughId={bread.doughId}
         doughWeight={bread.doughWeight}
-            costBreakdown={costBreakdown} // This should now be calculated with allIngredientsData
-            allIngredientsList={allIngredientsData}
+            costBreakdown={costBreakdown}
       />
       
       <FillingInfo 
         fillings={bread.fillings}
-            costBreakdown={costBreakdown} // This should now be calculated with allIngredientsData
-            allIngredientsList={allIngredientsData}
+            costBreakdown={costBreakdown}
       />
       
       <DecorationInfo 
         decorations={bread.decorations}
-            costBreakdown={costBreakdown} // This should now be calculated with allIngredientsData
-            allIngredientsList={allIngredientsData}
-      />
-      
-      <CostSummary 
-        bread={bread}
         costBreakdown={costBreakdown}
-        aggregatedMaterials={aggregatedMaterials}
-            allIngredientsList={allIngredientsData} // Pass for consistency or if it needs direct access
           />
+          
+          <AggregatedMaterials materials={aggregatedMaterials} />
         </>
       ) : (
         <Box sx={{ textAlign: 'center', my: 5 }}>
            <Typography variant="h6" color="text.secondary">
-            {!costBreakdown && !errorIngredients ? '正在计算成本和物料详情...' : '无法显示面包详情，可能缺少原料数据或计算出错。'}
+            正在计算成本和物料详情...
           </Typography>
-         {/* If costBreakdown is null but no explicit errorIngredients, it implies calculations are pending or failed silently (though we try to catch it) */} 
         </Box>
       )}
     </Container>

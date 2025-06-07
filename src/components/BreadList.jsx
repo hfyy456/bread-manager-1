@@ -1,14 +1,24 @@
-import React from 'react';
-import { Card, CardContent, Typography, Grid, Container, Box, Button, Tooltip, IconButton } from '@mui/material';
-import { breadTypes } from '../data/breadTypes';
-import { doughRecipes } from '../data/doughRecipes';
-import { fillingRecipes } from '../data/fillingRecipes';
-import { ingredients } from '../data/ingredients';
-import { getBreadCostBreakdown } from '../utils/calculator';
+import React, { useContext } from 'react';
+import { Card, CardContent, Typography, Grid, Container, Box, Button, Tooltip, IconButton, CircularProgress } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
+import { DataContext } from './DataContext.jsx';
+import { getBreadCostBreakdown } from '../utils/calculator';
 
 const BreadList = () => {
+  const { 
+    breadTypes, 
+    ingredients, 
+    loading,
+    doughRecipesMap,
+    fillingRecipesMap,
+    ingredientsMap 
+  } = useContext(DataContext);
+
+  if (loading) {
+    return <CircularProgress />;
+  }
+
   return (
     <Container maxWidth="xl">
       <Box display="flex" alignItems="center" sx={{ mb: 6, mt: 3 }}>
@@ -23,22 +33,23 @@ const BreadList = () => {
       </Box>
       <Grid container spacing={4}>
         {breadTypes.map(bread => {
-          const doughRecipe = doughRecipes.find(r => r.id === bread.doughId);
+          const doughRecipe = doughRecipesMap.get((bread.doughId || '').trim());
           
           // 构建馅料信息
           const fillingInfo = bread.fillings?.map(filling => {
-            const recipe = fillingRecipes.find(r => r.id === filling.fillingId);
+            console.log(filling,"filling");
+            const recipe = fillingRecipesMap.get((filling.fillingId || '').trim());
             return `${recipe?.name || '未知馅料'} (${filling.quantity}${filling.unit})`;
           }).join(', ') || '无';
           
           // 构建装饰信息
           const decorationInfo = bread.decorations?.map(decoration => {
-            const ingredient = ingredients.find(ing => ing.name === decoration.ingredientId);
+            const ingredient = ingredientsMap.get((decoration.ingredientId || '').trim());
             return `${ingredient?.name || '未知配料'} (${decoration.quantity}${decoration.unit})`;
           }).join(', ') || '无';
           
-          const costBreakdown = getBreadCostBreakdown(bread);
-          const cost = costBreakdown.total || 0;
+          const costBreakdown = getBreadCostBreakdown(bread, doughRecipesMap, fillingRecipesMap, ingredientsMap);
+          const totalCost = costBreakdown.totalCost;
           
           // 修复：添加对fillings的空值检查
           const totalWeight = bread.doughWeight + 
@@ -72,7 +83,7 @@ const BreadList = () => {
                       总重量: {totalWeight}g
                     </Typography>
                     <Typography variant="body2" sx={{ fontFamily: 'Inter, sans-serif' }}>
-                      成本: ¥{cost.toFixed(2)}
+                      成本: ¥{totalCost.toFixed(2)}
                     </Typography>
                   </Box>
                   

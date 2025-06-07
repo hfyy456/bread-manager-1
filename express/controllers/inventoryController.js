@@ -1,4 +1,6 @@
 const Ingredient = require('../models/Ingredient');
+const InventorySnapshot = require('../models/InventorySnapshot');
+const moment = require('moment');
 
 // @desc    提交指定岗位的物料盘点数据
 // @route   POST /api/inventory/submit
@@ -31,17 +33,13 @@ const submitStockByPost = async (req, res) => {
           return null;
         }
         
-        // 更新或设置该岗位的库存信息
         ingredient.stockByPost.set(String(postId), {
           quantity: item.quantity,
-          unit: item.unit, // 使用提交上来的单位，这应该是该物料的采购单位
+          unit: item.unit, 
           lastUpdated: new Date(),
         });
         
-        // The logic to calculate and set `currentStock` is now removed.
-        // The total stock will be calculated on-the-fly whenever needed.
-
-        ingredient.markModified('stockByPost'); // 必须标记，因为 stockByPost 是 Mixed type (Map)
+        ingredient.markModified('stockByPost'); 
         return ingredient.save();
       })
       .then(savedDoc => {
@@ -67,9 +65,162 @@ const submitStockByPost = async (req, res) => {
 
     res.json({ success: true, message: `岗位 ${POSTNAME[postId]} 的 ${successCount} 项物料盘点数据已成功提交。` });
 
-  } catch (globalError) { // Should not happen if individual errors are caught
+  } catch (globalError) { 
     console.error('提交盘点数据时发生意外全局错误:', globalError);
     res.status(500).json({ success: false, message: '服务器在处理盘点提交时发生意外错误。' });
+  }
+};
+
+// @desc    创建当前库存的快照
+// @route   POST /api/inventory/snapshot
+// @access  Private
+const createInventorySnapshot = async (req, res) => {
+  try {
+    const ingredients = await Ingredient.find({});
+
+    let grandTotalValue = 0;
+    const snapshotIngredients = ingredients.map(ing => {
+      let totalStock = 0;
+      if (ing.stockByPost && typeof ing.stockByPost.values === 'function') {
+        for (const stock of ing.stockByPost.values()) {
+          totalStock += stock.quantity || 0;
+        }
+      }
+      
+      const ingredientValue = totalStock * (ing.price || 0);
+      grandTotalValue += ingredientValue;
+
+      // Only store the ID and the stock data, not the rest of the ingredient info
+      return {
+        ingredientId: ing._id,
+        stockByPost: ing.stockByPost,
+      };
+    });
+
+    const year = moment().year();
+    const weekOfYear = moment().week();
+
+    const snapshot = new InventorySnapshot({
+      totalValue: grandTotalValue,
+      ingredients: snapshotIngredients,
+      year: year,
+      weekOfYear: weekOfYear,
+    });
+
+    await snapshot.save();
+
+    // After successfully saving the snapshot, clear the stock data for all ingredients
+    await Ingredient.updateMany({}, { $set: { stockByPost: {} } });
+
+    res.status(201).json({
+      success: true,
+      message: `成功创建库存快照，并已清空现有库存以便开始新的盘点。`,
+      data: snapshot,
+    });
+
+  } catch (error) {
+    console.error('创建库存快照失败:', error);
+    res.status(500).json({ success: false, message: `服务器错误: ${error.message}` });
+  }
+};
+
+// @desc    获取所有库存快照的列表
+// @route   GET /api/inventory/snapshots
+// @access  Private
+const listSnapshots = async (req, res) => {
+  try {
+    const snapshots = await InventorySnapshot.find({})
+      .sort({ year: -1, weekOfYear: -1 })
+      .select('year weekOfYear createdAt');
+
+    res.json({ success: true, data: snapshots });
+  } catch (error) {
+    console.error('获取快照列表失败:', error);
+    res.status(500).json({ success: false, message: '服务器错误' });
+  }
+};
+
+// @desc    获取单个库存快照的详细信息
+// @route   GET /api/inventory/snapshots/:id
+// @access  Private
+const getSnapshotDetails = async (req, res) => {
+  try {
+    const snapshot = await InventorySnapshot.findById(req.params.id);
+
+    if (!snapshot) {
+      return res.status(404).json({ success: false, message: '快照未找到' });
+    }
+
+    // 获取所有相关的原料信息
+    const ingredientIds = snapshot.ingredients.map(item => item.ingredientId);
+    const ingredientsData = await Ingredient.find({ '_id': { $in: ingredientIds } });
+    const ingredientsMap = new Map(ingredientsData.map(ing => [ing._id.toString(), ing]));
+
+    const populatedIngredients = snapshot.ingredients.map(item => {
+      const ingredientDetails = ingredientsMap.get(item.ingredientId.toString());
+      if (!ingredientDetails) {
+        return {
+          _id: item.ingredientId,
+          name: '（已删除或未知的原料）',
+          unit: '-',
+          price: 0,
+          post: [],
+          specs: '',
+          norms: 0,
+          baseUnit: '',
+          stockByPost: item.stockByPost,
+        };
+      }
+      return {
+        ...ingredientDetails.toObject(),
+        stockByPost: item.stockByPost, // 使用快照中的库存数据
+      };
+    });
+
+    const responseData = {
+      _id: snapshot._id,
+      year: snapshot.year,
+      weekOfYear: snapshot.weekOfYear,
+      createdAt: snapshot.createdAt,
+      totalValue: snapshot.totalValue,
+      ingredients: populatedIngredients,
+    };
+
+    res.json({ success: true, data: responseData });
+  } catch (error) {
+    console.error('获取快照详情失败:', error);
+    res.status(500).json({ success: false, message: '服务器错误' });
+  }
+};
+
+// @desc    从快照还原库存
+// @route   POST /api/inventory/restore/:id
+// @access  Private
+const restoreInventoryFromSnapshot = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const snapshot = await InventorySnapshot.findById(id);
+    if (!snapshot) {
+      return res.status(404).json({ success: false, message: '快照未找到' });
+    }
+
+    // Step 1: Clear all current stock data
+    await Ingredient.updateMany({}, { $set: { stockByPost: {} } });
+
+    // Step 2: Restore stock data from the snapshot
+    const restorePromises = snapshot.ingredients.map(item => {
+      return Ingredient.findByIdAndUpdate(item.ingredientId, {
+        $set: { stockByPost: item.stockByPost }
+      });
+    });
+
+    await Promise.all(restorePromises);
+
+    res.json({ success: true, message: `库存已成功从 ${moment(snapshot.createdAt).format('YYYY-MM-DD')} 的快照中还原。` });
+
+  } catch (error) {
+    console.error('从快照还原库存失败:', error);
+    res.status(500).json({ success: false, message: `服务器错误: ${error.message}` });
   }
 };
 
@@ -88,4 +239,8 @@ const POSTNAME = {
 
 module.exports = {
   submitStockByPost,
+  createInventorySnapshot,
+  listSnapshots,
+  getSnapshotDetails,
+  restoreInventoryFromSnapshot,
 }; 

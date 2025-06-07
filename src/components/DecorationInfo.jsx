@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { Card, CardContent, Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography } from '@mui/material';
-import { findIngredientById } from '../utils/calculator';
+import { DataContext } from './DataContext.jsx';
 
 const DecorationInfo = ({ decorations, costBreakdown }) => {
+  const { ingredientsMap } = useContext(DataContext);
+  const decorationDetails = costBreakdown?.decorationsDetails;
+
   if (!decorations || decorations.length === 0) {
     return (
       <Card sx={{ mt: 4 }}>
@@ -42,19 +45,21 @@ const DecorationInfo = ({ decorations, costBreakdown }) => {
               </TableHead>
               <TableBody>
                 {decorations.map(decoration => {
-                  const ingredient = findIngredientById(decoration.ingredientId);
-                  const unitCost = ingredient?.pricePerUnit || 0;
-                  const totalCost = unitCost * decoration.quantity;
+                  const ingredient = ingredientsMap.get((decoration.ingredientId || '').trim());
+                  const costDetails = decorationDetails?.details?.[decoration.ingredientId];
+                  const unitCost = costDetails?.unitCost || 0;
+                  const totalCost = costDetails?.cost || 0;
+
                   return (
                     <TableRow key={decoration.ingredientId}>
                       <TableCell component="th" scope="row" sx={{ fontFamily: 'Inter, sans-serif' }}>
-                        {ingredient?.name || '未知配料'}
+                        {ingredient?.name || decoration.ingredientId}
                       </TableCell>
                       <TableCell align="right" sx={{ fontFamily: 'Inter, sans-serif' }}>
-                        {decoration.quantity}{decoration.unit || ''}
+                        {decoration.quantity}{decoration.unit || ingredient?.min || 'g'}
                       </TableCell>
                       <TableCell align="right" sx={{ fontFamily: 'Inter, sans-serif' }}>
-                        ¥{unitCost.toFixed(4)}/{decoration.unit || ''}
+                        ¥{unitCost.toFixed(4)}/{decoration.unit || ingredient?.min || 'g'}
                       </TableCell>
                       <TableCell align="right" sx={{ fontFamily: 'Inter, sans-serif' }}>
                         ¥{totalCost.toFixed(2)}
@@ -69,7 +74,7 @@ const DecorationInfo = ({ decorations, costBreakdown }) => {
                   <TableCell align="right"></TableCell>
                   <TableCell align="right"></TableCell>
                   <TableCell align="right" sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 600 }}>
-                    ¥{(costBreakdown?.decorations?.totalCost || 0).toFixed(2)}
+                    ¥{(decorationDetails?.totalCost || 0).toFixed(2)}
                   </TableCell>
                 </TableRow>
               </TableBody>

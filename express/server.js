@@ -8,9 +8,12 @@ const inventoryRoutes = require('./routes/inventoryRoutes'); // 新增：引入�
 const dailyReportRoutes = require('./routes/dailyReportRoutes'); // 引入日报表路由
 const dashboardRoutes = require('./routes/dashboardRoutes'); // Added dashboardRoutes import
 const receivingRoutes = require('./routes/receivingRoutes'); // Import the new route
+const breadTypeRoutes = require('./routes/breadTypeRoutes');
+const fillingRecipeRoutes = require('./routes/fillingRecipeRoutes');
+const doughRecipeRoutes = require('./routes/doughRecipeRoutes');
 
 const app = express();
-const port = process.env.PORT || 3001;
+const port = process.env.PORT || 10099;
 
 // --- 连接到数据库 ---
 connectDB();
@@ -29,6 +32,9 @@ app.use('/api/inventory', inventoryRoutes); // 新增：使用盘点路由，所
 app.use('/api/daily-reports', dailyReportRoutes); // 使用日报表路由
 app.use('/api/dashboard', dashboardRoutes); // Added dashboardRoutes usage
 app.use('/api/receiving', receivingRoutes); // Use the new route
+app.use('/api', breadTypeRoutes);
+app.use('/api', fillingRecipeRoutes);
+app.use('/api', doughRecipeRoutes);
 // 您可以在这里添加其他路由模块，例如:
 // const userRoutes = require('./routes/userRoutes');
 // app.use('/api/users', userRoutes);

@@ -5,13 +5,13 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 3000, // You can specify a port for the dev server
+    port: 10098, // You can specify a port for the dev server
     open: true, // Automatically open the app in the browser
     proxy: {
       // Proxy API requests to your Express server
       // Adjust this if your API is on a different port or path
       '/api': {
-        target: 'http://localhost:3001', // Assuming your Express server runs on 3001
+        target: 'http://localhost:10099', // Assuming your Express server runs on 3001
         changeOrigin: true,
         secure: false,
       }

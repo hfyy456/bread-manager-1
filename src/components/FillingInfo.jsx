@@ -1,156 +1,37 @@
-import React, { useState } from 'react';
-import { Card, CardContent, Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography, Tooltip, IconButton } from '@mui/material';
-import { findIngredientById, findFillingRecipeById, adjustCost } from '../utils/calculator';
+import React, { useState, useContext, useMemo } from 'react';
+import { Card, CardContent, Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography, Tooltip, IconButton, Collapse } from '@mui/material';
+import { ExpandMore, ExpandLess, InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
-import { InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
+import { DataContext } from './DataContext.jsx';
 
-const FillingInfo = ({ fillings, costBreakdown, allIngredientsList }) => {
-  const [highlightedSourceFilling, setHighlightedSourceFilling] = useState(null);
+const FillingInfo = ({ fillings, costBreakdown }) => {
+  const { fillingRecipesMap, ingredientsMap, loading } = useContext(DataContext);
+  const [expandedRows, setExpandedRows] = useState({});
 
-  if (!costBreakdown || !costBreakdown.fillingsDetails || costBreakdown.fillingsDetails.length === 0) {
+  const hasFillings = useMemo(() => fillings && fillings.length > 0, [fillings]);
+
+  if (loading) return null;
+
+  if (!hasFillings) {
     return (
       <Card sx={{ mt: 4 }}>
         <CardContent>
-          <Typography variant="h5" component="h2" sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 600 }}>
-            馅料物料明细
-          </Typography>
-          <Typography variant="body2" sx={{ fontFamily: 'Inter, sans-serif' }}>
-            此面包没有馅料信息或馅料成本为零。
-          </Typography>
+          <Typography variant="h5" component="h2" sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 600 }}>馅料信息</Typography>
+          <Typography variant="body2" sx={{ fontFamily: 'Inter, sans-serif' }}>此面包没有馅料。</Typography>
         </CardContent>
       </Card>
     );
   }
 
-  if (!allIngredientsList || allIngredientsList.length === 0) {
-    return (
-        <Card sx={{ mt: 4 }}>
-            <CardContent>
-                <Typography variant="h5" component="h2" sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 600 }}>馅料物料明细</Typography>
-                <Typography variant="body2" color="error" sx={{ fontFamily: 'Inter, sans-serif' }}>原料数据列表未提供给 FillingInfo 组件，无法显示馅料详情。</Typography>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const allFillingMaterialsForDisplay = [];
-  let totalCostOfAllFillingMaterials = 0;
-
-  costBreakdown.fillingsDetails.forEach((fillingUsageInProduct, usageIndex) => {
-    if (fillingUsageInProduct.isDirectIngredient) {
-      const ingredientData = findIngredientById(fillingUsageInProduct.id, allIngredientsList);
-      let pricePerMinUnit = 0;
-      if (ingredientData && typeof ingredientData.price === 'number' && ingredientData.norms > 0) {
-        pricePerMinUnit = ingredientData.price / ingredientData.norms;
-      }
-      const productUsageQty = Number(fillingUsageInProduct.quantityInProduct) || 0;
-      const productTotalCost = Number(fillingUsageInProduct.costInProduct) || 0;
-      totalCostOfAllFillingMaterials += productTotalCost;
-
-      allFillingMaterialsForDisplay.push({
-        key: `direct-fill-${fillingUsageInProduct.id}-${usageIndex}`,
-        name: ingredientData?.name || fillingUsageInProduct.id,
-        source: "直接原料",
-        productUsageQty: productUsageQty,
-        displayUnit: fillingUsageInProduct.unit || ingredientData?.baseUnit || ingredientData?.min || 'g',
-        unitCost: pricePerMinUnit, 
-        productTotalCost: productTotalCost,
-      });
-    } else {
-      const fillingRecipe = findFillingRecipeById(fillingUsageInProduct.id);
-      if (!fillingRecipe) {
-        console.warn(`[FillingInfo] Filling recipe not found for ID: ${fillingUsageInProduct.id} (expected name: ${fillingUsageInProduct.recipeName})`);
-        allFillingMaterialsForDisplay.push({
-          key: `missing-recipe-${fillingUsageInProduct.id}-${usageIndex}`,
-          name: `配方未找到: ${fillingUsageInProduct.recipeName || fillingUsageInProduct.id}`,
-          source: "错误",
-          productUsageQty: Number(fillingUsageInProduct.quantityInProduct) || 0,
-          displayUnit: fillingUsageInProduct.unit || 'g',
-          unitCost: 0,
-          productTotalCost: Number(fillingUsageInProduct.costInProduct) || 0,
-        });
-        totalCostOfAllFillingMaterials += (Number(fillingUsageInProduct.costInProduct) || 0);
-        return;
-      }
-      
-      const totalProductUsageOfThisFillingType = Number(fillingUsageInProduct.quantityInProduct) || 0;
-      const fillingRecipeYield = (fillingRecipe.yield > 0 && Number.isFinite(fillingRecipe.yield)) ? fillingRecipe.yield : 0;
-      
-      const scaleFillingRecipeToProduct = (fillingRecipeYield > 0 && Number.isFinite(totalProductUsageOfThisFillingType)) 
-        ? (totalProductUsageOfThisFillingType / fillingRecipeYield)
-        : 0;
-      
-      let costSumForThisRecipeInProduct = 0;
-
-      fillingRecipe.ingredients?.forEach((ingUsage, ingIndex) => {
-        const ingredientData = findIngredientById(ingUsage.ingredientId, allIngredientsList);
-        let pricePerMinUnit = 0;
-        if (ingredientData && typeof ingredientData.price === 'number' && ingredientData.norms > 0) {
-          pricePerMinUnit = ingredientData.price / ingredientData.norms;
-        }
-        
-        const recipeQty = Number(ingUsage.quantity) || 0;
-        const productUsageQty = recipeQty * scaleFillingRecipeToProduct;
-        const ingredientCostInProduct = productUsageQty * pricePerMinUnit;
-        costSumForThisRecipeInProduct += ingredientCostInProduct;
-
-        allFillingMaterialsForDisplay.push({
-          key: `fill-main-${fillingRecipe.id}-${ingUsage.ingredientId}-${ingIndex}`,
-          name: ingredientData?.name || ingUsage.ingredientId,
-          source: fillingRecipe.name,
-          productUsageQty: productUsageQty,
-          displayUnit: ingUsage.unit || ingredientData?.baseUnit || ingredientData?.min || 'g',
-          unitCost: pricePerMinUnit,
-          productTotalCost: adjustCost(ingredientCostInProduct),
-        });
-      });
-
-      fillingRecipe.subFillings?.forEach((sfUsage, sfIndex) => {
-        const subFillingRecipe = findFillingRecipeById(sfUsage.recipeId);
-        if (subFillingRecipe && subFillingRecipe.ingredients) {
-          const subFillingRecipeYield = (subFillingRecipe.yield > 0 && Number.isFinite(subFillingRecipe.yield)) ? subFillingRecipe.yield : 0;
-          const sfQtyInParentRecipe = Number(sfUsage.quantity) || 0; 
-          
-          const totalProductUsageOfThisSubFillingType = sfQtyInParentRecipe * scaleFillingRecipeToProduct;
-
-          if (subFillingRecipeYield > 0) {
-            const scaleSubFillingToProduct = totalProductUsageOfThisSubFillingType / subFillingRecipeYield;
-
-            subFillingRecipe.ingredients.forEach((subIngUsage, subIngIndex) => {
-              const ingredientData = findIngredientById(subIngUsage.ingredientId, allIngredientsList);
-              let pricePerMinUnit = 0;
-              if (ingredientData && typeof ingredientData.price === 'number' && ingredientData.norms > 0) {
-                pricePerMinUnit = ingredientData.price / ingredientData.norms;
-              }
-              const subRecipeIngQty = Number(subIngUsage.quantity) || 0;
-              const productUsageQty = subRecipeIngQty * scaleSubFillingToProduct;
-              const ingredientCostInProduct = productUsageQty * pricePerMinUnit;
-              costSumForThisRecipeInProduct += ingredientCostInProduct; 
-
-              allFillingMaterialsForDisplay.push({
-                key: `sf-ing-${fillingRecipe.id}-${subFillingRecipe.id}-${subIngUsage.ingredientId}-${subIngIndex}`,
-                name: ingredientData?.name || subIngUsage.ingredientId,
-                source: subFillingRecipe.name,
-                productUsageQty: productUsageQty,
-                displayUnit: subIngUsage.unit || ingredientData?.baseUnit || ingredientData?.min || 'g',
-                unitCost: pricePerMinUnit,
-                productTotalCost: adjustCost(ingredientCostInProduct),
-              });
-            });
-          }
-        }
-      });
-      totalCostOfAllFillingMaterials += adjustCost(costSumForThisRecipeInProduct);
-    }
-  });
+  const handleExpandClick = (id) => {
+    setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   return (
     <Card sx={{ mt: 4 }}>
       <CardContent>
         <Box display="flex" alignItems="center" sx={{ mb: 3 }}>
-          <Typography variant="h5" component="h2" sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, mr: 1 }}>
-            馅料物料明细
-          </Typography>
+          <Typography variant="h5" component="h2" sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, mr: 1 }}>馅料信息</Typography>
           <Tooltip title="查看馅料配方操作指南">
             <IconButton component={Link} to="/operation-guide#filling-recipes" size="small" sx={{ color: 'primary.main' }}>
               <InfoOutlinedIcon fontSize="small"/>
@@ -158,54 +39,70 @@ const FillingInfo = ({ fillings, costBreakdown, allIngredientsList }) => {
           </Tooltip>
         </Box>
         
-        {allFillingMaterialsForDisplay.length > 0 ? (
-          <TableContainer component={Paper} sx={{ mt: 1 }}>
+        <Typography variant="body1" sx={{ mb: 3 }}>
+          馅料在产品中总成本: <strong>¥{(costBreakdown?.fillingsCost || 0).toFixed(2)}</strong>
+        </Typography>
+
+        {fillings.map(fillingUsage => {
+            const detail = costBreakdown.fillingsDetails?.find(d => d.id === fillingUsage.fillingId);
+            if (!detail) return <Typography key={fillingUsage.fillingId} color="error">未找到馅料成本详情: {fillingUsage.fillingId}</Typography>;
+
+            const recipe = detail.isDirectIngredient ? null : fillingRecipesMap.get(fillingUsage.fillingId);
+            const ingredient = detail.isDirectIngredient ? ingredientsMap.get(fillingUsage.fillingId) : null;
+
+            const name = recipe?.name || ingredient?.name || fillingUsage.fillingId;
+            const isExpanded = expandedRows[fillingUsage.fillingId] || false;
+
+            return (
+                 <Paper key={fillingUsage.fillingId} sx={{ p: 2, mb: 2, borderLeft: '3px solid', borderColor: 'secondary.main' }} variant="outlined">
+                    <Box onClick={() => recipe && handleExpandClick(fillingUsage.fillingId)} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: recipe ? "pointer" : "default" }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
+                            {name} {ingredient ? '(直接原料)' : ''}
+                        </Typography>
+                        <Box sx={{display: 'flex', alignItems: 'center'}}>
+                            <Typography variant="body1" sx={{mr:1}}>
+                                用量: {fillingUsage.quantity}g | 成本: ¥{detail.costInProduct.toFixed(2)}
+                            </Typography>
+                           {recipe && (
+                            <IconButton size="small">
+                                {isExpanded ? <ExpandLess /> : <ExpandMore />}
+                            </IconButton>
+                           )}
+                        </Box>
+                    </Box>
+                    {recipe && (
+                        <Collapse in={isExpanded}>
+                           <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 1}}>
+                                (配方批量: {recipe.yield}g, 批量成本: ¥{(detail.batchCalculation?.cost || 0).toFixed(2)})
+                            </Typography>
+                           <TableContainer component={Paper} variant="outlined">
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 'bold' }}>配料名称</TableCell>
-                  <TableCell sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 'bold' }}>来源馅料</TableCell>
-                  <TableCell align="right" sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 'bold' }}>产品用量</TableCell>
-                  <TableCell align="right" sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 'bold' }}>单位成本 (元/{allFillingMaterialsForDisplay[0]?.displayUnit || 'g'})</TableCell>
-                  <TableCell align="right" sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 'bold' }}>总成本 (产品中)</TableCell>
+                                   <TableCell sx={{fontWeight: 'bold'}}>配料</TableCell>
+                                   <TableCell align="right" sx={{fontWeight: 'bold'}}>产品用量</TableCell>
+                                   <TableCell align="right" sx={{fontWeight: 'bold'}}>产品成本</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {allFillingMaterialsForDisplay.map((item) => (
-                  <TableRow 
-                    key={item.key}
-                    onMouseEnter={() => setHighlightedSourceFilling(item.source)}
-                    onMouseLeave={() => setHighlightedSourceFilling(null)}
-                    sx={{
-                      ...(item.source === highlightedSourceFilling && { backgroundColor: 'rgba(255,229,100,0.2)' }),
-                      transition: 'background-color 0.1s ease-in-out',
-                      opacity: (highlightedSourceFilling && item.source !== highlightedSourceFilling) ? 0.5 : 1,
-                    }}
-                  >
-                    <TableCell sx={{ fontFamily: 'Inter, sans-serif' }}>{item.name}</TableCell>
-                    <TableCell sx={{ fontFamily: 'Inter, sans-serif' }}>{item.source}</TableCell>
-                    <TableCell align="right" sx={{ fontFamily: 'Inter, sans-serif' }}>{item.productUsageQty.toFixed(2)}{item.displayUnit}</TableCell>
-                    <TableCell align="right" sx={{ fontFamily: 'Inter, sans-serif' }}>¥{item.unitCost.toFixed(3)}</TableCell>
-                    <TableCell align="right" sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 'bold' }}>¥{item.productTotalCost.toFixed(2)}</TableCell>
+                                 {Object.entries(detail.ingredientCostsInProduct || {}).map(([ingId, data]) => {
+                                   const ing = ingredientsMap.get(ingId.trim());
+                                   return (
+                                     <TableRow key={ingId}>
+                                       <TableCell>{ing?.name || ingId}</TableCell>
+                                       <TableCell align="right">{data.quantity.toFixed(2)}g</TableCell>
+                                       <TableCell align="right">¥{data.cost.toFixed(2)}</TableCell>
                   </TableRow>
-                ))}
-                <TableRow sx={{ '& td': { borderTop: '1px solid rgba(224, 224, 224, 1)', fontWeight: 'bold' } }}>
-                  <TableCell colSpan={2} sx={{ fontFamily: 'Inter, sans-serif' }}>所有馅料物料总成本</TableCell>
-                  <TableCell align="right" sx={{ fontFamily: 'Inter, sans-serif' }}></TableCell>
-                  <TableCell align="right" sx={{ fontFamily: 'Inter, sans-serif' }}></TableCell>
-                  <TableCell align="right" sx={{ fontFamily: 'Inter, sans-serif' }}>
-                    ¥{totalCostOfAllFillingMaterials.toFixed(2)}
-                  </TableCell>
-                </TableRow>
+                                   )
+                                 })}
               </TableBody>
             </Table>
           </TableContainer>
-        ) : (
-          <Typography variant="body2" sx={{ fontFamily: 'Inter, sans-serif' }}>
-            此面包的馅料无具体物料信息或计算出错。
-          </Typography>
+                        </Collapse>
         )}
-
+                 </Paper>
+            )
+        })}
       </CardContent>
     </Card>
   );

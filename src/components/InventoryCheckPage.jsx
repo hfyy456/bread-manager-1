@@ -157,7 +157,7 @@ const InventoryCheckPage = () => {
         ingredientId: ing._id,
         ingredientName: ing.name,
         quantity: parseFloat(stockInputs[ing._id]),
-        unit: ing.unit,
+        unit: ing.unit || ing.baseUnit || ing.min || 'g',
         baseUnit: ing.baseUnit || ing.min,
         norms: ing.norms
       }))

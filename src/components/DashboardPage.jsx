@@ -1,135 +1,45 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext, useMemo } from 'react';
 import {
     Container, Typography, Paper, Grid, Box, Tabs, Tab, AppBar, Tooltip, IconButton,
-    TextField, CircularProgress, Alert as MuiAlert
+    TextField, CircularProgress, Alert as MuiAlert, useTheme
 } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
 import { LineChart, Line, PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import moment from 'moment';
+import { DataContext } from './DataContext'; 
+import { getBreadCostBreakdown, calculateDoughCost, calculateFillingCost, generateAggregatedRawMaterials } from '../utils/calculator'; 
 
-const TabPanel = (props) => {
-    const { children, value, index, ...other } = props;
-    return (
-        <div
-            role="tabpanel"
-            hidden={value !== index}
-            id={`dashboard-tabpanel-${index}`}
-            aria-labelledby={`dashboard-tab-${index}`}
-            {...other}
-        >
-            {value === index && (
-                <Box sx={{ p: 3 }}>
-                    {children}
-                </Box>
-            )}
-        </div>
-    );
-};
-
-function a11yProps(index) {
-    return {
-        id: `dashboard-tab-${index}`,
-        'aria-controls': `dashboard-tabpanel-${index}`,
-    };
-}
-
-const DashboardPage = () => {
-    const [currentTab, setCurrentTab] = useState(0);
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-    const [dashboardData, setDashboardData] = useState(null);
-    const [inventoryValue, setInventoryValue] = useState(null);
-    const [loadingSummary, setLoadingSummary] = useState(false);
-    const [loadingInventory, setLoadingInventory] = useState(false);
-    const [error, setError] = useState(null);
-
-    const handleTabChange = (event, newValue) => {
-        setCurrentTab(newValue);
-    };
-
-    const handleDateChange = (event) => {
-        setSelectedDate(event.target.value);
-    };
-
-    const PIE_CHART_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
-
-    useEffect(() => {
-        const fetchDashboardData = async () => {
-            if (!selectedDate) return;
-            setLoadingSummary(true);
-            setError(null);
-            let period = 'daily';
-            if (currentTab === 1) period = 'weekly';
-            if (currentTab === 2) period = 'monthly';
-
-            try {
-                const response = await fetch(`/api/dashboard/summary?periodType=${period}&date=${selectedDate}`);
-                const result = await response.json();
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || `获取${period}看板数据失败`);
-                }
-                setDashboardData(result.data);
-            } catch (err) {
-                console.error('Fetch dashboard data error:', err);
-                setError(err.message);
-                setDashboardData(null);
-            } finally {
-                setLoadingSummary(false);
-            }
-        };
-        fetchDashboardData();
-    }, [selectedDate, currentTab]);
-
-    useEffect(() => {
-        const fetchInventoryValue = async () => {
-            setLoadingInventory(true);
-            try {
-                const response = await fetch('/api/ingredients/current-total-value');
-                const result = await response.json();
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || '获取总库存价值失败');
-                }
-                setInventoryValue(result.totalValue);
-            } catch (err) {
-                console.error('Fetch inventory value error:', err);
-                setError(prevError => prevError ? `${prevError}\\n${err.message}` : err.message);
-                setInventoryValue(null);
-            } finally {
-                setLoadingInventory(false);
-            }
-        };
-        fetchInventoryValue();
-    }, []);
-
-    const renderMaterialConsumption = (consumptionData, title) => {
+const MaterialConsumptionPanel = ({ consumptionData, ingredientsMap }) => {
         if (!consumptionData || Object.keys(consumptionData).length === 0) {
             return (
-                <Typography sx={{ textAlign: 'center', py: 2 }} color="text.secondary">
-                    暂无原料消耗数据或数据正在加载中。
+            <Typography sx={{ textAlign: 'center', py: 4 }} color="text.secondary">
+                当前周期内无原料消耗。
                 </Typography>
             );
         }
+
+    const consumptionList = Object.entries(consumptionData).map(([name, data]) => {
+        const ingredientDetails = ingredientsMap.get(name);
+        const stock = ingredientDetails?.stockByPost 
+            ? Object.values(ingredientDetails.stockByPost).reduce((acc, curr) => acc + (curr.quantity || 0), 0)
+            : 0;
+        return { name, ...data, stock };
+    }).sort((a, b) => b.quantity - a.quantity);
+
+
         return (
             <Paper elevation={2} sx={{ p: 2, mt: 3 }}>
-                <Typography variant="h6" gutterBottom sx={{ textAlign: 'center', mb: 2 }}>{title}</Typography>
+            <Typography variant="h6" gutterBottom sx={{ textAlign: 'center', mb: 2 }}>理论原料消耗</Typography>
                 <Grid container spacing={1.5}>
-                    {Object.entries(consumptionData)
-                        .sort(([, a], [, b]) => {
-                            // Sort by consumption percentage, descending
-                            const percentageA = a.currentStock > 0 ? (a.quantity / a.currentStock) : (a.quantity > 0 ? Infinity : 0);
-                            const percentageB = b.currentStock > 0 ? (b.quantity / b.currentStock) : (b.quantity > 0 ? Infinity : 0);
-                            return percentageB - percentageA;
-                        })
-                        .map(([name, data]) => {
-                            const consumed = data.quantity || 0;
-                            const stock = data.currentStock || 0;
-                            const unit = data.unit || '单位未知';
+                {consumptionList.map(({ name, quantity, unit, stock }) => {
+                    const consumed = quantity || 0;
                             
                             let progress = 0;
                             if (stock > 0) {
                                 progress = Math.min((consumed / stock) * 100, 100);
                             } else if (consumed > 0) {
-                                progress = 100; // Consumed something with zero stock
+                        progress = 100; // Consumed something with zero or undefined stock
                             }
                             
                             const isOverBudget = consumed > stock;
@@ -137,14 +47,11 @@ const DashboardPage = () => {
 
                             return (
                                 <Grid item xs={12} sm={6} md={4} lg={3} key={name}>
-                                    <Tooltip title={`${name}: 已消耗 ${consumed.toFixed(2)} / 库存 ${stock.toFixed(2)} ${unit}`} placement="top">
+                            <Tooltip title={`${name}: 已消耗 ${consumed.toFixed(2)}${unit} / 总库存 ${stock.toFixed(2)}${unit}`} placement="top">
                                         <Paper variant="outlined" sx={{ p: 1.5, position: 'relative', overflow: 'hidden' }}>
                                             <Box
                                                 sx={{
-                                                    position: 'absolute',
-                                                    top: 0,
-                                                    left: 0,
-                                                    height: '100%',
+                                            position: 'absolute', top: 0, left: 0, height: '100%',
                                                     width: `${progress}%`,
                                                     backgroundColor: progressBarColor,
                                                     transition: 'width 0.5s ease-in-out',
@@ -169,6 +76,335 @@ const DashboardPage = () => {
         );
     };
 
+const TabPanel = (props) => {
+    const { children, value, index, ...other } = props;
+    return (
+        <div
+            role="tabpanel"
+            hidden={value !== index}
+            id={`dashboard-tabpanel-${index}`}
+            aria-labelledby={`dashboard-tab-${index}`}
+            {...other}
+        >
+            {value === index && (
+                <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
+                    {children}
+                </Box>
+            )}
+        </div>
+    );
+};
+
+const DashboardPage = () => {
+    const theme = useTheme();
+    const [currentTab, setCurrentTab] = useState(0);
+    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    
+    const [rawReports, setRawReports] = useState({ periodReports: [], trendReports: [] });
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+
+    const { 
+        ingredientsMap, 
+        doughRecipesMap, 
+        fillingRecipesMap, 
+        breadsMap, 
+        dataLoaded 
+    } = useContext(DataContext);
+
+    useEffect(() => {
+        const fetchDashboardReports = async () => {
+            if (!selectedDate || !dataLoaded) return;
+            setLoading(true);
+            setError(null);
+            
+            const periodMap = { 0: 'daily', 1: 'weekly', 2: 'monthly' };
+            const periodType = periodMap[currentTab];
+
+            try {
+                const response = await fetch(`/api/dashboard/summary?periodType=${periodType}&date=${selectedDate}`);
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    throw new Error(result.message || `获取看板数据失败`);
+                }
+                setRawReports(result.data);
+            } catch (err) {
+                console.error('Fetch dashboard data error:', err);
+                setError(err.message);
+                setRawReports({ periodReports: [], trendReports: [] });
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchDashboardReports();
+    }, [selectedDate, currentTab, dataLoaded]);
+
+    const processedData = useMemo(() => {
+        if (!dataLoaded || !rawReports.periodReports) {
+            return {
+                summary: {},
+                productionByCategory: [],
+                wasteByCategory: [],
+                materialConsumption: {},
+                trendData: [],
+                inventoryValue: 0,
+            };
+        }
+
+        // 1. Calculate Total Inventory Value
+        let totalInventoryValue = 0;
+        ingredientsMap.forEach(ing => {
+            if (ing.stockByPost) {
+                Object.values(ing.stockByPost).forEach(stock => {
+                    totalInventoryValue += (stock.quantity || 0) * (ing.price || 0);
+                });
+            }
+        });
+
+        // 2. Process Period Reports for Summary & Pie Charts
+        const aggregatedProducts = new Map();
+        const aggregatedDoughWastes = new Map();
+        const aggregatedFillingWastes = new Map();
+        let totalProductionValue = 0;
+        let totalFinishedWasteValue = 0;
+        const productionValueMap = new Map();
+        const wasteValueMap = new Map();
+
+        rawReports.periodReports.forEach(report => {
+            // 聚合产品数据，并计算产值和报废价值
+            report.products?.forEach(p => {
+                const bread = breadsMap.get(p.productId);
+                if (!bread || p.quantityProduced <= 0) return;
+
+                const currentQty = aggregatedProducts.get(p.productId) || 0;
+                aggregatedProducts.set(p.productId, currentQty + p.quantityProduced);
+
+                const value = p.quantityProduced * (bread.price || 0);
+                const wasteValue = p.finishedWasteQuantity * (bread.price || 0);
+                const productionValue = value - wasteValue;
+
+                totalProductionValue += productionValue;
+                totalFinishedWasteValue += wasteValue;
+
+                const category = bread.category || '未分类';
+                productionValueMap.set(category, (productionValueMap.get(category) || 0) + productionValue);
+                if (wasteValue > 0) {
+                    wasteValueMap.set(category, (wasteValueMap.get(category) || 0) + wasteValue);
+                }
+            });
+
+            // 聚合面团报废
+            report.doughWastes?.forEach(dw => {
+                if (!dw.doughId || !dw.quantity || dw.quantity <= 0) return;
+                const currentQty = aggregatedDoughWastes.get(dw.doughId) || 0;
+                aggregatedDoughWastes.set(dw.doughId, currentQty + dw.quantity);
+            });
+
+            // 聚合馅料报废
+            report.fillingWastes?.forEach(fw => {
+                if (!fw.fillingId || !fw.quantity || fw.quantity <= 0) return;
+                const currentQty = aggregatedFillingWastes.get(fw.fillingId) || 0;
+                aggregatedFillingWastes.set(fw.fillingId, currentQty + fw.quantity);
+            });
+        });
+
+        // 基于聚合后的数据，计算总物料消耗
+        const materialConsumptionMap = new Map();
+
+        // 从产品计算
+        aggregatedProducts.forEach((quantityProduced, productId) => {
+            const bread = breadsMap.get(productId);
+            if (!bread) return;
+
+            // Use the correct function to get raw materials for a single bread unit
+            const materials = generateAggregatedRawMaterials(bread, breadsMap, doughRecipesMap, fillingRecipesMap, Array.from(ingredientsMap.values()));
+            
+            if (materials && materials.length > 0) {
+                materials.forEach(material => {
+                    const existing = materialConsumptionMap.get(material.name) || { quantity: 0, unit: material.unit };
+                    // The returned material.quantity is for ONE bread, so we multiply by total quantity
+                    materialConsumptionMap.set(material.name, {
+                        quantity: existing.quantity + (material.quantity * quantityProduced),
+                        unit: material.unit || existing.unit
+                    });
+                });
+            }
+        });
+
+        // 从面团报废计算
+        aggregatedDoughWastes.forEach((wastedQuantity, doughId) => {
+            const recipe = doughRecipesMap.get(doughId);
+            if (!recipe || !recipe.yield || recipe.yield <= 0) return;
+
+            const costResult = calculateDoughCost(doughId, doughRecipesMap, ingredientsMap);
+            if (!costResult || !costResult.ingredientCosts) return; 
+
+            const materials = Object.entries(costResult.ingredientCosts).map(([name, data]) => ({
+                name,
+                quantity: data.quantity,
+                unit: ingredientsMap.get(name)?.unit,
+            }));
+
+            const wasteRatio = wastedQuantity / recipe.yield;
+
+            materials.forEach(material => {
+                 const existing = materialConsumptionMap.get(material.name) || { quantity: 0, unit: material.unit };
+                 materialConsumptionMap.set(material.name, {
+                     quantity: existing.quantity + (material.quantity * wasteRatio),
+                     unit: material.unit || existing.unit
+                 });
+            });
+        });
+        
+        // 从馅料报废计算
+        aggregatedFillingWastes.forEach((wastedQuantity, fillingId) => {
+            const recipe = fillingRecipesMap.get(fillingId);
+            if (!recipe || !recipe.yield || recipe.yield <= 0) return;
+
+            const costResult = calculateFillingCost(fillingId, fillingRecipesMap, ingredientsMap);
+            if (!costResult || !costResult.ingredientCosts) return;
+
+            const materials = Object.entries(costResult.ingredientCosts).map(([name, data]) => ({
+                name,
+                quantity: data.quantity,
+                unit: ingredientsMap.get(name)?.unit,
+            }));
+
+            const wasteRatio = wastedQuantity / recipe.yield;
+
+            materials.forEach(material => {
+                 const existing = materialConsumptionMap.get(material.name) || { quantity: 0, unit: material.unit };
+                 materialConsumptionMap.set(material.name, {
+                     quantity: existing.quantity + (material.quantity * wasteRatio),
+                     unit: material.unit || existing.unit
+                 });
+            });
+        });
+
+        // 3. Format data for charts
+        const productionByCategory = Array.from(productionValueMap.entries()).map(([name, value]) => ({ name, value }));
+        const wasteByCategory = Array.from(wasteValueMap.entries()).map(([name, value]) => ({ name, value }));
+        const materialConsumption = Object.fromEntries(materialConsumptionMap);
+
+        // 4. Process Trend Data
+        const trendDataMap = new Map();
+        const periodMap = { 0: 'daily', 1: 'weekly', 2: 'monthly' };
+        const periodType = periodMap[currentTab];
+        const targetDateInBJT = moment(selectedDate).utcOffset('+08:00');
+        const trendFormat = 'MM-DD';
+
+        // Initialize the trend map with all days in the period to ensure a continuous axis.
+        if (periodType === 'daily') {
+            const startDate = targetDateInBJT.clone().subtract(6, 'days');
+            for (let m = startDate; m.isSameOrBefore(targetDateInBJT, 'day'); m.add(1, 'days')) {
+                const dateKey = m.format(trendFormat);
+                trendDataMap.set(dateKey, { date: dateKey, productionValue: 0, wasteValue: 0 });
+            }
+        } else if (periodType === 'weekly') {
+            const startDate = targetDateInBJT.clone().startOf('isoWeek');
+            const endDate = targetDateInBJT.clone().endOf('isoWeek');
+            for (let m = startDate; m.isSameOrBefore(endDate, 'day'); m.add(1, 'days')) {
+                const dateKey = m.format(trendFormat);
+                trendDataMap.set(dateKey, { date: dateKey, productionValue: 0, wasteValue: 0 });
+            }
+        } else { // monthly
+            const startDate = targetDateInBJT.clone().startOf('month');
+            const endDate = targetDateInBJT.clone().endOf('month');
+            for (let m = startDate; m.isSameOrBefore(endDate, 'day'); m.add(1, 'days')) {
+                const dateKey = m.format(trendFormat);
+                trendDataMap.set(dateKey, { date: dateKey, productionValue: 0, wasteValue: 0 });
+            }
+        }
+        
+        // Populate the map with actual data from reports
+        rawReports.trendReports.forEach(report => {
+            const dateKey = moment(report.date).utcOffset('+08:00').format(trendFormat);
+            
+            let dailyProductionValue = 0;
+            let dailyWasteValue = 0;
+
+            report.products.forEach(p => {
+                const bread = breadsMap.get(p.productId);
+                if (bread) {
+                    dailyProductionValue += (p.quantityProduced - p.finishedWasteQuantity) * bread.price;
+                    dailyWasteValue += p.finishedWasteQuantity * bread.price;
+                }
+            });
+            
+            const existing = trendDataMap.get(dateKey);
+            if (existing) {
+                existing.productionValue += dailyProductionValue;
+                existing.wasteValue += dailyWasteValue;
+            }
+        });
+
+        return {
+            summary: {
+                totalProductionValue,
+                totalFinishedWasteValue,
+            },
+            productionByCategory,
+            wasteByCategory,
+            materialConsumption,
+            trendData: Array.from(trendDataMap.values()),
+            inventoryValue: totalInventoryValue,
+            currentDate: rawReports.currentDate,
+        };
+
+    }, [rawReports, dataLoaded, ingredientsMap, doughRecipesMap, fillingRecipesMap, breadsMap, currentTab, selectedDate]);
+
+    const handleTabChange = (event, newValue) => {
+        setCurrentTab(newValue);
+    };
+
+    const handleDateChange = (event) => {
+        setSelectedDate(event.target.value);
+    };
+
+    const PIE_CHART_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#DD84D8'];
+
+    // Helper rendering functions
+    const renderSummaryCard = (title, value, color) => (
+        <Grid item xs={12} sm={6} md={3}>
+            <Paper elevation={2} sx={{ p: 2, textAlign: 'center' }}>
+                <Typography variant="subtitle1" color="textSecondary">{title}</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 'bold' }} color={color}>
+                    {typeof value === 'number' ? `¥${value.toFixed(2)}` : 'N/A'}
+                </Typography>
+            </Paper>
+        </Grid>
+    );
+
+    const renderPieChart = (data, title) => (
+        <Grid item xs={12} md={6}>
+            <Paper elevation={2} sx={{ p: 2, height: 350 }}>
+                <Typography variant="h6" gutterBottom sx={{ textAlign: 'center' }}>{title}</Typography>
+                {data && data.length > 0 ? (
+                    <ResponsiveContainer>
+                        <PieChart>
+                            <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label>
+                                {data.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={PIE_CHART_COLORS[index % PIE_CHART_COLORS.length]} />
+                                ))}
+                            </Pie>
+                            <RechartsTooltip formatter={(value) => `¥${value.toFixed(2)}`} />
+                            <Legend />
+                        </PieChart>
+                    </ResponsiveContainer>
+                ) : <Typography sx={{ textAlign: 'center', pt: 8 }} color="text.secondary">暂无数据</Typography>}
+            </Paper>
+        </Grid>
+    );
+    
+    if (!dataLoaded) {
+        return (
+            <Container maxWidth="xl" sx={{ py: 3, textAlign: 'center' }}>
+                <CircularProgress />
+                <Typography sx={{ mt: 2 }}>正在加载核心数据...</Typography>
+            </Container>
+        );
+    }
 
     return (
         <Container maxWidth="xl" sx={{ py: 3 }}>
@@ -190,14 +426,13 @@ const DashboardPage = () => {
                 value={selectedDate}
                 onChange={handleDateChange}
                 sx={{ mb: 2, maxWidth: 220 }}
-                InputLabelProps={{
-                    shrink: true,
-                }}
+                InputLabelProps={{ shrink: true }}
+                disabled={loading}
             />
 
             {error && (
                 <MuiAlert severity="error" sx={{ mb: 2 }}>
-                    {error.split('\\n').map((line, index) => <div key={index}>{line}</div>)}
+                    {error}
                 </MuiAlert>
             )}
 
@@ -209,278 +444,58 @@ const DashboardPage = () => {
                     indicatorColor="primary"
                     textColor="primary"
                     variant="fullWidth"
+                    disabled={loading}
                 >
-                    <Tab label="按日汇总" {...a11yProps(0)} />
-                    <Tab label="按周汇总" {...a11yProps(1)} />
-                    <Tab label="按月汇总" {...a11yProps(2)} />
+                    <Tab label="按日汇总" />
+                    <Tab label="按周汇总" />
+                    <Tab label="按月汇总" />
                 </Tabs>
             </AppBar>
 
-            {/* Daily Tab Content */}
-            <TabPanel value={currentTab} index={0}>
-                <Typography variant="h6" gutterBottom>每日数据 {dashboardData?.currentDate && `(${dashboardData.currentDate})`}</Typography>
-                {loadingSummary && <Box sx={{display:'flex', justifyContent:'center', my:3}}><CircularProgress /></Box>}
-                {!loadingSummary && dashboardData && (
+            <Paper elevation={2} sx={{ borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
+                 {loading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
+                        <CircularProgress />
+                    </Box>
+                ) : (
+                    <TabPanel value={currentTab} index={currentTab}>
+                        <Typography variant="h6" gutterBottom>
+                           {['每日', '每周', '每月'][currentTab]}数据汇总 {processedData.currentDate && `(${processedData.currentDate})`}
+                                </Typography>
                     <Grid container spacing={3}>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <Paper elevation={2} sx={{ p: 2, textAlign: 'center' }}>
-                                <Typography variant="subtitle1" color="textSecondary">总出品价值</Typography>
-                                <Typography variant="h5" sx={{fontWeight: 'bold'}}>¥{dashboardData.summary?.totalProductionValue?.toFixed(2) || 'N/A'}</Typography>
-                            </Paper>
-                        </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <Paper elevation={2} sx={{ p: 2, textAlign: 'center' }}>
-                                <Typography variant="subtitle1" color="textSecondary">总成品报废价值</Typography>
-                                <Typography variant="h5" color="error" sx={{fontWeight: 'bold'}}>¥{dashboardData.summary?.totalFinishedProductWasteValue?.toFixed(2) || 'N/A'}</Typography>
-                            </Paper>
-                        </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <Paper elevation={2} sx={{ p: 2, textAlign: 'center' }}>
-                                <Typography variant="subtitle1" color="textSecondary">总库存价值(当前)</Typography>
-                                <Typography variant="h5" sx={{fontWeight: 'bold'}}>
-                                    {loadingInventory ? <CircularProgress size={24} /> : `¥${inventoryValue?.toFixed(2) || 'N/A'}`}
-                                </Typography>
-                            </Paper>
-                        </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <Paper elevation={2} sx={{ p: 2, textAlign: 'center' }}>
-                                <Typography variant="subtitle1" color="textSecondary">面团/馅料报废量</Typography>
-                                <Typography variant="h5" color="orange" sx={{fontWeight: 'bold'}}>
-                                     {`${dashboardData.summary?.totalDoughWasteQuantity || 0} ${dashboardData.summary?.doughWasteUnit || 'g'} / ${dashboardData.summary?.totalFillingWasteQuantity || 0} ${dashboardData.summary?.fillingWasteUnit || 'g'}`}
-                                </Typography>
-                            </Paper>
-                        </Grid>
-                        <Grid item xs={12} md={6}>
-                            <Paper elevation={2} sx={{ p: 2, height: 300}}>
-                                <Typography variant="subtitle2" gutterBottom align="center">出品与报废趋势 (最近7天)</Typography>
-                                {dashboardData.charts?.productionWasteTrend ? (
-                                    <ResponsiveContainer width="100%" height="calc(100% - 24px)">
-                                        <LineChart data={dashboardData.charts.productionWasteTrend} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
+                            {renderSummaryCard("总出品价值", processedData.summary.totalProductionValue)}
+                            {renderSummaryCard("总成品报废价值", processedData.summary.totalFinishedWasteValue, 'error')}
+                            {renderSummaryCard("当前总库存价值", processedData.inventoryValue)}
+                            
+                            <Grid item xs={12}>
+                                <Paper elevation={2} sx={{ p: 2, height: 350 }}>
+                                    <Typography variant="h6" gutterBottom sx={{ textAlign: 'center' }}>生产/报废趋势</Typography>
+                                    <ResponsiveContainer>
+                                        <LineChart data={processedData.trendData}>
                                             <CartesianGrid strokeDasharray="3 3" />
-                                            <XAxis dataKey="date" tickFormatter={(tick) => moment(tick, 'YYYY-MM-DD').format('MM-DD')} />
+                                            <XAxis dataKey="date" />
                                             <YAxis />
-                                            <RechartsTooltip />
+                                            <RechartsTooltip formatter={(value) => `¥${value.toFixed(2)}`} />
                                             <Legend />
-                                            <Line type="monotone" dataKey="productionValue" name="出品价值" stroke="#82ca9d" activeDot={{ r: 8 }} />
-                                            <Line type="monotone" dataKey="wasteValue" name="报废价值" stroke="#ff7300" />
+                                            <Line type="monotone" dataKey="productionValue" name="出品价值" stroke={theme.palette.primary.main} activeDot={{ r: 8 }} />
+                                            <Line type="monotone" dataKey="wasteValue" name="报废价值" stroke={theme.palette.error.main} />
                                         </LineChart>
                                     </ResponsiveContainer>
-                                ) : <Typography sx={{textAlign:'center', pt:5}}>图表数据加载中或无数据</Typography>}
                             </Paper>
                         </Grid>
-                        <Grid item xs={12} md={6}>
-                            <Paper elevation={2} sx={{ p: 2, height: 300}}>
-                                <Typography variant="subtitle2" gutterBottom align="center">报废构成</Typography>
-                                 {dashboardData.charts?.wasteComposition && dashboardData.charts.wasteComposition.some(item => item.value > 0) ? (
-                                    <ResponsiveContainer width="100%" height="calc(100% - 24px)">
-                                        <PieChart>
-                                            <Pie
-                                                data={dashboardData.charts.wasteComposition.filter(item => item.value > 0)}
-                                                cx="50%"
-                                                cy="50%"
-                                                labelLine={false}
-                                                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                                outerRadius={80}
-                                                fill="#8884d8"
-                                                dataKey="value"
-                                                nameKey="name"
-                                            >
-                                                {dashboardData.charts.wasteComposition.filter(item => item.value > 0).map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={PIE_CHART_COLORS[index % PIE_CHART_COLORS.length]} />
-                                                ))}
-                                            </Pie>
-                                            <RechartsTooltip formatter={(value, name) => [parseFloat(value).toFixed(2), name]} />
-                                            <Legend />
-                                        </PieChart>
-                                    </ResponsiveContainer>
-                                ) : <Typography sx={{textAlign:'center', pt:5}}>图表数据加载中或无数据 / 无报废</Typography>}
-                            </Paper>
-                        </Grid>
-                        <Grid item xs={12}>
-                           {renderMaterialConsumption(dashboardData.rawMaterialConsumption, '本日理论消耗')}
-                        </Grid>
-                    </Grid>
-                )}
-            </TabPanel>
 
-            {/* Weekly Tab Content */}
-            <TabPanel value={currentTab} index={1}>
-                <Typography variant="h6" gutterBottom>每周数据 {dashboardData?.currentDateRange && `(${dashboardData.currentDateRange})`}</Typography>
-                {loadingSummary && <Box sx={{display:'flex', justifyContent:'center', my:3}}><CircularProgress /></Box>}
-                {!loadingSummary && dashboardData && (
-                    <Grid container spacing={3}>
-                        {/* Summary Cards - similar to daily */}
-                        <Grid item xs={12} sm={6} md={3}>
-                            <Paper elevation={2} sx={{ p: 2, textAlign: 'center' }}>
-                                <Typography variant="subtitle1" color="textSecondary">总出品价值</Typography>
-                                <Typography variant="h5" sx={{fontWeight: 'bold'}}>¥{dashboardData.summary?.totalProductionValue?.toFixed(2) || 'N/A'}</Typography>
-                            </Paper>
-                        </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <Paper elevation={2} sx={{ p: 2, textAlign: 'center' }}>
-                                <Typography variant="subtitle1" color="textSecondary">总成品报废价值</Typography>
-                                <Typography variant="h5" color="error" sx={{fontWeight: 'bold'}}>¥{dashboardData.summary?.totalFinishedProductWasteValue?.toFixed(2) || 'N/A'}</Typography>
-                            </Paper>
-                        </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
-                             <Paper elevation={2} sx={{ p: 2, textAlign: 'center' }}>
-                                <Typography variant="subtitle1" color="textSecondary">总库存价值(当前)</Typography>
-                                <Typography variant="h5" sx={{fontWeight: 'bold'}}>
-                                    {loadingInventory ? <CircularProgress size={24} /> : `¥${inventoryValue?.toFixed(2) || 'N/A'}`}
-                                </Typography>
-                            </Paper>
-                        </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <Paper elevation={2} sx={{ p: 2, textAlign: 'center' }}>
-                                <Typography variant="subtitle1" color="textSecondary">面团/馅料报废量</Typography>
-                                <Typography variant="h5" color="orange" sx={{fontWeight: 'bold'}}>
-                                     {`${dashboardData.summary?.totalDoughWasteQuantity || 0} ${dashboardData.summary?.doughWasteUnit || 'g'} / ${dashboardData.summary?.totalFillingWasteQuantity || 0} ${dashboardData.summary?.fillingWasteUnit || 'g'}`}
-                                </Typography>
-                            </Paper>
-                        </Grid>
                         
-                        {/* Charts - similar to daily, but using weekly data */}
-                        <Grid item xs={12} md={6}>
-                            <Paper elevation={2} sx={{ p: 2, height: 300}}>
-                                <Typography variant="subtitle2" gutterBottom align="center">出品与报废趋势 (本周)</Typography>
-                                {dashboardData.charts?.productionWasteTrend && dashboardData.charts.productionWasteTrend.length > 0 ? (
-                                    <ResponsiveContainer width="100%" height="calc(100% - 24px)">
-                                        <LineChart data={dashboardData.charts.productionWasteTrend} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
-                                            <CartesianGrid strokeDasharray="3 3" />
-                                            <XAxis dataKey="date" />
-                                            <YAxis />
-                                            <RechartsTooltip />
-                                            <Legend />
-                                            <Line type="monotone" dataKey="productionValue" name="出品价值" stroke="#82ca9d" />
-                                            <Line type="monotone" dataKey="wasteValue" name="报废价值" stroke="#ff7300" />
-                                        </LineChart>
-                                    </ResponsiveContainer>
-                                 ) : <Typography sx={{textAlign:'center', pt:5}}>图表数据加载中或无数据</Typography>}
-                            </Paper>
+
+                            <Grid item xs={12}>
+                                <MaterialConsumptionPanel 
+                                    consumptionData={processedData.materialConsumption}
+                                    ingredientsMap={ingredientsMap}
+                                />
                         </Grid>
-                        <Grid item xs={12} md={6}>
-                             <Paper elevation={2} sx={{ p: 2, height: 300}}>
-                                <Typography variant="subtitle2" gutterBottom align="center">报废构成 (本周)</Typography>
-                                {dashboardData.charts?.wasteComposition && dashboardData.charts.wasteComposition.some(item=>item.value > 0) ? (
-                                    <ResponsiveContainer width="100%" height="calc(100% - 24px)">
-                                        <PieChart>
-                                            <Pie
-                                                data={dashboardData.charts.wasteComposition.filter(item => item.value > 0)}
-                                                cx="50%"
-                                                cy="50%"
-                                                labelLine={false}
-                                                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                                outerRadius={80}
-                                                fill="#8884d8"
-                                                dataKey="value"
-                                            >
-                                                {dashboardData.charts.wasteComposition.filter(item => item.value > 0).map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={PIE_CHART_COLORS[index % PIE_CHART_COLORS.length]} />
-                                                ))}
-                                            </Pie>
-                                            <Legend />
-                                        </PieChart>
-                                    </ResponsiveContainer>
-                                ) : <Typography sx={{textAlign:'center', pt:5}}>图表数据加载中或无数据</Typography>}
-                            </Paper>
                         </Grid>
-                         {/* Material Consumption - weekly */}
-                        <Grid item xs={12}>
-                           {renderMaterialConsumption(dashboardData.rawMaterialConsumption, '本周理论消耗')}
-                        </Grid>
-                    </Grid>
-                )}
             </TabPanel>
-
-            {/* Monthly Tab Content */}
-            <TabPanel value={currentTab} index={2}>
-                <Typography variant="h6" gutterBottom>每月数据 {dashboardData?.currentDateRange && `(${dashboardData.currentDateRange})`}</Typography>
-                {loadingSummary && <Box sx={{display:'flex', justifyContent:'center', my:3}}><CircularProgress /></Box>}
-                {!loadingSummary && dashboardData && (
-                    <Grid container spacing={3}>
-                        {/* Summary Cards - similar to daily/weekly */}
-                        <Grid item xs={12} sm={6} md={3}>
-                            <Paper elevation={2} sx={{ p: 2, textAlign: 'center' }}>
-                                <Typography variant="subtitle1" color="textSecondary">总出品价值</Typography>
-                                <Typography variant="h5" sx={{fontWeight: 'bold'}}>¥{dashboardData.summary?.totalProductionValue?.toFixed(2) || 'N/A'}</Typography>
-                            </Paper>
-                        </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <Paper elevation={2} sx={{ p: 2, textAlign: 'center' }}>
-                                <Typography variant="subtitle1" color="textSecondary">总成品报废价值</Typography>
-                                <Typography variant="h5" color="error" sx={{fontWeight: 'bold'}}>¥{dashboardData.summary?.totalFinishedProductWasteValue?.toFixed(2) || 'N/A'}</Typography>
-                            </Paper>
-                        </Grid>
-                         <Grid item xs={12} sm={6} md={3}>
-                             <Paper elevation={2} sx={{ p: 2, textAlign: 'center' }}>
-                                <Typography variant="subtitle1" color="textSecondary">总库存价值(当前)</Typography>
-                                <Typography variant="h5" sx={{fontWeight: 'bold'}}>
-                                    {loadingInventory ? <CircularProgress size={24} /> : `¥${inventoryValue?.toFixed(2) || 'N/A'}`}
-                                </Typography>
-                            </Paper>
-                        </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <Paper elevation={2} sx={{ p: 2, textAlign: 'center' }}>
-                                <Typography variant="subtitle1" color="textSecondary">面团/馅料报废量</Typography>
-                                <Typography variant="h5" color="orange" sx={{fontWeight: 'bold'}}>
-                                     {`${dashboardData.summary?.totalDoughWasteQuantity || 0} ${dashboardData.summary?.doughWasteUnit || 'g'} / ${dashboardData.summary?.totalFillingWasteQuantity || 0} ${dashboardData.summary?.fillingWasteUnit || 'g'}`}
-                                </Typography>
-                            </Paper>
-                        </Grid>
-
-                        {/* Charts - similar to daily/weekly, but using monthly data */}
-                        <Grid item xs={12} md={6}>
-                            <Paper elevation={2} sx={{ p: 2, height: 300}}>
-                                <Typography variant="subtitle2" gutterBottom align="center">出品与报废趋势 (本月)</Typography>
-                                {dashboardData.charts?.productionWasteTrend && dashboardData.charts.productionWasteTrend.length > 0 ? (
-                                    <ResponsiveContainer width="100%" height="calc(100% - 24px)">
-                                        <LineChart data={dashboardData.charts.productionWasteTrend} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
-                                            <CartesianGrid strokeDasharray="3 3" />
-                                            <XAxis dataKey="date" />
-                                            <YAxis />
-                                            <RechartsTooltip />
-                                            <Legend />
-                                            <Line type="monotone" dataKey="productionValue" name="出品价值" stroke="#82ca9d" />
-                                            <Line type="monotone" dataKey="wasteValue" name="报废价值" stroke="#ff7300" />
-                                        </LineChart>
-                                    </ResponsiveContainer>
-                                ) : <Typography sx={{textAlign:'center', pt:5}}>图表数据加载中或无数据</Typography>}
-                            </Paper>
-                        </Grid>
-                        <Grid item xs={12} md={6}>
-                            <Paper elevation={2} sx={{ p: 2, height: 300}}>
-                                <Typography variant="subtitle2" gutterBottom align="center">报废构成 (本月)</Typography>
-                                {dashboardData.charts?.wasteComposition && dashboardData.charts.wasteComposition.some(item=>item.value > 0) ? (
-                                    <ResponsiveContainer width="100%" height="calc(100% - 24px)">
-                                        <PieChart>
-                                            <Pie
-                                                data={dashboardData.charts.wasteComposition.filter(item => item.value > 0)}
-                                                cx="50%"
-                                                cy="50%"
-                                                labelLine={false}
-                                                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                                outerRadius={80}
-                                                fill="#8884d8"
-                                                dataKey="value"
-                                            >
-                                                {dashboardData.charts.wasteComposition.filter(item => item.value > 0).map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={PIE_CHART_COLORS[index % PIE_CHART_COLORS.length]} />
-                                                ))}
-                                            </Pie>
-                                            <Legend />
-                                        </PieChart>
-                                    </ResponsiveContainer>
-                                ) : <Typography sx={{textAlign:'center', pt:5}}>图表数据加载中或无数据</Typography>}
-                            </Paper>
-                        </Grid>
-                         {/* Material Consumption - monthly */}
-                        <Grid item xs={12}>
-                           {renderMaterialConsumption(dashboardData.rawMaterialConsumption, '本月理论消耗')}
-                        </Grid>
-                    </Grid>
                 )}
-            </TabPanel>
-
+            </Paper>
         </Container>
     );
 };

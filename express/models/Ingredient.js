@@ -41,7 +41,6 @@ const ingredientSchema = new mongoose.Schema({
   norms: { // 换算规格：1个[unit] 等于多少个[baseUnit]
     type: Number,
     required: [true, '换算规格是必填项'],
-    min: [0.000001, '换算规格必须大于0'], // 避免为0或负数
   },
   storeIds: { // 可能是关联的商店或其他实体的ID (对应原始数据的 store 字段)
     type: [String], // 或者 [mongoose.Schema.Types.ObjectId] 如果它们确实是其他集合的文档ID
