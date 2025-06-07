@@ -265,7 +265,7 @@ const DashboardPage = () => {
             const materials = Object.entries(costResult.ingredientCosts).map(([name, data]) => ({
                 name,
                 quantity: data.quantity,
-                unit: ingredientsMap.get(name)?.unit,
+                unit: ingredientsMap.get(name)?.min || 'g',
             }));
 
             const wasteRatio = wastedQuantity / recipe.yield;
@@ -290,7 +290,7 @@ const DashboardPage = () => {
             const materials = Object.entries(costResult.ingredientCosts).map(([name, data]) => ({
                 name,
                 quantity: data.quantity,
-                unit: ingredientsMap.get(name)?.unit,
+                unit: ingredientsMap.get(name)?.min || 'g',
             }));
 
             const wasteRatio = wastedQuantity / recipe.yield;
