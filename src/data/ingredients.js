@@ -173,6 +173,26 @@ export const ingredients = [
   },
   {
     _id: {
+      $oid: "6727c0ee35d23fe5d7da7527",
+    },
+    name: "诺曼底淡奶油",
+    unit: "瓶",
+    price: 48,
+    specs: "1L/12瓶/箱",
+    thumb:
+      "https://qiniu.hfsblog.com/wuliao/%E5%BE%AE%E4%BF%A1%E5%9B%BE%E7%89%87_20241117040519.jpg",
+    create_time: "2024/11/4 2:28",
+    post: [7, 8, 9],
+    min: "ml",
+    norms: 1000,
+    store: [
+      "66be33b337f4cf91f7ff8c18",
+      "6741b68cd23100edb62f1d58",
+      "6741b67ed23100edb62f1d57",
+    ],
+  },
+  {
+    _id: {
       $oid: "6727c0ee35d23fe5d7da7578",
     },
     name: "趁热开心果片800g",
@@ -294,7 +314,7 @@ export const ingredients = [
     thumb: "",
     create_time: "2024/11/4 2:28",
     post: [1, 3, 9],
-    min: "kg",
+    min: "g",
     norms: 12000,
     store: [
       "6741b68cd23100edb62f1d58",
@@ -773,7 +793,7 @@ export const ingredients = [
     _id: {
       $oid: "6727c0ee35d23fe5d7da7598",
     },
-    name: "安德鲁蓝莓颗粒果酱（蓝莓条酱）",
+    name: "安德鲁蓝莓颗粒果酱",
     unit: "包",
     price: 65,
     specs: "1kg/8包/箱",
@@ -4031,7 +4051,7 @@ export const ingredients = [
     unit: "斤",
     price: 7,
     create_time: "2024/12/20 22:35",
-    min: "斤",
+    min: "g",
     norms: 500,
     post: [4, 8],
     thumb: "1",

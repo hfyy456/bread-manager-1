@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -7,6 +7,10 @@ import {
   Container,
   Box,
   IconButton,
+  CircularProgress,
+  Paper,
+  Button,
+  Tooltip,
 } from "@mui/material";
 import { doughRecipes } from "../data/doughRecipes";
 import {
@@ -15,6 +19,8 @@ import {
   findDoughRecipeById,
 } from "../utils/calculator";
 import { styled } from "@mui/material/styles";
+import { Link } from 'react-router-dom';
+import { InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
 
 const ExpandMore = styled((props) => {
   const { expand, ...other } = props;
@@ -27,8 +33,52 @@ const ExpandMore = styled((props) => {
   }),
 }));
 
+const formatNumberDisplay = (num, decimals = 2, fallback = 'N/A') => {
+  const parsedNum = parseFloat(num);
+  if (typeof parsedNum === 'number' && isFinite(parsedNum)) {
+    return parsedNum.toFixed(decimals);
+  }
+  return fallback;
+};
+
 const DoughRecipeList = () => {
   const [expanded, setExpanded] = React.useState({});
+  const [allIngredientsData, setAllIngredientsData] = useState([]);
+  const [loadingIngredients, setLoadingIngredients] = useState(true);
+  const [errorIngredients, setErrorIngredients] = useState(null);
+
+  useEffect(() => {
+    const fetchIngredients = async () => {
+      setLoadingIngredients(true);
+      setErrorIngredients(null);
+      try {
+        const response = await fetch('/api/ingredients/list', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({}),
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          setAllIngredientsData(result.data);
+        } else {
+          setErrorIngredients(result.message || 'Failed to load ingredients or data format is incorrect.');
+          setAllIngredientsData([]);
+        }
+      } catch (err) {
+        setErrorIngredients(`Error fetching ingredients: ${err.message}`);
+        setAllIngredientsData([]);
+      } finally {
+        setLoadingIngredients(false);
+      }
+    };
+
+    fetchIngredients();
+  }, []);
 
   const handleExpandClick = (id) => {
     setExpanded((prev) => ({
@@ -37,18 +87,75 @@ const DoughRecipeList = () => {
     }));
   };
 
+  if (loadingIngredients) {
+    return (
+      <Container maxWidth="xl" sx={{ py: 4, textAlign: 'center' }}>
+        <CircularProgress />
+        <Typography sx={{ mt: 2 }}>正在加载原料数据...</Typography>
+      </Container>
+    );
+  }
+
+  if (errorIngredients) {
+    return (
+      <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Paper elevation={3} sx={{ p: 3, textAlign: 'center', backgroundColor: 'error.light' }}>
+          <Typography variant="h5" color="error.contrastText">原料数据加载失败</Typography>
+          <Typography color="error.contrastText" sx={{ mt: 1 }}>{errorIngredients}</Typography>
+          <Button variant="contained" onClick={() => window.location.reload()} sx={{mt: 2}}>
+            刷新页面
+          </Button>
+        </Paper>
+      </Container>
+    );
+  }
+  
+  if (!loadingIngredients && !errorIngredients && allIngredientsData.length === 0) {
+    return (
+      <Container maxWidth="xl" sx={{ py: 4, textAlign: 'center' }}>
+        <Typography variant="h6" color="text.secondary">
+            未能加载到任何原料数据，无法显示面团配方。请检查API或数据库。
+        </Typography>
+      </Container>
+    );
+  }
+
   return (
     <Container maxWidth="xl">
+      <Box display="flex" alignItems="center" sx={{ mb: 6, mt: 3 }}>
       <Typography
         variant="h4"
         component="h1"
-        sx={{ mb: 6, mt: 3, fontFamily: "Inter, sans-serif", fontWeight: 600 }}
+          sx={{ fontFamily: "Inter, sans-serif", fontWeight: 600, mr: 1 }}
       >
         面团配方
       </Typography>
+        <Tooltip title="查看操作指南">
+          <IconButton component={Link} to="/operation-guide#dough-recipes" size="small" sx={{ color: 'primary.main' }}>
+            <InfoOutlinedIcon />
+          </IconButton>
+        </Tooltip>
+      </Box>
       <Grid container spacing={4}>
-        {doughRecipes.map((recipe) => {
-          const cost = calculateDoughCost(recipe);
+        {Array.isArray(doughRecipes) && doughRecipes.map((recipe) => {
+          if (!recipe || typeof recipe.id === 'undefined' || typeof recipe.name === 'undefined') {
+            console.warn("Invalid recipe object found:", recipe);
+            return null; // Skip rendering this invalid recipe
+          }
+
+          const costResult = calculateDoughCost(recipe, allIngredientsData);
+          const cost = costResult && typeof costResult.cost === 'number' && isFinite(costResult.cost) ? costResult.cost : undefined;
+          const currentRecipeYield = costResult && typeof costResult.yield === 'number' && isFinite(costResult.yield) && costResult.yield > 0 
+                                   ? costResult.yield 
+                                   : (parseFloat(recipe.yield) > 0 ? parseFloat(recipe.yield) : undefined);
+
+          const isValidYield = typeof currentRecipeYield === 'number' && currentRecipeYield > 0;
+          
+          const displayCost = formatNumberDisplay(cost, 2, '计算错误');
+          const displayUnitCost = isValidYield && typeof cost === 'number'
+            ? formatNumberDisplay(cost / currentRecipeYield, 4, '计算错误') 
+            : 'N/A';
+
           return (
             <Grid item xs={12} md={6} lg={4} key={recipe.id}>
               <Card
@@ -71,8 +178,8 @@ const DoughRecipeList = () => {
                     color="text.secondary"
                     sx={{ mt: 2, fontFamily: "Inter, sans-serif" }}
                   >
-                    总重量: {recipe.yield}g | 总成本: ¥{cost.toFixed(2)} |
-                    单位成本: ¥{(cost / recipe.yield).toFixed(4)}/g
+                    总重量: {isValidYield ? currentRecipeYield.toString() + 'g' : 'N/A'} | 总成本: ¥{displayCost} |
+                    单位成本: ¥{displayUnitCost}/g
                   </Typography>
 
                   <Box sx={{ mt: 3 }}>
@@ -98,7 +205,7 @@ const DoughRecipeList = () => {
                             </Typography>
                           );
                         }
-                        const ingredient = findIngredientById(ing.ingredientId);
+                        const ingredient = findIngredientById(ing.ingredientId, allIngredientsData);
                         // 检查配料是否存在
                         if (!ingredient) {
                           return (

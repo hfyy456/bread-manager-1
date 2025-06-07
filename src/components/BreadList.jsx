@@ -1,18 +1,26 @@
 import React from 'react';
-import { Card, CardContent, Typography, Grid, Container, Box, Button } from '@mui/material';
+import { Card, CardContent, Typography, Grid, Container, Box, Button, Tooltip, IconButton } from '@mui/material';
 import { breadTypes } from '../data/breadTypes';
 import { doughRecipes } from '../data/doughRecipes';
 import { fillingRecipes } from '../data/fillingRecipes';
 import { ingredients } from '../data/ingredients';
 import { getBreadCostBreakdown } from '../utils/calculator';
 import { Link } from 'react-router-dom';
+import { InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
 
 const BreadList = () => {
   return (
     <Container maxWidth="xl">
-      <Typography variant="h4" component="h1" sx={{ mb: 6, mt: 3, fontFamily: 'Inter, sans-serif', fontWeight: 600 }}>
+      <Box display="flex" alignItems="center" sx={{ mb: 6, mt: 3 }}>
+        <Typography variant="h4" component="h1" sx={{ fontFamily: 'Inter, sans-serif', fontWeight: 600, mr: 1 }}>
         面包列表
       </Typography>
+        <Tooltip title="查看操作指南">
+          <IconButton component={Link} to="/operation-guide#bread-products" size="small" sx={{ color: 'primary.main' }}>
+            <InfoOutlinedIcon />
+          </IconButton>
+        </Tooltip>
+      </Box>
       <Grid container spacing={4}>
         {breadTypes.map(bread => {
           const doughRecipe = doughRecipes.find(r => r.id === bread.doughId);
