@@ -58,7 +58,29 @@ export const DataProvider = ({ children }) => {
         const a_breadTypes = breadTypesData.data || [];
         const a_fillingRecipes = fillingRecipesData.data || [];
         const a_doughRecipes = doughRecipesData.data || [];
-        const a_ingredients = ingredientsData.data || [];
+        let a_ingredients = ingredientsData.data || [];
+
+        // Fetch inventory state separately
+        try {
+            const inventoryRes = await fetch('/api/inventory/state');
+            const inventoryResult = await inventoryRes.json();
+            if (inventoryRes.ok && inventoryResult.success) {
+                const inventoryMap = new Map(inventoryResult.data.map(item => [item.ingredientId, item.stockByPost]));
+                
+                // Merge inventory data into ingredients list
+                a_ingredients = a_ingredients.map(ing => {
+                    if (inventoryMap.has(ing.name)) {
+                        return { ...ing, stockByPost: inventoryMap.get(ing.name) };
+                    }
+                    return ing;
+                });
+            } else {
+                console.warn("Could not fetch inventory state:", inventoryResult.message);
+            }
+        } catch (invErr) {
+            console.error("Error fetching inventory state:", invErr);
+            // Decide if this should be a critical error. For now, we'll just log it.
+        }
 
         setBreadTypes(a_breadTypes);
         setFillingRecipes(a_fillingRecipes);
