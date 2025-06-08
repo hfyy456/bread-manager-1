@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useEffect, useCallback } from 'react';
 
 export const DataContext = createContext();
 
@@ -25,86 +25,147 @@ export const DataProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const results = await Promise.allSettled([
+        fetch('/api/bread-types/list', { method: 'POST' }),
+        fetch('/api/filling-recipes/list', { method: 'POST' }),
+        fetch('/api/dough-recipes/list', { method: 'POST' }),
+        fetch('/api/ingredients/list', { method: 'POST' })
+      ]);
+
+      const successfulResults = [];
+      const failedReasons = [];
+
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled' && result.value.ok) {
+          successfulResults[index] = result.value.json();
+        } else {
+          const reason = result.reason || `HTTP error! status: ${result.value?.status}`;
+          failedReasons.push(`API call ${index + 1} failed: ${reason}`);
+        }
+      });
+      
+      if (failedReasons.length > 0) {
+        throw new Error(failedReasons.join('; '));
+      }
+
+      const [breadTypesData, fillingRecipesData, doughRecipesData, ingredientsData] = await Promise.all(successfulResults);
+
+      const a_breadTypes = breadTypesData.data || [];
+      const a_fillingRecipes = fillingRecipesData.data || [];
+      const a_doughRecipes = doughRecipesData.data || [];
+      let a_ingredients = ingredientsData.data || [];
+
+      // Fetch inventory state separately
       try {
-        const results = await Promise.allSettled([
-          fetch('/api/bread-types/list', { method: 'POST' }),
-          fetch('/api/filling-recipes/list', { method: 'POST' }),
-          fetch('/api/dough-recipes/list', { method: 'POST' }),
-          fetch('/api/ingredients/list', { method: 'POST' })
-        ]);
-
-        const successfulResults = [];
-        const failedReasons = [];
-
-        results.forEach((result, index) => {
-          if (result.status === 'fulfilled' && result.value.ok) {
-            successfulResults[index] = result.value.json();
+          const inventoryRes = await fetch('/api/inventory/state');
+          const inventoryResult = await inventoryRes.json();
+          if (inventoryRes.ok && inventoryResult.success) {
+              const inventoryMap = new Map(inventoryResult.data.map(item => [item.ingredientId, item.stockByPost]));
+              
+              // Merge inventory data into ingredients list
+              a_ingredients = a_ingredients.map(ing => {
+                  if (inventoryMap.has(ing.name)) {
+                      return { ...ing, stockByPost: inventoryMap.get(ing.name) };
+                  }
+                  return ing;
+              });
           } else {
-            const reason = result.reason || `HTTP error! status: ${result.value?.status}`;
-            failedReasons.push(`API call ${index + 1} failed: ${reason}`);
+              console.warn("Could not fetch inventory state:", inventoryResult.message);
+          }
+      } catch (invErr) {
+          console.error("Error fetching inventory state:", invErr);
+          // Decide if this should be a critical error. For now, we'll just log it.
+      }
+
+      setBreadTypes(a_breadTypes);
+      setFillingRecipes(a_fillingRecipes);
+      setDoughRecipes(a_doughRecipes);
+      setIngredients(a_ingredients);
+      
+      setBreadsMap(arrayToMap(a_breadTypes, 'id'));
+      setFillingRecipesMap(arrayToMap(a_fillingRecipes, 'name'));
+      setDoughRecipesMap(arrayToMap(a_doughRecipes, 'name'));
+      setIngredientsMap(arrayToMap(a_ingredients, 'name'));
+      
+      setDataLoaded(true);
+
+    } catch (err) {
+      console.error("Failed to fetch initial data:", err);
+      setError(err.message);
+      setDataLoaded(false);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const updateIngredientStock = useCallback(async (updates) => {
+    // updates should be an array of objects: [{ ingredientName, location, quantity, unit }]
+    try {
+      const response = await fetch('/api/inventory/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Failed to update inventory on the server.');
+      }
+      
+      // Optimistically update local state
+      setIngredients(prevIngredients => {
+        const newIngredients = [...prevIngredients];
+        const newIngredientsMap = new Map(ingredientsMap);
+
+        updates.forEach(update => {
+          const ingredientToUpdate = newIngredientsMap.get(update.ingredientName);
+          if (ingredientToUpdate) {
+            const newStockByPost = { ...(ingredientToUpdate.stockByPost || {}) };
+            
+            if (newStockByPost[update.location]) {
+              newStockByPost[update.location].quantity = (parseFloat(newStockByPost[update.location].quantity) || 0) + parseFloat(update.quantity);
+            } else {
+              newStockByPost[update.location] = {
+                quantity: parseFloat(update.quantity),
+                unit: update.unit,
+              };
+            }
+            newStockByPost[update.location].lastUpdated = new Date().toISOString();
+
+            const updatedIngredient = { ...ingredientToUpdate, stockByPost: newStockByPost };
+            
+            // update the map
+            newIngredientsMap.set(update.ingredientName, updatedIngredient);
+
+            // update the array
+            const indexInArray = newIngredients.findIndex(ing => ing.name === update.ingredientName);
+            if (indexInArray !== -1) {
+              newIngredients[indexInArray] = updatedIngredient;
+            }
           }
         });
         
-        if (failedReasons.length > 0) {
-          throw new Error(failedReasons.join('; '));
-        }
+        // Update the state that will trigger re-render
+        setIngredientsMap(newIngredientsMap);
+        return newIngredients;
+      });
 
-        const [breadTypesData, fillingRecipesData, doughRecipesData, ingredientsData] = await Promise.all(successfulResults);
-
-        const a_breadTypes = breadTypesData.data || [];
-        const a_fillingRecipes = fillingRecipesData.data || [];
-        const a_doughRecipes = doughRecipesData.data || [];
-        let a_ingredients = ingredientsData.data || [];
-
-        // Fetch inventory state separately
-        try {
-            const inventoryRes = await fetch('/api/inventory/state');
-            const inventoryResult = await inventoryRes.json();
-            if (inventoryRes.ok && inventoryResult.success) {
-                const inventoryMap = new Map(inventoryResult.data.map(item => [item.ingredientId, item.stockByPost]));
-                
-                // Merge inventory data into ingredients list
-                a_ingredients = a_ingredients.map(ing => {
-                    if (inventoryMap.has(ing.name)) {
-                        return { ...ing, stockByPost: inventoryMap.get(ing.name) };
-                    }
-                    return ing;
-                });
-            } else {
-                console.warn("Could not fetch inventory state:", inventoryResult.message);
-            }
-        } catch (invErr) {
-            console.error("Error fetching inventory state:", invErr);
-            // Decide if this should be a critical error. For now, we'll just log it.
-        }
-
-        setBreadTypes(a_breadTypes);
-        setFillingRecipes(a_fillingRecipes);
-        setDoughRecipes(a_doughRecipes);
-        setIngredients(a_ingredients);
-        
-        setBreadsMap(arrayToMap(a_breadTypes, 'id'));
-        setFillingRecipesMap(arrayToMap(a_fillingRecipes, 'name'));
-        setDoughRecipesMap(arrayToMap(a_doughRecipes, 'name'));
-        setIngredientsMap(arrayToMap(a_ingredients, 'name'));
-        
-        setDataLoaded(true);
-
-      } catch (err) {
-        console.error("Failed to fetch initial data:", err);
-        setError(err.message);
-        setDataLoaded(false);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
+      return { success: true };
+    } catch (error) {
+      console.error("Failed to update ingredient stock:", error);
+      return { success: false, message: error.message };
+    }
+  }, [ingredientsMap]);
 
   return (
     <DataContext.Provider value={{ 
@@ -118,7 +179,9 @@ export const DataProvider = ({ children }) => {
         ingredientsMap,
         dataLoaded,
         loading,
-        error
+        error,
+        updateIngredientStock,
+        refreshData: fetchData
       }}>
       {children}
     </DataContext.Provider>

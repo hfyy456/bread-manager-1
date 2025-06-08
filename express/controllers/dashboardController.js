@@ -73,4 +73,4 @@ const getDashboardSummary = async (req, res) => {
 
 module.exports = {
     getDashboardSummary,
-}; 
+};      

@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import React, { useContext, useState } from "react";
 import {
   Typography,
   Grid,
@@ -7,12 +7,20 @@ import {
   CircularProgress,
   Tooltip,
   IconButton,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Button,
 } from "@mui/material";
 import { Link } from 'react-router-dom';
 import { InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
 import { DataContext } from './DataContext.jsx';
 import { calculateFillingCost } from "../utils/calculator";
 import RecipeCard from './RecipeCard.jsx';
+import RecipeCreateDialog from './RecipeCreateDialog.jsx';
+import { useSnackbar } from "./SnackbarProvider.jsx";
 
 const formatNumberDisplay = (num, decimals = 2, fallback = 'N/A') => {
   const parsedNum = parseFloat(num);
@@ -23,7 +31,45 @@ const formatNumberDisplay = (num, decimals = 2, fallback = 'N/A') => {
 };
 
 const FillingRecipeList = () => {
-  const { fillingRecipes, fillingRecipesMap, ingredientsMap, loading } = useContext(DataContext);
+  const { fillingRecipes, fillingRecipesMap, ingredientsMap, loading, refreshData, doughRecipes } = useContext(DataContext);
+  const { showSnackbar } = useSnackbar();
+  
+  const [dialogState, setDialogState] = useState({ open: false, recipeData: null });
+  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, id: null });
+
+  const handleEdit = (recipe) => {
+    setDialogState({ open: true, recipeData: recipe });
+  };
+
+  const handleDelete = (id) => {
+    setDeleteConfirm({ open: true, id });
+  };
+
+  const handleCloseDialog = () => {
+    setDialogState({ open: false, recipeData: null });
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      const response = await fetch(`/api/filling-recipes/${deleteConfirm.id}`, { method: 'DELETE' });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || '删除失败');
+      }
+      showSnackbar('删除成功', 'success');
+      await refreshData();
+    } catch (error) {
+      showSnackbar(`删除失败: ${error.message}`, 'error');
+    } finally {
+      setDeleteConfirm({ open: false, id: null });
+    }
+  };
+
+  const handleSaveSuccess = async (savedRecipe) => {
+    showSnackbar('配方保存成功', 'success');
+    await refreshData();
+    handleCloseDialog();
+  };
 
   const getCost = (recipe) => {
     if (loading || !ingredientsMap || ingredientsMap.size === 0) return { cost: 0, yield: recipe.yield || 0 };
@@ -85,11 +131,40 @@ const FillingRecipeList = () => {
                 isValidYield={isValidYield}
                 ingredientsList={ingredientsList}
                 subRecipesList={subRecipesList}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
               />
             </Grid>
           );
         })}
       </Grid>
+
+      {dialogState.open && (
+        <RecipeCreateDialog
+          open={dialogState.open}
+          onClose={handleCloseDialog}
+          recipeType="filling"
+          initialData={dialogState.recipeData}
+          onSuccess={handleSaveSuccess}
+          doughRecipes={doughRecipes}
+          fillingRecipes={fillingRecipes}
+        />
+      )}
+
+      <Dialog open={deleteConfirm.open} onClose={() => setDeleteConfirm({ open: false, id: null })}>
+        <DialogTitle>确认删除</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            您确定要删除这个馅料配方吗？此操作无法撤销。
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirm({ open: false, id: null })}>取消</Button>
+          <Button onClick={handleConfirmDelete} color="error">
+            确认删除
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

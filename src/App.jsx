@@ -14,10 +14,12 @@ import ProductionWastePage from './components/ProductionWastePage';
 import DailyReportPreviewPage from './components/DailyReportPreviewPage';
 import DashboardPage from './components/DashboardPage';
 import { DataProvider } from "./components/DataContext.jsx";
+import BreadTypeEditor from './components/BreadTypeEditor';
+import { SnackbarProvider } from './components/SnackbarProvider.jsx';
 
 // Lazy load components
 const IngredientsPage = lazy(() => import('./components/IngredientsPage'));
-const ReceivingPage = lazy(() => import('./components/ReceivingPage'));
+const ReceiveStock = lazy(() => import('./components/ReceiveStock'));
 
 // 创建主题
 const theme = createTheme({
@@ -46,6 +48,7 @@ function App() {
       <CssBaseline />
       <Router>
         <DataProvider>
+          <SnackbarProvider>
           <div className="min-h-screen bg-neutral-100">
             <Navbar />
             <main className="container mx-auto px-4 py-6">
@@ -68,11 +71,14 @@ function App() {
                   <Route path="/operation-guide" element={<OperationGuidePage />} />
                   <Route path="/production-waste-report" element={<ProductionWastePage />} />
                   <Route path="/daily-report-preview" element={<DailyReportPreviewPage />} />
-                  <Route path="/receiving" element={<ReceivingPage />} />
+                  <Route path="/receiving" element={<ReceiveStock />} />
+                    <Route path="/bread-type-editor" element={<BreadTypeEditor />} />
+                    <Route path="/bread-type-editor/:id" element={<BreadTypeEditor />} />
                 </Routes>
               </Suspense>
             </main>
           </div>
+          </SnackbarProvider>
         </DataProvider>
       </Router>
     </ThemeProvider>

@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useState, useEffect, useMemo, useContext } from 'react';
 import { 
   Card, CardContent, Typography, Grid, Container, Box, 
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
@@ -14,20 +14,10 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { Link } from 'react-router-dom';
 import { InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
+import { DataContext } from './DataContext';
+import { POSTNAME } from '../config/constants';
 
 // const categories = ['基础材料', '发酵剂', '调味料', '油脂', '液体', '辅料', '馅料材料']; // Not used currently
-
-const POSTNAME = {
-  1: "搅拌",
-  2: "丹麦",
-  3: "整形",
-  4: "烤炉",
-  5: "冷加工",
-  6: "收银打包",
-  7: '水吧',
-  8: "馅料",
-  9: "小库房"
-};
 
 // Helper function for stable sorting
 function descendingComparator(a, b, orderBy) {
@@ -156,7 +146,7 @@ const IngredientList = () => {
       unit: '克', 
       price: '', // Allow empty string for better UX with type number
       specs: '', 
-      baseUnit: '克', 
+      min: '克', // Use 'min' instead of 'baseUnit'
       norms: 1, 
       post: [] // Initialize post as empty array
     }); 
@@ -195,7 +185,7 @@ const IngredientList = () => {
   };
 
   const handleSubmit = async () => {
-    if (!selectedIngredient || !selectedIngredient.name || selectedIngredient.price === undefined || selectedIngredient.price === '' || !selectedIngredient.unit || !selectedIngredient.baseUnit || selectedIngredient.norms === undefined || selectedIngredient.norms === '') {
+    if (!selectedIngredient || !selectedIngredient.name || selectedIngredient.price === undefined || selectedIngredient.price === '' || !selectedIngredient.unit || !selectedIngredient.min || selectedIngredient.norms === undefined || selectedIngredient.norms === '') {
       setApiFeedback({ open: true, message: '名称, 单位, 价格, 基础单位, 换算规格 是必填项。', severity: 'warning' });
       return;
     }
@@ -211,7 +201,11 @@ const IngredientList = () => {
     const endpoint = isEditing ? '/api/ingredients/update' : '/api/ingredients/create';
     const method = 'POST'; // Both are POST
     
-    const body = isEditing ? { ...selectedIngredient, id: selectedIngredient._id } : selectedIngredient;
+    // Ensure the payload has 'min' instead of 'baseUnit'
+    const { baseUnit, ...restOfIngredient } = selectedIngredient;
+    const body = isEditing 
+        ? { ...restOfIngredient, id: selectedIngredient._id } 
+        : restOfIngredient;
 
     try {
       const response = await fetch(endpoint, {
@@ -352,7 +346,7 @@ const IngredientList = () => {
                 <TableCell sx={{ fontFamily: 'Inter, sans-serif' }}>{ingredient.name}</TableCell>
                 <TableCell sx={{ fontFamily: 'Inter, sans-serif' }}>{ingredient.unit}</TableCell>
                   <TableCell align="right" sx={{ fontFamily: 'Inter, sans-serif' }}>{typeof ingredient.price === 'number' ? ingredient.price.toFixed(2) : ingredient.price}</TableCell>
-                  <TableCell sx={{ fontFamily: 'Inter, sans-serif' }}>{ingredient.baseUnit}</TableCell>
+                  <TableCell sx={{ fontFamily: 'Inter, sans-serif' }}>{ingredient.min}</TableCell>
                   <TableCell align="right" sx={{ fontFamily: 'Inter, sans-serif' }}>{ingredient.norms}</TableCell>
                   <TableCell sx={{ fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap' }}>{formatDate(ingredient.updatedAt)}</TableCell>
                   <TableCell sx={{ fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px' }}>{ingredient.specs || '-'}</TableCell>
@@ -428,8 +422,8 @@ const IngredientList = () => {
               <TextField
                 label="基础单位 (最小计算单位, 如: 克, 个, 毫升)"
                 variant="outlined"
-                value={selectedIngredient.baseUnit || ''}
-                onChange={(e) => setSelectedIngredient({ ...selectedIngredient, baseUnit: e.target.value })}
+                value={selectedIngredient.min || ''}
+                onChange={(e) => setSelectedIngredient({ ...selectedIngredient, min: e.target.value })}
                 required
                 sx={{ fontFamily: 'Inter, sans-serif' }}
               />

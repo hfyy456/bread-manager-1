@@ -5,7 +5,8 @@ const {
   createInventorySnapshot, 
   listSnapshots, 
   getSnapshotDetails,
-  restoreInventoryFromSnapshot
+  restoreInventoryFromSnapshot,
+  getInventoryState
 } = require('../controllers/inventoryController');
 
 // @route   POST /api/inventory/submit
@@ -28,5 +29,9 @@ router.get('/snapshots/:id', getSnapshotDetails);
 // @route   POST /api/inventory/restore/:id
 // @desc    Restore inventory from a specific snapshot
 router.post('/restore/:id', restoreInventoryFromSnapshot);
+
+// @route   GET /api/inventory/state
+// @desc    Get the current stock state for all ingredients
+router.get('/state', getInventoryState);
 
 module.exports = router; 

@@ -1,25 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Container, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Button, Box, Snackbar, Alert as MuiAlert, IconButton, Tooltip, Stack, CircularProgress, Chip, TableSortLabel, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Select, MenuItem, FormControl, InputLabel, Grid } from '@mui/material';
+import { Container, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Button, Box, IconButton, Tooltip, Stack, CircularProgress, Chip, TableSortLabel, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Select, MenuItem, FormControl, InputLabel, Grid } from '@mui/material';
 import { InfoOutlined as InfoOutlinedIcon, HelpOutline as HelpOutlineIcon, CameraAlt as CameraAltIcon } from '@mui/icons-material';
 import { visuallyHidden } from '@mui/utils';
 import { Link } from 'react-router-dom';
 import moment from 'moment';
-
-const Alert = React.forwardRef(function Alert(props, ref) {
-  return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
-});
-
-const POSTNAME = {
-  1: "搅拌",
-  2: "丹麦",
-  3: "整形",
-  4: "烤炉",
-  5: "冷加工",
-  6: "收银打包",
-  7: '水吧',
-  8: "馅料",
-  9: "小库房"
-};
+import { POSTNAME } from '../config/constants';
+import { useSnackbar } from './SnackbarProvider.jsx';
 
 // Helper functions for sorting
 function descendingComparator(a, b, orderBy) {
@@ -58,7 +44,7 @@ const headCells = [
   { id: 'unit', numeric: false, disablePadding: false, label: '采购单位', sortable: true, align: 'right', width: '8%' },
   { id: 'specs', numeric: false, disablePadding: false, label: '规格', sortable: false, align: 'right', width: '15%' },
   { id: 'price', numeric: true, disablePadding: false, label: '采购单价', sortable: true, align: 'right', width: '10%' },
-  { id: 'pricePerBaseUnit', numeric: true, disablePadding: false, label: '单价/基本单位', sortable: true, align: 'right', width: '12%' },
+  { id: 'pricePerBaseUnit', numeric: true, disablePadding: false, label: '单价/(克)', sortable: true, align: 'right', width: '12%' },
   { id: 'currentStock', numeric: true, disablePadding: false, label: '总库存', sortable: true, align: 'right', width: '8%' },
   { id: 'totalValue', numeric: true, disablePadding: false, label: '总价值', sortable: true, align: 'right', width: '9%' },
 ];
@@ -67,9 +53,9 @@ const IngredientsPage = () => {
   const [allIngredients, setAllIngredients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { showSnackbar } = useSnackbar();
 
   const [stocks, setStocks] = useState({});
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
 
   const [order, setOrder] = useState('asc');
   const [orderBy, setOrderBy] = useState('name');
@@ -82,8 +68,13 @@ const IngredientsPage = () => {
   const [snapshots, setSnapshots] = useState([]);
   const [selectedSnapshotId, setSelectedSnapshotId] = useState('current');
   const [snapshotData, setSnapshotData] = useState(null);
+  const [expandedRowId, setExpandedRowId] = useState(null);
 
   const isSnapshotView = selectedSnapshotId !== 'current';
+
+  const handleRowToggle = (id) => {
+    setExpandedRowId(expandedRowId === id ? null : id);
+  };
 
   const fetchIngredientsAndSetStocks = useCallback(async () => {
     setLoading(true);
@@ -193,17 +184,6 @@ const IngredientsPage = () => {
     setOrderBy(property);
   };
 
-  const handleShowSnackbar = (message, severity = 'info') => {
-    setSnackbar({ open: true, message, severity });
-  };
-
-  const handleCloseSnackbar = (event, reason) => {
-    if (reason === 'clickaway') {
-      return;
-    }
-    setSnackbar(prev => ({ ...prev, open: false }));
-  };
-
   const handleOpenDialog = () => {
     setDialogOpen(true);
   };
@@ -214,7 +194,7 @@ const IngredientsPage = () => {
 
   const handleOpenRestoreDialog = () => {
     if (selectedSnapshotId === 'current') {
-      setSnackbar({ open: true, message: '请先选择一个要还原的历史快照', severity: 'warning' });
+      showSnackbar('请先选择一个要还原的历史快照', 'warning');
       return;
     }
     setRestoreDialogOpen(true);
@@ -231,11 +211,11 @@ const IngredientsPage = () => {
       const response = await fetch('/api/inventory/snapshot', { method: 'POST' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || '操作失败');
-      setSnackbar({ open: true, message: data.message, severity: 'success' });
+      showSnackbar(data.message, 'success');
       fetchSnapshots(); // Refresh snapshot list
       fetchIngredientsAndSetStocks(); // Refresh the main ingredient list to show cleared stocks
     } catch (err) {
-      setSnackbar({ open: true, message: err.message, severity: 'error' });
+      showSnackbar(err.message, 'error');
     } finally {
       setIsSnapshotting(false);
     }
@@ -248,11 +228,11 @@ const IngredientsPage = () => {
       const response = await fetch(`/api/inventory/restore/${selectedSnapshotId}`, { method: 'POST' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || '操作失败');
-      setSnackbar({ open: true, message: data.message, severity: 'success' });
+      showSnackbar(data.message, 'success');
       fetchIngredientsAndSetStocks(); // Refresh data to show restored state
       setSelectedSnapshotId('current'); // Switch back to current view
     } catch (err) {
-      setSnackbar({ open: true, message: err.message, severity: 'error' });
+      showSnackbar(err.message, 'error');
     } finally {
       setIsRestoring(false);
     }
@@ -264,26 +244,38 @@ const IngredientsPage = () => {
 
   // Calculate grand total inventory value -- THIS SECTION IS BEING REMOVED
   // let grandTotalInventoryValue = 0; // This line is removed
-  const ingredientsWithCalculatedValues = useMemo(() => {
-    if (allIngredients.length > 0) {
-        return allIngredients.map(ingredient => {
-            const currentStock = ingredient.currentStock !== undefined ? ingredient.currentStock : 0;
-            const price = ingredient.price || 0;
-            const norms = ingredient.norms || 0;
-            const totalValue = currentStock * price;
-            const pricePerBaseUnit = (norms > 0 && price > 0) ? (price / norms) : 0;
-            
-            // grandTotalInventoryValue += totalValue; // Ensure this kind of line is not present
-            return {
-                ...ingredient,
-                currentStock: currentStock,
-                totalValue: totalValue,
-                pricePerBaseUnit: pricePerBaseUnit,
-            };
-        });
-    }
-    return [];
-  }, [allIngredients]);
+  const processedIngredients = useMemo(() => {
+    const ingredientList = isSnapshotView ? (snapshotData?.inventoryState || []) : allIngredients;
+
+    return ingredientList.map(ing => {
+      const norms = ing.norms || 1;
+      const price = ing.price || 0;
+      const baseUnit = ing.min || 'g'; // Default to 'g' if min is not specified
+      
+      const pricePerBaseUnit = norms > 0 ? price / norms : 0;
+      
+      let currentStock, totalValue;
+
+      if (isSnapshotView) {
+        currentStock = ing.totalStocked || 0;
+        totalValue = currentStock * price;
+      } else {
+        currentStock = stocks[ing.name] || 0;
+        totalValue = currentStock * price;
+      }
+
+      const displayPosts = Array.isArray(ing.post) ? ing.post.map(p => POSTNAME[p] || '未知').join(', ') : (POSTNAME[ing.post] || '未分配');
+
+      return {
+        ...ing,
+        baseUnit,
+        pricePerBaseUnit,
+        currentStock,
+        totalValue,
+        displayPosts
+      };
+    });
+  }, [allIngredients, stocks, isSnapshotView, snapshotData]);
   
   // grandTotalInventoryValue = useMemo(() => { // This useMemo hook for grandTotalInventoryValue is removed
   //   return ingredientsWithCalculatedValues.reduce((sum, ingredient) => sum + ingredient.totalValue, 0);
@@ -325,8 +317,8 @@ const IngredientsPage = () => {
             ? (a, b) => customDescendingComparator(a, b, orderBy)
             : (a, b) => -customDescendingComparator(a, b, orderBy);
     }
-    return stableSort(ingredientsWithCalculatedValues, customGetComparator(order, orderBy));
-  }, [ingredientsWithCalculatedValues, order, orderBy]);
+    return stableSort(processedIngredients, customGetComparator(order, orderBy));
+  }, [processedIngredients, order, orderBy]);
 
   const ingredientsToDisplay = useMemo(() => {
     const source = isSnapshotView && snapshotData ? snapshotData.ingredients : allIngredients;
@@ -497,43 +489,65 @@ const IngredientsPage = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {sortedIngredientsToDisplay.map((ingredient) => {
+              {sortedIngredients.map((ingredient, index) => {
+                const labelId = `ingredients-table-checkbox-${index}`;
                 return (
-                  <TableRow hover key={ingredient._id || ingredient.name}>
-                    <TableCell component="th" scope="row" sx={commonCellSx}>
-                      {ingredient.name}
-                      {ingredient.thumb && (
-                          <Tooltip title={<img src={ingredient.thumb} alt={ingredient.name} style={{ maxWidth: '150px', maxHeight: '150px' }} />}>
-                              <IconButton size="small" sx={{ ml: 0.5, p:0.2 }}><InfoOutlinedIcon fontSize="inherit" /></IconButton>
-                          </Tooltip>
-                      )}
+                  <React.Fragment key={ingredient.id || ingredient.name}>
+                  <TableRow
+                    hover
+                    role="checkbox"
+                    tabIndex={-1}
+                    key={ingredient.id || ingredient.name}
+                  >
+                    <TableCell component="th" id={labelId} scope="row">
+                      <Stack>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{ingredient.name}</Typography>
+                        {isSnapshotView && ingredient.ingredientId && (
+                           <Typography variant="caption" color="text.secondary">ID: {ingredient.ingredientId}</Typography>
+                        )}
+                      </Stack>
                     </TableCell>
-                    <TableCell sx={commonCellSx}>
-                      { Array.isArray(ingredient.post) && ingredient.post.length > 0 ? (
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                          {ingredient.post.map(postId => (
-                            <Chip key={postId} label={POSTNAME[postId] || `ID: ${postId}`} size="small" />
-                          ))}
-                        </Box>
-                      ) : (
-                        '-'
-                      )}
+                    <TableCell>{ingredient.displayPosts}</TableCell>
+                    <TableCell align="right">{ingredient.unit}</TableCell>
+                    <TableCell align="right">{`${ingredient.norms || 'N/A'} ${ingredient.baseUnit}`}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>¥{ingredient.price?.toFixed(2) || '0.00'}</TableCell>
+                    <TableCell align="right">¥{ingredient.pricePerBaseUnit?.toFixed(4) || '0.0000'}</TableCell>
+                    <TableCell 
+                      align="right"
+                      onClick={() => !isSnapshotView && handleRowToggle(ingredient._id)}
+                      sx={{ 
+                        cursor: isSnapshotView ? 'default' : 'pointer', 
+                        fontWeight: 'bold',
+                      }}
+                      title={isSnapshotView ? '历史快照不支持展开' : "点击展开/折叠岗位详情"}
+                    >
+                      {ingredient.currentStock?.toFixed(2) || '0.00'}
+                      {!isSnapshotView && (expandedRowId === ingredient._id ? ' ▲' : ' ▼')}
                     </TableCell>
-                    <TableCell align="right" sx={commonCellSx}>{ingredient.unit}</TableCell>
-                    <TableCell align="right" sx={commonCellSx}>{ingredient.specs} ({ingredient.norms} {ingredient.baseUnit || 'g'}/{ingredient.unit})</TableCell>
-                    <TableCell align="right" sx={commonCellSx}>{(ingredient.price || 0).toFixed(2)}</TableCell>
-                    <TableCell align="right" sx={commonCellSx}>
-                      {typeof ingredient.pricePerBaseUnit === 'number' 
-                        ? `¥${ingredient.pricePerBaseUnit.toFixed(3)} / ${ingredient.baseUnit || 'g'}`
-                        : 'N/A'}
-                    </TableCell>
-                    <TableCell align="right" sx={commonCellSx}>
-                      {ingredient.currentStock !== undefined ? ingredient.currentStock : 'N/A'}
-                    </TableCell>
-                    <TableCell align="right" sx={commonCellSx}>
-                      {ingredient.totalValue !== undefined ? `¥${ingredient.totalValue.toFixed(2)}` : 'N/A'}
-                    </TableCell>
+                    <TableCell align="right">¥{ingredient.totalValue?.toFixed(2) || '0.00'}</TableCell>
                   </TableRow>
+                  {!isSnapshotView && expandedRowId === ingredient._id && (
+                    <TableRow>
+                      <TableCell colSpan={headCells.length} style={{ background: '#fafafa', padding: '12px 24px', borderBottom: '1px solid #e0e0e0' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>各岗位库存详情:</Typography>
+                          {ingredient.stockByPost && Object.keys(ingredient.stockByPost).length > 0 ? (
+                            <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                              {Object.entries(ingredient.stockByPost)
+                                .filter(([, stock]) => stock.quantity > 0)
+                                .map(([postId, stock]) => (
+                                  <li key={postId}>
+                                    <Typography variant="body2" component="span">{POSTNAME[postId] || `未知岗位 (${postId})`}: </Typography>
+                                    <Typography variant="body2" component="span" sx={{ fontWeight: 500 }}>{stock.quantity.toLocaleString()} {stock.unit}</Typography>
+                                  </li>
+                                ))}
+                            </ul>
+                          ) : (
+                            <Typography variant="body2" color="textSecondary" sx={{pl: 2}}>无库存记录</Typography>
+                          )}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  </React.Fragment>
                 );
               })}
             </TableBody>
@@ -546,25 +560,6 @@ const IngredientsPage = () => {
         )}
       </Paper>
 
-      <Paper sx={{ p: 3, m: 1, boxShadow: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h4" gutterBottom component="div">
-            库存总览
-          </Typography>
-          <Button
-            variant="contained"
-            color="secondary"
-            startIcon={<CameraAltIcon />}
-            onClick={handleOpenDialog}
-            disabled={isSnapshotting}
-          >
-            {isSnapshotting ? '正在生成...' : '生成本周库存快照'}
-          </Button>
-        </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, color: 'text.secondary' }}>
-          {/* ... existing code ... */}
-        </Box>
-      </Paper>
 
       <Dialog
         open={dialogOpen}
@@ -573,8 +568,7 @@ const IngredientsPage = () => {
         <DialogTitle>确认操作</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            您确定要为当前库存生成一份快照吗？通常建议在每周日进行此操作。
-            如果本周已存在快照，则无法重复创建。
+            此操作将以当前各岗位填写的库存数量为准，生成一份全店的库存快照，作为后续计算和还原的基准。快照生成后，今日库存将被清零以便开始新的盘点。
           </DialogContentText>
         </DialogContent>
         <DialogActions>
@@ -602,12 +596,6 @@ const IngredientsPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
-
-      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
     </Container>
   );
 };

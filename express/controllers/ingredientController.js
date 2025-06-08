@@ -65,13 +65,13 @@ const createIngredient = async (req, res) => {
     thumb,
     originalCreateTime,
     post,
-    baseUnit,
+    min,
     norms,
     storeIds,
   } = req.body;
 
   try {
-    if (!name || !unit || price == null || !baseUnit || norms == null) {
+    if (!name || !unit || price == null || !min || norms == null) {
       return res
         .status(400)
         .json({
@@ -87,7 +87,7 @@ const createIngredient = async (req, res) => {
       thumb,
       originalCreateTime: originalCreateTime || new Date().toLocaleString(),
       post,
-      baseUnit,
+      min,
       norms,
       storeIds,
     });
