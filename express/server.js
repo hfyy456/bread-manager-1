@@ -11,6 +11,7 @@ const receivingRoutes = require('./routes/receivingRoutes'); // Import the new r
 const breadTypeRoutes = require('./routes/breadTypeRoutes');
 const fillingRecipeRoutes = require('./routes/fillingRecipeRoutes');
 const doughRecipeRoutes = require('./routes/doughRecipeRoutes');
+const ingredientsCompareRoutes = require('./routes/ingredients.js'); // 新增对比路由
 
 const app = express();
 const port = process.env.PORT || 10099;
@@ -35,6 +36,7 @@ app.use('/api/receiving', receivingRoutes); // Use the new route
 app.use('/api', breadTypeRoutes);
 app.use('/api', fillingRecipeRoutes);
 app.use('/api', doughRecipeRoutes);
+app.use('/api/ingredients', ingredientsCompareRoutes); // 新增对比路由
 // 您可以在这里添加其他路由模块，例如:
 // const userRoutes = require('./routes/userRoutes');
 // app.use('/api/users', userRoutes);

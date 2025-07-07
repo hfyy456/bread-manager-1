@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AppBar, Toolbar, Typography, Button, Container, Box, IconButton, Menu, MenuItem } from '@mui/material';
+import { AppBar, Toolbar, Typography, Button, Container, Box, IconButton, Menu, MenuItem, Collapse } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import { useTheme } from '@mui/material/styles';
 import { useMediaQuery } from '@mui/material';
@@ -37,6 +37,46 @@ const navConfig = [
   },
   { title: '操作指南', path: '/operation-guide' },
 ];
+
+const MobileNavItem = ({ item, handleClose }) => {
+  const [open, setOpen] = useState(false);
+
+  const handleClick = () => {
+    if (item.children) {
+      setOpen(!open);
+    } else {
+      handleClose();
+    }
+  };
+
+  if (!item.children) {
+    return (
+      <MenuItem onClick={handleClose} component={Link} to={item.path}>
+        {item.title}
+      </MenuItem>
+    );
+  }
+
+  return (
+    <>
+      <MenuItem onClick={handleClick}>
+        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+          <Box sx={{ flexGrow: 1 }}>{item.title}</Box>
+          <ArrowDropDownIcon sx={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
+        </Box>
+      </MenuItem>
+      <Collapse in={open} timeout="auto" unmountOnExit>
+        <Box sx={{ pl: 2 }}>
+          {item.children.map((child) => (
+            <MenuItem key={child.title} onClick={handleClose} component={Link} to={child.path} sx={{ pl: 4 }}>
+              {child.title}
+            </MenuItem>
+          ))}
+        </Box>
+      </Collapse>
+    </>
+  );
+};
 
 const NavMenu = ({ item }) => {
   const [anchorEl, setAnchorEl] = useState(null);
@@ -108,24 +148,10 @@ const Navbar = () => {
               open={Boolean(anchorElNav)}
               onClose={handleCloseNavMenu}
               sx={{ display: { xs: 'block', md: 'none' } }}
+              MenuListProps={{ style: { width: '250px' } }}
             >
               {navConfig.map((item) => (
-                item.children ? (
-                  // This is a naive implementation for mobile. A better UX would be nested menus.
-                  // For now, we flatten it.
-                  [
-                    <MenuItem key={item.title} sx={{ fontWeight: 'bold', pointerEvents: 'none' }}>{item.title}</MenuItem>,
-                    ...item.children.map(child => (
-                      <MenuItem key={child.title} onClick={handleCloseNavMenu} component={Link} to={child.path} sx={{ pl: 4 }}>
-                        {child.title}
-                      </MenuItem>
-                    ))
-                  ]
-                ) : (
-                  <MenuItem key={item.title} onClick={handleCloseNavMenu} component={Link} to={item.path}>
-                    {item.title}
-                </MenuItem>
-                )
+                <MobileNavItem key={item.title} item={item} handleClose={handleCloseNavMenu} />
               ))}
             </Menu>
           </Box>

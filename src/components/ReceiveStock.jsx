@@ -1,7 +1,8 @@
 import React, { useState, useRef, useContext } from 'react';
-import { Container, Typography, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Box, TextField, Snackbar, Alert as MuiAlert } from '@mui/material';
-import { FileUpload as FileUploadIcon, Send as SendIcon } from '@mui/icons-material';
+import { Container, Typography, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Box, TextField, Snackbar, Alert as MuiAlert, IconButton, Autocomplete } from '@mui/material';
+import { FileUpload as FileUploadIcon, Send as SendIcon, DeleteOutline, AddCircleOutline } from '@mui/icons-material';
 import * as XLSX from 'xlsx';
+import { v4 as uuidv4 } from 'uuid';
 import { DataContext } from './DataContext';
 
 const Alert = React.forwardRef(function Alert(props, ref) {
@@ -9,7 +10,7 @@ const Alert = React.forwardRef(function Alert(props, ref) {
 });
 
 const ReceiveStock = () => {
-  const { ingredientsMap, updateIngredientStock } = useContext(DataContext);
+  const { ingredients, ingredientsMap, updateIngredientStock } = useContext(DataContext);
   const [pendingStock, setPendingStock] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef(null);
@@ -72,8 +73,33 @@ const ReceiveStock = () => {
     if(fileInputRef.current) fileInputRef.current.value = '';
   };
   
-  const handleLocationChange = (id, newLocation) => {
-    setPendingStock(prev => prev.map(item => item.id === id ? { ...item, location: newLocation } : item));
+  const handleQuantityChange = (id, newQuantity) => {
+    const quantity = parseFloat(newQuantity);
+    setPendingStock(prev => 
+      prev.map(item => 
+        item.id === id ? { ...item, quantity: isNaN(quantity) ? '' : quantity } : item
+      )
+    );
+  };
+
+  const handleAddItem = () => {
+    setPendingStock(prev => [...prev, { id: uuidv4(), name: '', quantity: 0, unit: '', location: '10', status: 'new', isNew: true }]);
+  };
+
+  const handleNewItemSelect = (id, selectedIngredient) => {
+    if (!selectedIngredient) {
+      handleDeleteItem(id);
+      return;
+    }
+    setPendingStock(prev => prev.map(item => 
+      item.id === id 
+      ? { ...item, name: selectedIngredient.name, unit: selectedIngredient.unit, status: 'valid', isNew: false } 
+      : item
+    ));
+  };
+
+  const handleDeleteItem = (id) => {
+    setPendingStock(prev => prev.filter(item => item.id !== id));
   };
 
   const handleConfirmReceive = async () => {
@@ -135,34 +161,75 @@ const ReceiveStock = () => {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>原料名称</TableCell>
+                  <TableCell sx={{ minWidth: '200px' }}>原料名称</TableCell>
                   <TableCell align="right">采购数量</TableCell>
                   <TableCell align="right">单位</TableCell>
-                  <TableCell align="right" sx={{ width: '150px' }}>入库库位</TableCell>
+                  <TableCell align="right">入库库位</TableCell>
+                  <TableCell align="center">操作</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {pendingStock.map((item) => (
-                  <TableRow key={item.id} error={item.status === 'invalid'} sx={{ backgroundColor: item.status === 'invalid' ? 'rgba(255, 229, 229, 0.6)' : 'inherit' }}>
-                    <TableCell>{item.name} {item.status === 'invalid' && <Typography variant="caption" color="error">(未找到)</Typography>}</TableCell>
-                    <TableCell align="right">{item.quantity}</TableCell>
-                    <TableCell align="right">{item.unit}</TableCell>
+                  <TableRow key={item.id} sx={{ 
+                    backgroundColor: item.status === 'invalid' ? 'rgba(255, 229, 229, 0.6)' : 'inherit',
+                    '&:last-child td, &:last-child th': { border: 0 } 
+                  }}>
+                    <TableCell component="th" scope="row">
+                      {item.isNew ? (
+                        <Autocomplete
+                          fullWidth
+                          options={ingredients}
+                          getOptionLabel={(option) => option.name || ''}
+                          isOptionEqualToValue={(option, value) => option.id === value.id}
+                          onChange={(event, newValue) => {
+                            handleNewItemSelect(item.id, newValue);
+                          }}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="搜索原料"
+                              size="small"
+                              variant="standard"
+                            />
+                          )}
+                        />
+                      ) : (
+                        <>
+                          {item.name} {item.status === 'invalid' && <Typography variant="caption" color="error">(未找到)</Typography>}
+                        </>
+                      )}
+                    </TableCell>
                     <TableCell align="right">
                       <TextField
                         size="small"
                         variant="outlined"
-                        value={item.location}
-                        onChange={(e) => handleLocationChange(item.id, e.target.value)}
-                        placeholder="例如: 1"
-                        disabled={item.status === 'invalid'}
+                        type="number"
+                        value={item.quantity}
+                        onChange={(e) => handleQuantityChange(item.id, e.target.value)}
+                        sx={{ width: '100px' }}
+                        disabled={item.status === 'invalid' || item.isNew}
                       />
+                    </TableCell>
+                    <TableCell align="right">{item.unit}</TableCell>
+                    <TableCell align="right">{item.location}</TableCell>
+                    <TableCell align="center">
+                      <IconButton aria-label="delete" onClick={() => handleDeleteItem(item.id)} size="small">
+                        <DeleteOutline fontSize="small" />
+                      </IconButton>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </TableContainer>
-          <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+          <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+            <Button
+              variant="outlined"
+              startIcon={<AddCircleOutline />}
+              onClick={handleAddItem}
+            >
+              手动添加原料
+            </Button>
             <Button
               variant="contained"
               color="primary"

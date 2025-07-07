@@ -60,7 +60,16 @@ const RecipeCreateDialog = ({ open, onClose, recipeType, onSuccess, doughRecipes
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'name') {
+      // 当名称改变时，自动同步ID，除非ID已被用户手动修改过
+      setRecipe(prev => ({
+        ...prev,
+        name: value,
+        id: value, 
+      }));
+    } else {
     setRecipe(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleDynamicChange = (listName, index, field, value) => {
@@ -99,14 +108,13 @@ const RecipeCreateDialog = ({ open, onClose, recipeType, onSuccess, doughRecipes
     delete payload.subRecipes; 
     
     if (recipe.subRecipes && recipe.subRecipes.length > 0) {
-      const subRecipeIdKey = recipeType === 'dough' ? 'id' : 'subFillingId';
-      
       payload[subRecipePayloadKey] = recipe.subRecipes
         .filter(sub => sub.recipeId && sub.quantity)
         .map(sub => ({
-          [subRecipeIdKey]: sub.recipeId,
+          id: sub.recipeId,
+          name: sub.name,
           quantity: Number(sub.quantity),
-          unit: 'g'
+          unit: 'g' // Assuming sub-recipes are always measured in grams
         }));
     }
 
@@ -195,14 +203,27 @@ const RecipeCreateDialog = ({ open, onClose, recipeType, onSuccess, doughRecipes
                 getOptionLabel={(option) => option.name || ''}
                 value={(subRecipeSource || []).find(r => r.id === sub.recipeId) || null}
                 onChange={(event, newValue) => {
-                  handleDynamicChange('subRecipes', index, 'recipeId', newValue ? newValue.id : '');
+                  const newSubRecipes = [...recipe.subRecipes];
+                  if (newValue) {
+                    newSubRecipes[index] = { ...newSubRecipes[index], recipeId: newValue.id, name: newValue.name };
+                  } else {
+                    newSubRecipes[index] = { ...newSubRecipes[index], recipeId: '', name: '' };
+                  }
+                  setRecipe(prev => ({ ...prev, subRecipes: newSubRecipes }));
                 }}
                 isOptionEqualToValue={(option, value) => option.id === value.id}
                 renderInput={(params) => <TextField {...params} label="配方" required />}
               />
             </Grid>
             <Grid item xs={12} sm={3}>
-              <TextField fullWidth size="small" label="用量 (g)" type="number" value={sub.quantity} onChange={(e) => handleDynamicChange('subRecipes', index, 'quantity', e.target.value)} />
+              <TextField 
+                fullWidth 
+                size="small" 
+                label="用量 (g)" 
+                type="number" 
+                value={sub.quantity} 
+                onChange={(e) => handleDynamicChange('subRecipes', index, 'quantity', e.target.value)} 
+              />
             </Grid>
             <Grid item xs={12} sm={1}>
               <IconButton onClick={() => removeListItem('subRecipes', index)}><RemoveCircleOutlineIcon /></IconButton>

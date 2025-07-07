@@ -1,10 +1,16 @@
-import React, { useState, useEffect, useMemo, useContext } from 'react';
+import React, { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import {
     Container, Typography, Paper, Grid, TextField, Button, Box, Table, TableHead, TableRow, TableCell, TableBody,
-    Select, MenuItem, InputLabel, FormControl, CircularProgress, Snackbar, Alert as MuiAlert, IconButton,
+    CircularProgress, Snackbar, Alert as MuiAlert, IconButton,
     Accordion, AccordionSummary, AccordionDetails,
     Tooltip,
-    TableContainer
+    TableContainer,
+    useMediaQuery,
+    Autocomplete,
+    Fab,
+    Tabs,
+    Tab,
+    AppBar
 } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
@@ -14,21 +20,59 @@ import { Link } from 'react-router-dom';
 import { InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
 import { DataContext } from './DataContext.jsx';
 import { calculateDoughCost, calculateFillingCost } from '../utils/calculator.js';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import dayjs from 'dayjs';
 
 const Alert = React.forwardRef(function Alert(props, ref) {
     return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
 });
 
+const WASTE_TYPE = {
+    DOUGH: 'dough',
+    FILLING: 'filling',
+};
+
+function TabPanel(props) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`simple-tabpanel-${index}`}
+      aria-labelledby={`simple-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={{ pt: 3 }}>
+          {children}
+        </Box>
+      )}
+    </div>
+  );
+}
+
 const ProductionWastePage = () => {
     const { breadTypes, doughRecipes, doughRecipesMap, fillingRecipes, fillingRecipesMap, ingredientsMap, loading: dataContextLoading } = useContext(DataContext);
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    const isMobile = useMediaQuery(theme => theme.breakpoints.down('sm'));
+    const [selectedDate, setSelectedDate] = useState(dayjs());
     const [productEntries, setProductEntries] = useState([]);
     const [doughWasteEntries, setDoughWasteEntries] = useState([{ doughId: '', doughName: '', quantity: '', unit: 'g', reason: '' }]);
     const [fillingWasteEntries, setFillingWasteEntries] = useState([{ fillingId: '', fillingName: '', quantity: '', unit: 'g', reason: '' }]);
     const [generalRemarks, setGeneralRemarks] = useState('');
+    const [tabValue, setTabValue] = useState(0);
+
+    const producedInputRefs = useRef([]);
+    const wastedInputRefs = useRef([]);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+
+    const handleTabChange = (event, newValue) => {
+        setTabValue(newValue);
+    };
 
     useEffect(() => {
         // Initialize product entries from breadTypes
@@ -39,6 +83,8 @@ const ProductionWastePage = () => {
             wasted: ''
         }));
         setProductEntries(initialProductEntries);
+        producedInputRefs.current = Array(breadTypes.length).fill(0).map((_, i) => producedInputRefs.current[i] || React.createRef());
+        wastedInputRefs.current = Array(breadTypes.length).fill(0).map((_, i) => wastedInputRefs.current[i] || React.createRef());
     }, [breadTypes]);
 
     // Summary Calculations
@@ -105,18 +151,24 @@ const ProductionWastePage = () => {
     };
 
     const handleWasteEntryChange = (type, index, field, value) => {
-        const entries = type === 'dough' ? [...doughWasteEntries] : [...fillingWasteEntries];
+        const entries = type === WASTE_TYPE.DOUGH ? [...doughWasteEntries] : [...fillingWasteEntries];
         entries[index][field] = value;
-        if (field === (type === 'dough' ? 'doughId' : 'fillingId')) {
-            const selectedItem = (type === 'dough' ? doughRecipes : fillingRecipes).find(item => item.name === value);
-            entries[index][type === 'dough' ? 'doughName' : 'fillingName'] = selectedItem ? selectedItem.name : '';
+
+        const idField = type === WASTE_TYPE.DOUGH ? 'doughId' : 'fillingId';
+        const nameField = type === WASTE_TYPE.DOUGH ? 'doughName' : 'fillingName';
+        const recipeList = type === WASTE_TYPE.DOUGH ? doughRecipes : fillingRecipes;
+
+        if (field === idField) {
+            const selectedItem = recipeList.find(item => item.id === value);
+            entries[index][nameField] = selectedItem ? selectedItem.name : '';
         }
-        if (type === 'dough') setDoughWasteEntries(entries);
+
+        if (type === WASTE_TYPE.DOUGH) setDoughWasteEntries(entries);
         else setFillingWasteEntries(entries);
     };
 
     const addWasteEntry = (type) => {
-        if (type === 'dough') {
+        if (type === WASTE_TYPE.DOUGH) {
             setDoughWasteEntries([...doughWasteEntries, { doughId: '', doughName: '', quantity: '', unit: 'g', reason: '' }]);
         } else {
             setFillingWasteEntries([...fillingWasteEntries, { fillingId: '', fillingName: '', quantity: '', unit: 'g', reason: '' }]);
@@ -124,10 +176,10 @@ const ProductionWastePage = () => {
     };
 
     const removeWasteEntry = (type, index) => {
-        const entries = type === 'dough' ? [...doughWasteEntries] : [...fillingWasteEntries];
+        const entries = type === WASTE_TYPE.DOUGH ? [...doughWasteEntries] : [...fillingWasteEntries];
         if (entries.length > 1) {
             entries.splice(index, 1);
-            if (type === 'dough') setDoughWasteEntries(entries);
+            if (type === WASTE_TYPE.DOUGH) setDoughWasteEntries(entries);
             else setFillingWasteEntries(entries);
         }
     };
@@ -135,7 +187,7 @@ const ProductionWastePage = () => {
     const handleSubmit = async () => {
         setIsSubmitting(true);
         const reportData = {
-            date: selectedDate,
+            date: selectedDate.format('YYYY-MM-DD'),
             products: productEntries.map(entry => {
                 const bread = breadTypes.find(b => b.id === entry.id);
                 return {
@@ -143,10 +195,9 @@ const ProductionWastePage = () => {
                     productName: entry.name,
                     unitPrice: bread?.price || 0,
                     quantityProduced: parseInt(entry.produced, 10) || 0,
-                    finishedWasteQuantity: parseInt(entry.wasted, 10) || 0,
-                    remarks: entry.remarks || ''
+                    finishedWasteQuantity: parseInt(entry.wasted, 10) || 0
                 };
-            }).filter(p => p.quantityProduced > 0 || p.finishedWasteQuantity > 0 || (p.remarks && p.remarks.trim() !== '')),
+            }).filter(p => p.quantityProduced > 0 || p.finishedWasteQuantity > 0),
             doughWastes: doughWasteEntries.filter(d => d.doughId && d.quantity).map(d => ({...d, quantity: parseFloat(d.quantity) || 0})),
             fillingWastes: fillingWasteEntries.filter(f => f.fillingId && f.quantity).map(f => ({...f, quantity: parseFloat(f.quantity) || 0})),
             generalRemarks
@@ -176,7 +227,8 @@ const ProductionWastePage = () => {
     }
 
     return (
-        <Container maxWidth="xl" sx={{ py: 3 }}>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+        <Container maxWidth="xl" sx={{ py: 3, pb: isMobile ? '80px' : 3 }}>
             <Box display="flex" alignItems="center" sx={{ mb: 3 }}>
                 <Typography variant="h4" component="h1" sx={{ fontWeight: 500, mr: 1 }}>
                     生产与报废登记
@@ -190,140 +242,230 @@ const ProductionWastePage = () => {
 
             <Paper elevation={2} sx={{ p: { xs: 1.5, sm: 2, md: 3 }, mb: 3 }}>
                 <Typography variant="h6" gutterBottom>常规信息</Typography>
-                <TextField
+                <DatePicker
                     label="报告日期"
-                    type="date"
                     value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    InputLabelProps={{ shrink: true }}
-                    fullWidth
-                    sx={{ mb: 2, maxWidth: { xs: '100%', sm: '300px' } }}
+                    onChange={(newValue) => setSelectedDate(newValue)}
+                    renderInput={(params) => <TextField {...params} fullWidth sx={{ maxWidth: { xs: '100%', sm: '300px' } }} />}
                 />
             </Paper>
 
-            {/* Summary Section Moved Here */}
-            <Paper elevation={2} sx={{ p: { xs: 1.5, sm: 2, md: 3 }, mb: 3 }}>
+            {/* Summary Section */}
+            <Paper 
+                elevation={2} 
+                sx={{ 
+                    p: { xs: 1.5, sm: 2, md: 3 }, 
+                    mb: 3
+                }}
+            >
                 <Typography variant="h6" gutterBottom>汇总信息</Typography>
                 <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6} md={4}>
+                    <Grid item xs={12} sm={6} md={3}>
                         <Typography variant="body1">总出品价值: <strong>¥{summaryValues.totalProductionValue.toFixed(2)}</strong></Typography>
                     </Grid>
-                    <Grid item xs={12} sm={6} md={4}>
+                    <Grid item xs={12} sm={6} md={3}>
                         <Typography variant="body1" color="error">总成品报废价值: <strong>¥{summaryValues.totalFinishedWasteValue.toFixed(2)}</strong></Typography>
                     </Grid>
-                    <Grid item xs={12} sm={6} md={4}>
+                    <Grid item xs={12} sm={6} md={3}>
                         <Typography variant="body1" color="orange">总面团报废价值: <strong>¥{summaryValues.totalDoughWasteValue.toFixed(2)}</strong> ({summaryValues.totalDoughWasteQuantity.toFixed(2)} {summaryValues.doughWasteUnits})</Typography>
                     </Grid>
-                     <Grid item xs={12} sm={6} md={4}>
+                     <Grid item xs={12} sm={6} md={3}>
                         <Typography variant="body1" color="orange">总馅料报废价值: <strong>¥{summaryValues.totalFillingWasteValue.toFixed(2)}</strong> ({summaryValues.totalFillingWasteQuantity.toFixed(2)} {summaryValues.fillingWasteUnits})</Typography>
                     </Grid>
                 </Grid>
             </Paper>
 
-            <Accordion defaultExpanded sx={{ mt: 0 }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography variant="h6">产品出品与报废</Typography></AccordionSummary>
-                <AccordionDetails sx={{ p: { xs: 0.5, sm: 1, md: 2} }}>
-                    <TableContainer component={Paper} elevation={2} sx={{ mb: 3 }}>
-                        <Table size="small">
-                            <TableHead sx={{ backgroundColor: 'grey.100' }}>
-                                <TableRow>
-                                    <TableCell sx={{ fontWeight: 'bold', minWidth: { xs: 120, sm: 180 }, pl: {xs: 1, sm: 2} }}>产品名称</TableCell>
-                                    <TableCell align="right" sx={{ fontWeight: 'bold', minWidth: 60 }}>单价</TableCell>
-                                    <TableCell align="right" sx={{ fontWeight: 'bold', minWidth: 80 }}>出品数量</TableCell>
-                                    <TableCell align="right" sx={{ fontWeight: 'bold', minWidth: 80 }}>成品报废</TableCell>
-                                    <TableCell sx={{ fontWeight: 'bold', minWidth: { xs: 150, sm: 200 }, pr: {xs: 1, sm: 2} }}>备注</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {productEntries.map((entry, index) => {
-                                    const breadType = breadTypes.find(b => b.id === entry.id);
-                                    return (
-                                        <TableRow key={entry.id} hover>
-                                            <TableCell sx={{ pl: {xs: 1, sm: 2}}}>{entry.name}</TableCell>
-                                            <TableCell align="right">¥{(breadType?.price || 0).toFixed(2)}</TableCell>
-                                        <TableCell align="right">
-                                                <TextField type="number" size="small" variant="outlined" value={entry.produced} onChange={e => handleProductInputChange(index, 'produced', e.target.value)} sx={{width: '90px'}} InputProps={{ inputProps: { min: 0, step: 1 }}} />
-                                        </TableCell>
-                                        <TableCell align="right">
-                                                <TextField type="number" size="small" variant="outlined" value={entry.wasted} onChange={e => handleProductInputChange(index, 'wasted', e.target.value)} sx={{width: '90px'}} InputProps={{ inputProps: { min: 0, step: 1 }}} />
-                                        </TableCell>
-                                        <TableCell sx={{ pr: {xs: 1, sm: 2}}}>
-                                            <TextField type="text" size="small" variant="outlined" value={entry.remarks} onChange={e => handleProductInputChange(index, 'remarks', e.target.value)} fullWidth />
-                                        </TableCell>
-                                    </TableRow>
-                                    );
-                                })}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
-                </AccordionDetails>
-            </Accordion>
+            {isMobile ? (
+                 <>
+                    <AppBar position="static" color="default" sx={{ mb: 2 }}>
+                        <Tabs
+                            value={tabValue}
+                            onChange={handleTabChange}
+                            indicatorColor="primary"
+                            textColor="primary"
+                            variant="fullWidth"
+                            aria-label="data entry tabs"
+                        >
+                            <Tab label="出品" />
+                            <Tab label="成品报废" />
+                            <Tab label="面团报废" />
+                            <Tab label="馅料报废" />
+                        </Tabs>
+                    </AppBar>
+                    <TabPanel value={tabValue} index={0}>
+                        {/* Mobile Product Entry */}
+                        <Box>
+                            {productEntries.map((entry, index) => {
+                                const breadType = breadTypes.find(b => b.id === entry.id);
+                                const handleKeyDown = (e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        const nextRef = producedInputRefs.current[index + 1];
+                                        if (nextRef && nextRef.current) {
+                                            nextRef.current.focus();
+                                        }
+                                    }
+                                };
+                                return (
+                                    <Paper key={entry.id} sx={{ p: 2, mb: 2, '&:last-child': { mb: 0 } }}>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 1.5 }}>
+                                            <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>{entry.name}</Typography>
+                                            <Typography variant="body2" color="text.secondary">
+                                                ¥{(breadType?.price || 0).toFixed(2)}
+                                            </Typography>
+                                        </Box>
+                                        <TextField label="出品数量" type="number" size="small" variant="outlined" value={entry.produced} onChange={e => handleProductInputChange(index, 'produced', e.target.value)} fullWidth InputProps={{ inputProps: { min: 0, step: 1, inputMode: 'numeric' } }} inputRef={producedInputRefs.current[index]} onKeyDown={handleKeyDown} />
+                                    </Paper>
+                                );
+                            })}
+                        </Box>
+                    </TabPanel>
+                    <TabPanel value={tabValue} index={1}>
+                        {/* Mobile Wasted Entry */}
+                        <Box>
+                            {productEntries.map((entry, index) => {
+                                const breadType = breadTypes.find(b => b.id === entry.id);
+                                const handleKeyDown = (e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        const nextRef = wastedInputRefs.current[index + 1];
+                                        if (nextRef && nextRef.current) {
+                                            nextRef.current.focus();
+                                        }
+                                    }
+                                };
+                                return (
+                                    <Paper key={entry.id} sx={{ p: 2, mb: 2, '&:last-child': { mb: 0 } }}>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 1.5 }}>
+                                            <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>{entry.name}</Typography>
+                                            <Typography variant="body2" color="text.secondary">
+                                                ¥{(breadType?.price || 0).toFixed(2)}
+                                            </Typography>
+                                        </Box>
+                                        <TextField label="成品报废" type="number" size="small" variant="outlined" value={entry.wasted} onChange={e => handleProductInputChange(index, 'wasted', e.target.value)} fullWidth InputProps={{ inputProps: { min: 0, step: 1, inputMode: 'numeric' } }} inputRef={wastedInputRefs.current[index]} onKeyDown={handleKeyDown}/>
+                                    </Paper>
+                                );
+                            })}
+                        </Box>
+                    </TabPanel>
+                    <TabPanel value={tabValue} index={2}>
+                        {/* Dough Waste Entry */}
+                         <Paper elevation={0} sx={{ p: {xs: 1, sm: 2} }}>
+                            {doughWasteEntries.map((entry, index) => (
+                                <Grid container spacing={2} key={index} alignItems="flex-start" sx={{ mb: index === doughWasteEntries.length -1 ? 0 : 2.5}}>
+                                    <Grid item xs={12}><Autocomplete options={doughRecipes} getOptionLabel={(option) => option.name || ''} value={doughRecipes.find(d => d.id === entry.doughId) || null} onChange={(event, newValue) => { handleWasteEntryChange(WASTE_TYPE.DOUGH, index, 'doughId', newValue ? newValue.id : ''); }} renderInput={(params) => <TextField {...params} label="面团" size="small" />} /></Grid>
+                                    <Grid item xs={8}><TextField label="数量" type="number" size="small" value={entry.quantity} onChange={e => handleWasteEntryChange(WASTE_TYPE.DOUGH, index, 'quantity', e.target.value)} fullWidth InputProps={{ inputProps: { min: 0, inputMode: 'numeric' }}} /></Grid>
+                                    <Grid item xs={4}><TextField label="单位" size="small" value={entry.unit} onChange={e => handleWasteEntryChange(WASTE_TYPE.DOUGH, index, 'unit', e.target.value)} fullWidth /></Grid>
+                                    <Grid item xs={12}><TextField label="原因" size="small" value={entry.reason} onChange={e => handleWasteEntryChange(WASTE_TYPE.DOUGH, index, 'reason', e.target.value)} fullWidth /></Grid>
+                                    <Grid item xs={12} container justifyContent="flex-end" alignItems="center">
+                                        <IconButton onClick={() => removeWasteEntry(WASTE_TYPE.DOUGH, index)} disabled={doughWasteEntries.length === 1} size="small"><RemoveCircleOutlineIcon /></IconButton>
+                                        {index === doughWasteEntries.length -1 && <IconButton onClick={() => addWasteEntry(WASTE_TYPE.DOUGH)} size="small"><AddCircleOutlineIcon /></IconButton>}
+                                    </Grid>
+                                </Grid>
+                            ))}
+                        </Paper>
+                    </TabPanel>
+                    <TabPanel value={tabValue} index={3}>
+                        {/* Filling Waste Entry */}
+                        <Paper elevation={0} sx={{ p: {xs: 1, sm: 2} }}>
+                            {fillingWasteEntries.map((entry, index) => (
+                                <Grid container spacing={2} key={index} alignItems="flex-start" sx={{ mb: index === fillingWasteEntries.length -1 ? 0 : 2.5}}>
+                                    <Grid item xs={12}><Autocomplete options={fillingRecipes} getOptionLabel={(option) => option.name || ''} value={fillingRecipes.find(f => f.id === entry.fillingId) || null} onChange={(event, newValue) => { handleWasteEntryChange(WASTE_TYPE.FILLING, index, 'fillingId', newValue ? newValue.id : ''); }} renderInput={(params) => <TextField {...params} label="馅料" size="small" />} /></Grid>
+                                    <Grid item xs={8}><TextField label="数量" type="number" size="small" value={entry.quantity} onChange={e => handleWasteEntryChange(WASTE_TYPE.FILLING, index, 'quantity', e.target.value)} fullWidth InputProps={{ inputProps: { min: 0, inputMode: 'numeric' }}} /></Grid>
+                                    <Grid item xs={4}><TextField label="单位" size="small" value={entry.unit} onChange={e => handleWasteEntryChange(WASTE_TYPE.FILLING, index, 'unit', e.target.value)} fullWidth /></Grid>
+                                    <Grid item xs={12}><TextField label="原因" size="small" value={entry.reason} onChange={e => handleWasteEntryChange(WASTE_TYPE.FILLING, index, 'reason', e.target.value)} fullWidth /></Grid>
+                                    <Grid item xs={12} container justifyContent="flex-end" alignItems="center">
+                                        <IconButton onClick={() => removeWasteEntry(WASTE_TYPE.FILLING, index)} disabled={fillingWasteEntries.length === 1} size="small"><RemoveCircleOutlineIcon /></IconButton>
+                                        {index === fillingWasteEntries.length -1 && <IconButton onClick={() => addWasteEntry(WASTE_TYPE.FILLING)} size="small"><AddCircleOutlineIcon /></IconButton>}
+                                    </Grid>
+                                </Grid>
+                            ))}
+                        </Paper>
+                    </TabPanel>
+                 </>
+            ) : (
+                <>
+                    {/* Desktop View with Accordions */}
+                    <Accordion defaultExpanded sx={{ mt: 0 }}>
+                        <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography variant="h6">产品出品与报废</Typography></AccordionSummary>
+                        <AccordionDetails sx={{ p: { xs: 0.5, sm: 1, md: 2} }}>
+                                <TableContainer component={Paper} elevation={2} sx={{ mb: 3 }}>
+                                    <Table size="small">
+                                        <TableHead sx={{ backgroundColor: 'grey.100' }}>
+                                            <TableRow>
+                                                <TableCell sx={{ fontWeight: 'bold', minWidth: { xs: 120, sm: 180 }, pl: {xs: 1, sm: 2} }}>产品名称</TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 'bold', minWidth: 60 }}>单价</TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 'bold', minWidth: 80 }}>出品数量</TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 'bold', minWidth: 80 }}>成品报废</TableCell>
+                                            </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                            {productEntries.map((entry, index) => {
+                                                const breadType = breadTypes.find(b => b.id === entry.id);
+                                                return (
+                                                    <TableRow key={entry.id} hover>
+                                                        <TableCell sx={{ pl: {xs: 1, sm: 2}}}>{entry.name}</TableCell>
+                                                        <TableCell align="right">¥{(breadType?.price || 0).toFixed(2)}</TableCell>
+                                                        <TableCell align="right">
+                                                            <TextField type="number" size="small" variant="outlined" value={entry.produced} onChange={e => handleProductInputChange(index, 'produced', e.target.value)} sx={{width: '90px'}} InputProps={{ inputProps: { min: 0, step: 1 }}} />
+                                                        </TableCell>
+                                                        <TableCell align="right">
+                                                            <TextField type="number" size="small" variant="outlined" value={entry.wasted} onChange={e => handleProductInputChange(index, 'wasted', e.target.value)} sx={{width: '90px'}} InputProps={{ inputProps: { min: 0, step: 1 }}} />
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })}
+                                        </TableBody>
+                                    </Table>
+                                </TableContainer>
+                        </AccordionDetails>
+                    </Accordion>
 
-            <Accordion sx={{ mt: 2}}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography variant="h6">面团报废登记</Typography></AccordionSummary>
-                <AccordionDetails sx={{ p: { xs: 0.5, sm: 1, md: 2} }}>
-                    <Paper elevation={0} sx={{ p: {xs: 1, sm: 2}, mb: 3 }}>
-                        {doughWasteEntries.map((entry, index) => (
-                            <Grid container spacing={2} key={index} alignItems="flex-start" sx={{ mb: index === doughWasteEntries.length -1 ? 0 : 2.5}}>
-                                <Grid item xs={12} sm={6} md={3.5}>
-                                    <FormControl fullWidth size="small">
-                                        <InputLabel>面团</InputLabel>
-                                        <Select label="面团" value={entry.doughId} onChange={e => handleWasteEntryChange('dough', index, 'doughId', e.target.value)}>
-                                            {doughRecipes.map(d => <MenuItem key={d.id} value={d.name}>{d.name}</MenuItem>)}
-                                        </Select>
-                                    </FormControl>
-                                </Grid>
-                                <Grid item xs={6} sm={3} md={2}><TextField label="数量" type="number" size="small" value={entry.quantity} onChange={e => handleWasteEntryChange('dough', index, 'quantity', e.target.value)} fullWidth InputProps={{ inputProps: { min: 0 }}} /></Grid>
-                                <Grid item xs={6} sm={3} md={1.5}><TextField label="单位" size="small" value={entry.unit} onChange={e => handleWasteEntryChange('dough', index, 'unit', e.target.value)} fullWidth /></Grid>
-                                <Grid item xs={12} sm={9} md={3.5}><TextField label="原因" size="small" value={entry.reason} onChange={e => handleWasteEntryChange('dough', index, 'reason', e.target.value)} fullWidth /></Grid>
-                                <Grid item xs={12} sm={3} md={1.5} container justifyContent={{xs: 'flex-end', sm: 'center'}} alignItems="center">
-                                    <IconButton onClick={() => removeWasteEntry('dough', index)} disabled={doughWasteEntries.length === 1} size="small"><RemoveCircleOutlineIcon /></IconButton>
-                                    {index === doughWasteEntries.length -1 && <IconButton onClick={() => addWasteEntry('dough')} size="small"><AddCircleOutlineIcon /></IconButton>}
-                                </Grid>
-                            </Grid>
-                        ))}
-                    </Paper>
-                </AccordionDetails>
-            </Accordion>
-            
-            <Accordion sx={{ mt: 2}}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography variant="h6">馅料报废登记</Typography></AccordionSummary>
-                <AccordionDetails sx={{ p: { xs: 0.5, sm: 1, md: 2} }}>
-                    <Paper elevation={0} sx={{ p: {xs: 1, sm: 2}, mb: 3 }}>
-                        {fillingWasteEntries.map((entry, index) => (
-                            <Grid container spacing={2} key={index} alignItems="flex-start" sx={{ mb: index === fillingWasteEntries.length -1 ? 0 : 2.5}}>
-                                <Grid item xs={12} sm={6} md={3.5}>
-                                    <FormControl fullWidth size="small">
-                                        <InputLabel>馅料</InputLabel>
-                                        <Select label="馅料" value={entry.fillingId} onChange={e => handleWasteEntryChange('filling', index, 'fillingId', e.target.value)}>
-                                            {fillingRecipes.map(f => <MenuItem key={f.id} value={f.name}>{f.name}</MenuItem>)}
-                                        </Select>
-                                    </FormControl>
-                                </Grid>
-                                <Grid item xs={6} sm={3} md={2}><TextField label="数量" type="number" size="small" value={entry.quantity} onChange={e => handleWasteEntryChange('filling', index, 'quantity', e.target.value)} fullWidth InputProps={{ inputProps: { min: 0 }}} /></Grid>
-                                <Grid item xs={6} sm={3} md={1.5}><TextField label="单位" size="small" value={entry.unit} onChange={e => handleWasteEntryChange('filling', index, 'unit', e.target.value)} fullWidth /></Grid>
-                                <Grid item xs={12} sm={9} md={3.5}><TextField label="原因" size="small" value={entry.reason} onChange={e => handleWasteEntryChange('filling', index, 'reason', e.target.value)} fullWidth /></Grid>
-                                <Grid item xs={12} sm={3} md={1.5} container justifyContent={{xs: 'flex-end', sm: 'center'}} alignItems="center">
-                                    <IconButton onClick={() => removeWasteEntry('filling', index)} disabled={fillingWasteEntries.length === 1} size="small"><RemoveCircleOutlineIcon /></IconButton>
-                                    {index === fillingWasteEntries.length -1 && <IconButton onClick={() => addWasteEntry('filling')} size="small"><AddCircleOutlineIcon /></IconButton>}
-                                </Grid>
-                            </Grid>
-                        ))}
-                    </Paper>
-                </AccordionDetails>
-            </Accordion>
-
-            <Paper elevation={2} sx={{ p: { xs: 1.5, sm: 2, md: 3 }, mt:3, mb: 3 }}>
-                <Typography variant="h6" gutterBottom>总体备注</Typography>
-                <TextField
-                    label="备注"
-                    multiline
-                    rows={3}
-                    value={generalRemarks}
-                    onChange={(e) => setGeneralRemarks(e.target.value)}
-                    fullWidth
-                />
-            </Paper>
+                    <Accordion sx={{ mt: 2}}>
+                        <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography variant="h6">面团报废登记</Typography></AccordionSummary>
+                        <AccordionDetails sx={{ p: { xs: 0.5, sm: 1, md: 2} }}>
+                            <Paper elevation={0} sx={{ p: {xs: 1, sm: 2}, mb: 3 }}>
+                                {doughWasteEntries.map((entry, index) => (
+                                    <Grid container spacing={2} key={index} alignItems="flex-start" sx={{ mb: index === doughWasteEntries.length -1 ? 0 : 2.5}}>
+                                        <Grid item xs={12} sm={6} md={3.5}>
+                                            <Autocomplete options={doughRecipes} getOptionLabel={(option) => option.name || ''} value={doughRecipes.find(d => d.id === entry.doughId) || null} onChange={(event, newValue) => { handleWasteEntryChange(WASTE_TYPE.DOUGH, index, 'doughId', newValue ? newValue.id : ''); }} renderInput={(params) => <TextField {...params} label="面团" size="small" />} />
+                                        </Grid>
+                                        <Grid item xs={6} sm={3} md={2}><TextField label="数量" type="number" size="small" value={entry.quantity} onChange={e => handleWasteEntryChange(WASTE_TYPE.DOUGH, index, 'quantity', e.target.value)} fullWidth InputProps={{ inputProps: { min: 0 }}} /></Grid>
+                                        <Grid item xs={6} sm={3} md={1.5}><TextField label="单位" size="small" value={entry.unit} onChange={e => handleWasteEntryChange(WASTE_TYPE.DOUGH, index, 'unit', e.target.value)} fullWidth /></Grid>
+                                        <Grid item xs={12} sm={9} md={3.5}><TextField label="原因" size="small" value={entry.reason} onChange={e => handleWasteEntryChange(WASTE_TYPE.DOUGH, index, 'reason', e.target.value)} fullWidth /></Grid>
+                                        <Grid item xs={12} sm={3} md={1.5} container justifyContent={{xs: 'flex-end', sm: 'center'}} alignItems="center">
+                                            <IconButton onClick={() => removeWasteEntry(WASTE_TYPE.DOUGH, index)} disabled={doughWasteEntries.length === 1} size="small"><RemoveCircleOutlineIcon /></IconButton>
+                                            {index === doughWasteEntries.length -1 && <IconButton onClick={() => addWasteEntry(WASTE_TYPE.DOUGH)} size="small"><AddCircleOutlineIcon /></IconButton>}
+                                        </Grid>
+                                    </Grid>
+                                ))}
+                            </Paper>
+                        </AccordionDetails>
+                    </Accordion>
+                    
+                    <Accordion sx={{ mt: 2}}>
+                        <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography variant="h6">馅料报废登记</Typography></AccordionSummary>
+                        <AccordionDetails sx={{ p: { xs: 0.5, sm: 1, md: 2} }}>
+                            <Paper elevation={0} sx={{ p: {xs: 1, sm: 2}, mb: 3 }}>
+                                {fillingWasteEntries.map((entry, index) => (
+                                    <Grid container spacing={2} key={index} alignItems="flex-start" sx={{ mb: index === fillingWasteEntries.length -1 ? 0 : 2.5}}>
+                                        <Grid item xs={12} sm={6} md={3.5}>
+                                            <Autocomplete options={fillingRecipes} getOptionLabel={(option) => option.name || ''} value={fillingRecipes.find(f => f.id === entry.fillingId) || null} onChange={(event, newValue) => { handleWasteEntryChange(WASTE_TYPE.FILLING, index, 'fillingId', newValue ? newValue.id : ''); }} renderInput={(params) => <TextField {...params} label="馅料" size="small" />} />
+                                        </Grid>
+                                        <Grid item xs={6} sm={3} md={2}><TextField label="数量" type="number" size="small" value={entry.quantity} onChange={e => handleWasteEntryChange(WASTE_TYPE.FILLING, index, 'quantity', e.target.value)} fullWidth InputProps={{ inputProps: { min: 0 }}} /></Grid>
+                                        <Grid item xs={6} sm={3} md={1.5}><TextField label="单位" size="small" value={entry.unit} onChange={e => handleWasteEntryChange(WASTE_TYPE.FILLING, index, 'unit', e.target.value)} fullWidth /></Grid>
+                                        <Grid item xs={12} sm={9} md={3.5}><TextField label="原因" size="small" value={entry.reason} onChange={e => handleWasteEntryChange(WASTE_TYPE.FILLING, index, 'reason', e.target.value)} fullWidth /></Grid>
+                                        <Grid item xs={12} sm={3} md={1.5} container justifyContent={{xs: 'flex-end', sm: 'center'}} alignItems="center">
+                                            <IconButton onClick={() => removeWasteEntry(WASTE_TYPE.FILLING, index)} disabled={fillingWasteEntries.length === 1} size="small"><RemoveCircleOutlineIcon /></IconButton>
+                                            {index === fillingWasteEntries.length -1 && <IconButton onClick={() => addWasteEntry(WASTE_TYPE.FILLING)} size="small"><AddCircleOutlineIcon /></IconButton>}
+                                        </Grid>
+                                    </Grid>
+                                ))}
+                            </Paper>
+                        </AccordionDetails>
+                    </Accordion>
+                </>
+            )}
 
             <Box sx={{ mt: 3, textAlign: 'center' }}>
                 <Button 
@@ -338,12 +480,29 @@ const ProductionWastePage = () => {
                 </Button>
             </Box>
 
+            {isMobile && (
+                 <Fab
+                    color="primary"
+                    aria-label="save"
+                    onClick={handleSubmit}
+                    disabled={isSubmitting}
+                    sx={{
+                        position: 'fixed',
+                        bottom: 32,
+                        right: 32,
+                    }}
+                 >
+                    {isSubmitting ? <CircularProgress size={24} color="inherit" /> : <SaveIcon />}
+                 </Fab>
+            )}
+
             <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={() => setSnackbar({...snackbar, open: false})} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
                 <Alert onClose={() => setSnackbar({...snackbar, open: false})} severity={snackbar.severity} sx={{ width: '100%' }}>
                     {snackbar.message}
                 </Alert>
             </Snackbar>
         </Container>
+        </LocalizationProvider>
     );
 };
 

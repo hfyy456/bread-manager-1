@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Container,
   Typography,
@@ -27,10 +27,16 @@ import {
   useMediaQuery,
   InputAdornment,
   IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import { Link } from 'react-router-dom';
 import { InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
+import DownloadIcon from '@mui/icons-material/Download';
 
 const POSTNAME = {
   1: "搅拌",
@@ -61,6 +67,12 @@ const InventoryCheckPage = () => {
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState('info');
+
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [pendingSubmitData, setPendingSubmitData] = useState(null);
+  const [missingCount, setMissingCount] = useState(0);
+
+  const [downloading, setDownloading] = useState(false);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -135,12 +147,21 @@ const InventoryCheckPage = () => {
     setSelectedPost(event.target.value);
   };
 
-  const handleStockInputChange = (ingredientId, value) => {
+  const handleStockInputChange = useCallback((ingredientId, value) => {
     setStockInputs(prev => ({
       ...prev,
       [ingredientId]: value,
     }));
-  };
+  }, []);
+
+  // 使用useMemo计算总库存，避免重复计算
+  const totalStock = useMemo(() => {
+    if (!selectedPost || postIngredients.length === 0) return 0;
+    return postIngredients.reduce((total, ing) => {
+      const qty = stockInputs[ing._id];
+      return total + (qty ? parseFloat(qty) : 0);
+    }, 0);
+  }, [selectedPost, postIngredients, stockInputs]);
 
   const handleSubmitStock = async () => {
     if (!selectedPost) {
@@ -151,7 +172,8 @@ const InventoryCheckPage = () => {
       handleShowSnackbar('当前岗位没有需要盘点的物料。', 'info');
       return;
     }
-
+    // 统计未填写项
+    const missing = postIngredients.filter(ing => stockInputs[ing._id] === '' || stockInputs[ing._id] === undefined);
     const stockDataToSubmit = postIngredients
       .map(ing => ({
         ingredientId: ing._id,
@@ -162,20 +184,28 @@ const InventoryCheckPage = () => {
         norms: ing.norms
       }))
       .filter(item => !isNaN(item.quantity) && item.quantity >= 0);
-
     if (stockDataToSubmit.length === 0) {
       handleShowSnackbar('没有有效的库存数量被输入。', 'warning');
       return;
     }
+    if (missing.length > 0) {
+      setMissingCount(missing.length);
+      setPendingSubmitData(stockDataToSubmit);
+      setConfirmDialogOpen(true);
+      return;
+    }
+    await submitStockData(stockDataToSubmit);
+  };
 
+  // 真正提交数据的函数
+  const submitStockData = async (data) => {
     setIsSubmitting(true);
     try {
       const response = await fetch('/api/inventory/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId: selectedPost, stocks: stockDataToSubmit }),
+        body: JSON.stringify({ postId: selectedPost, stocks: data }),
       });
-      
       const resultText = await response.text();
       let resultJson;
       try {
@@ -184,11 +214,9 @@ const InventoryCheckPage = () => {
         console.error("Failed to parse API response as JSON:", resultText);
         throw new Error(`服务器响应格式错误: ${resultText.substring(0,100)}`);
       }
-
       if (!response.ok) {
         throw new Error(resultJson.message || `HTTP error! status: ${response.status}`);
       }
-
       if (resultJson.success) {
         handleShowSnackbar(resultJson.message || '库存盘点数据提交成功！', 'success');
         fetchIngredients();
@@ -200,7 +228,6 @@ const InventoryCheckPage = () => {
             throw new Error(resultJson.message || '库存提交失败，但未返回具体错误信息。');
         }
       }
-
     } catch (error) {
       console.error("Error submitting stock:", error);
       handleShowSnackbar(`提交失败: ${error.message}`, 'error');
@@ -209,9 +236,42 @@ const InventoryCheckPage = () => {
     }
   };
   
+  // 导出Excel功能
+  const handleExportExcel = async () => {
+    setDownloading(true);
+    try {
+      const response = await fetch('/api/inventory/export-realtime', {
+        method: 'GET',
+      });
+      if (!response.ok) {
+        throw new Error('导出失败');
+      }
+      const blob = await response.blob();
+      // 获取文件名
+      let filename = 'inventory_snapshot.xlsx';
+      const disposition = response.headers.get('Content-Disposition');
+      if (disposition && disposition.indexOf('filename=') !== -1) {
+        filename = decodeURIComponent(disposition.split('filename=')[1].replace(/['"]/g, ''));
+      }
+      // 创建下载链接
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      handleShowSnackbar('导出成功', 'success');
+    } catch (err) {
+      handleShowSnackbar('导出失败: ' + err.message, 'error');
+    } finally {
+      setDownloading(false);
+    }
+  };
+  
   const commonCellSx = { py: 1, fontSize: '0.875rem' };
   const commonHeaderCellSx = { ...commonCellSx, fontWeight: 'bold', backgroundColor: theme.palette.grey[200], color: theme.palette.text.primary };
-
 
   if (loadingIngredients) {
     return (
@@ -248,177 +308,174 @@ const InventoryCheckPage = () => {
       </Box>
 
       <Paper elevation={3} sx={{ p: { xs: 1.5, sm: 2.5 }, mb: {xs: 2, md: 3}, borderRadius: '12px' }}>
-        <Typography variant="h6" component="h2" sx={{ mb: 1.5, fontWeight: 500, fontSize: isMobile ? '1.1rem': undefined }}>
-          选择操作岗位
-        </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <FormControl fullWidth variant="outlined" size={isMobile ? 'small' : 'medium'}>
-            <InputLabel id="select-post-label">岗位</InputLabel>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} sm={6} md={4}>
+            <FormControl fullWidth>
+              <InputLabel id="post-select-label">选择岗位</InputLabel>
             <Select
-              labelId="select-post-label"
+                labelId="post-select-label"
+                id="post-select"
               value={selectedPost}
-              label="岗位"
+                label="选择岗位"
               onChange={handlePostChange}
             >
-              <MenuItem value="">
-                <em>-- 请选择 --</em>
-              </MenuItem>
               {Object.entries(POSTNAME).map(([id, name]) => (
                 <MenuItem key={id} value={id}>{name}</MenuItem>
               ))}
             </Select>
           </FormControl>
-        </Box>
-        {selectedPost && (
-          <Typography variant={isMobile ? 'body2' : 'subtitle1'} sx={{ mt: 1.5, textAlign: 'center', color: 'text.secondary' }}>
-            当前盘点岗位: <Box component="span" sx={{ fontWeight: 'bold', color: 'primary.main' }}>{POSTNAME[selectedPost]}</Box>
-          </Typography>
-        )}
+          </Grid>
+        </Grid>
       </Paper>
 
-      {selectedPost && !loadingIngredients && (
-        <Paper elevation={3} sx={{ p: { xs: 1.5, sm: 2.5 }, borderRadius: '12px' }}>
-          {postIngredients.length === 0 ? (
-            <Box sx={{textAlign: 'center', my: {xs: 2, md: 4}, color: 'text.secondary', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1}}>
-              <img src="/src/logo.svg" alt="Empty state" style={{ width: '60px', opacity: 0.4, marginBottom: '8px' }} /> 
-              <Typography variant="h6" component="p" sx={{fontSize: isMobile ? '1rem' : undefined}}>当前岗位无待盘点物料</Typography>
-              <Typography variant="body2" component="p" sx={{fontSize: isMobile ? '0.8rem' : undefined}}>请确认岗位选择是否正确，或联系管理员配置物料列表。</Typography>
-            </Box>
-          ) : (
-            <Box>
-              {isMobile ? (
-                <Box>
-                  {postIngredients.map((ing) => (
-                    <Card key={ing._id} sx={{ mb: 1.5, borderRadius: '8px' }} elevation={1}>
-                      <CardContent sx={{ py: 1, px: 1.5 }}>
-                        <Typography variant="body1" component="div" sx={{ fontWeight: 'medium', fontSize: '0.9rem', mb: 0.25 }}>
+      <Paper elevation={3} sx={{ p: { xs: 1.5, sm: 2.5 }, mb: {xs: 2, md: 3}, borderRadius: '12px' }}>
+        <Typography variant="h5" component="h2" sx={{ mb: 2 }}>
+          {selectedPost ? `${POSTNAME[selectedPost]} - 物料列表` : '请先选择岗位'}
+        </Typography>
+        
+        {selectedPost && postIngredients.length > 0 && (
+          isMobile ? (
+            <Grid container spacing={2}>
+              {postIngredients.map(ing => (
+                <Grid item xs={12} key={ing._id}>
+                  <Card variant="outlined" sx={{ borderRadius: '12px' }}>
+                    <CardContent>
+                      <Typography variant="h6" component="div" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                           {ing.name}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.7rem', mb: 0.75 }}>
-                          规格: {ing.specs || '-'} ({ing.norms} {ing.baseUnit || ing.min}/{ing.unit})
-                        </Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5, gap: 0.5 }}>
+                      <Grid container spacing={2} alignItems="flex-end">
+                        <Grid item xs={12}>
                           <TextField
-                            label="当前数量"
-                            type="number"
-                            variant="filled"
-                            size="small"
+                              fullWidth
+                              label="当前库存"
+                              variant="standard"
                             value={stockInputs[ing._id] || ''}
                             onChange={(e) => handleStockInputChange(ing._id, e.target.value)}
-                            onFocus={(event) => event.target.select()} 
-                            inputProps={{ 
-                              min: 0, 
-                              step: "any",
-                              sx: { fontSize: '0.9rem', py: '8px' }
-                            }}
-                            InputLabelProps={{ sx: { fontSize: '0.85rem' } }}
+                              type="number"
                             InputProps={{
-                              endAdornment: <InputAdornment position="end"><Typography variant="caption" sx={{fontSize: '0.75rem'}}>{ing.unit}</Typography></InputAdornment>,
-                              sx: { fontSize: '0.9rem'}
+                                endAdornment: <InputAdornment position="end">{ing.unit || ing.baseUnit || ing.min || 'g'}</InputAdornment>,
+                                sx: { fontSize: '1rem' }
                             }}
                             sx={{
-                              mr: 0,
-                              flexGrow: 1, 
-                              minWidth: '90px',
-                              '& .MuiFilledInput-root': {
-                                  backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.06)',
-                                  borderRadius: '4px',
-                               },
-                              '& .MuiFilledInput-input': {
-                                  paddingTop: '12px',
-                                  paddingBottom: '4px'
-                              }
-                            }}
-                          />
-                        </Box>
+                                '& .MuiInput-underline:before': { borderBottomColor: 'grey.400' },
+                                '& .MuiInput-underline:hover:not(.Mui-disabled):before': { borderBottomColor: 'primary.light' },
+                              }}
+                            />
+                        </Grid>
+                      </Grid>
                       </CardContent>
                     </Card>
+                </Grid>
                   ))}
-                </Box>
+            </Grid>
               ) : (
-                <TableContainer component={Paper} elevation={1} sx={{ borderRadius: '8px', overflow: 'hidden' }}>
-                  <Table sx={{ minWidth: 650 }} aria-label="inventory check table" size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={{...commonHeaderCellSx, width: '35%', py: 1 }}>原料名称</TableCell>
-                        <TableCell sx={{...commonHeaderCellSx, width: '35%', py: 1 }}>规格</TableCell>
-                        <TableCell align="right" sx={{...commonHeaderCellSx, width: '30%', py: 1 }}>盘点数量</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {postIngredients.map((ing, index) => (
-                        <TableRow 
-                          hover 
-                          key={ing._id}
-                          sx={{ 
-                            '&:nth-of-type(odd)': { backgroundColor: theme.palette.action.hover },
-                            '&:last-child td, &:last-child th': { border: 0 },
-                            '& td, & th': { py: 0.75 }
+            <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: '8px' }}>
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={commonHeaderCellSx}>物料名称</TableCell>
+                    <TableCell sx={{...commonHeaderCellSx, minWidth: '180px'}} align="center">当前库存</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {postIngredients.map(ing => (
+                    <TableRow key={ing._id} hover>
+                      <TableCell sx={{...commonCellSx, fontWeight: 500}}>{ing.name}</TableCell>
+                      <TableCell sx={commonCellSx} align="right">
+                        <TextField
+                          fullWidth
+                          variant="standard"
+                          value={stockInputs[ing._id] || ''}
+                          onChange={(e) => handleStockInputChange(ing._id, e.target.value)}
+                          type="number"
+                          inputProps={{ min: 0 }}
+                          InputProps={{
+                            endAdornment: <InputAdornment position="end">{ing.unit || ing.baseUnit || ing.min || 'g'}</InputAdornment>,
+                            sx: { fontSize: '1rem' }
                           }}
-                        >
-                          <TableCell sx={{...commonCellSx, fontSize: '0.8rem'}} component="th" scope="row">
-                            {ing.name}
-                          </TableCell>
-                          <TableCell sx={{...commonCellSx, fontSize: '0.8rem'}}>
-                            {ing.specs || '-'} ({ing.norms} {ing.baseUnit || ing.min}/{ing.unit})
-                          </TableCell>
-                          <TableCell align="right" sx={{...commonCellSx, pr: {xs: 1, md: 2}, fontSize: '0.8rem'}}>
-                            <TextField
-                              type="number"
-                              variant="outlined"
-                              size="small"
-                              placeholder="输入数量"
-                              value={stockInputs[ing._id] || ''}
-                              onChange={(e) => handleStockInputChange(ing._id, e.target.value)}
-                              onFocus={(event) => event.target.select()} 
-                              inputProps={{ min: 0, step: "any", sx: {fontSize: '0.85rem'} }}
-                              InputProps={{
-                                endAdornment: <InputAdornment position="end"><Typography variant="caption">{ing.unit}</Typography></InputAdornment>,
-                                sx: {fontSize: '0.85rem'}
-                              }}
-                              sx={{ width: {xs: '120px', sm: '150px'} }}
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
+                          sx={{
+                            '& .MuiInput-underline:before': { borderBottomColor: 'grey.400' },
+                            '& .MuiInput-underline:hover:not(.Mui-disabled):before': { borderBottomColor: 'primary.light' },
+                          }}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {/* 总库存行 */}
+                  {postIngredients.length > 0 && (
+                    <TableRow sx={{ backgroundColor: theme.palette.grey[200] }}>
+                      <TableCell sx={{...commonCellSx, fontWeight: 'bold'}}>总库存</TableCell>
+                      <TableCell sx={{...commonCellSx, fontWeight: 'bold'}} align="right">
+                        {totalStock}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )
+        )}
 
+        {selectedPost && postIngredients.length === 0 && (
+          <Typography sx={{ color: 'text.secondary', textAlign: 'center', py: 3 }}>
+            该岗位下没有需要盘点的物料。
+          </Typography>
+        )}
+
+        {!selectedPost && (
+          <Typography sx={{ color: 'text.secondary', textAlign: 'center', py: 3 }}>
+            请在上方选择一个岗位以查看物料列表和进行盘点。
+          </Typography>
+        )}
+
+        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
               <Button
                 variant="contained"
                 color="primary"
-                startIcon={<SaveIcon />}
+            size="large"
+            startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
                 onClick={handleSubmitStock}
-                disabled={isSubmitting || postIngredients.length === 0}
-                fullWidth={isMobile}
-                sx={{ 
-                  mt: {xs: 2, md: 3}, 
-                  py: isMobile ? 1.25 : 1.25,
-                  fontSize: isMobile ? '0.9rem' : '0.9rem',
-                  borderRadius: isMobile ? '8px' : '8px',
-                  boxShadow: theme.shadows[2],
-                  '&:hover': {
-                      boxShadow: theme.shadows[4],
-                      transform: 'translateY(-1px)'
-                  },
-                  transition: 'all 0.2s ease-in-out',
-                }}
+            disabled={isSubmitting || !selectedPost || postIngredients.length === 0}
+            sx={{ borderRadius: '8px', px: 3, py: 1.25 }}
               >
-                {isSubmitting ? <CircularProgress size={20} color="inherit" sx={{mr:1}} /> : null}
-                {isSubmitting ? '正在提交...' : '提交盘点数据'}
+            {isSubmitting ? '提交中...' : '提交盘点数据'}
               </Button>
             </Box>
-          )}
         </Paper>
-      )}
 
       <Snackbar open={snackbarOpen} autoHideDuration={4000} onClose={handleCloseSnackbar} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
         <Alert onClose={handleCloseSnackbar} severity={snackbarSeverity} sx={{ width: '100%' }}>
           {snackbarMessage}
         </Alert>
       </Snackbar>
+
+      {/* 确认未填写项的模态框 */}
+      <Dialog open={confirmDialogOpen} onClose={() => setConfirmDialogOpen(false)}>
+        <DialogTitle>确认提交</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            共有 {missingCount} 项物料未填写库存数量，是否继续提交？<br/>
+            （未填写的物料将不会被提交）
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDialogOpen(false)} color="inherit">取消</Button>
+          <Button onClick={() => { setConfirmDialogOpen(false); submitStockData(pendingSubmitData); }} color="primary" autoFocus>确认提交</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Box display="flex" justifyContent="space-between" alignItems="center" mt={2}>
+        <Typography variant="h5">库存总览</Typography>
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<DownloadIcon />}
+          onClick={handleExportExcel}
+          disabled={downloading}
+        >
+          {downloading ? '导出中...' : '导出Excel'}
+        </Button>
+      </Box>
     </Container>
   );
 };

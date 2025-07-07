@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Container, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Button, Box, IconButton, Tooltip, Stack, CircularProgress, Chip, TableSortLabel, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Select, MenuItem, FormControl, InputLabel, Grid } from '@mui/material';
-import { InfoOutlined as InfoOutlinedIcon, HelpOutline as HelpOutlineIcon, CameraAlt as CameraAltIcon } from '@mui/icons-material';
+import { Container, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Button, Box, IconButton, Tooltip, Stack, CircularProgress, Chip, TableSortLabel, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Select, MenuItem, FormControl, InputLabel, Grid, useTheme, useMediaQuery, Card, CardContent, TextField, FormControlLabel, Checkbox, TableFooter } from '@mui/material';
+import { InfoOutlined as InfoOutlinedIcon, HelpOutline as HelpOutlineIcon, CameraAlt as CameraAltIcon, KeyboardArrowDown as KeyboardArrowDownIcon, CompareArrows as CompareArrowsIcon, Download as DownloadIcon } from '@mui/icons-material';
 import { visuallyHidden } from '@mui/utils';
 import { Link } from 'react-router-dom';
 import moment from 'moment';
 import { POSTNAME } from '../config/constants';
 import { useSnackbar } from './SnackbarProvider.jsx';
-
 // Helper functions for sorting
 function descendingComparator(a, b, orderBy) {
   let aValue = a[orderBy];
@@ -49,11 +48,57 @@ const headCells = [
   { id: 'totalValue', numeric: true, disablePadding: false, label: '总价值', sortable: true, align: 'right', width: '9%' },
 ];
 
+const IngredientCard = ({ ingredient, posts, onRowToggle, isExpanded }) => {
+  const { name, post, unit, specs, price, pricePerBaseUnit, currentStock, totalValue, stockByPost } = ingredient;
+  const cardSx = { mb: 2, boxShadow: 3, '&:hover': { boxShadow: 6 } };
+
+  return (
+    <Card sx={cardSx}>
+      <CardContent onClick={() => onRowToggle(ingredient._id)} sx={{ cursor: 'pointer' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+          <Typography variant="h6" component="div" sx={{ fontWeight: 'bold' }}>{name}</Typography>
+          <Chip label={`${currentStock.toFixed(2)} ${unit}`} color={currentStock > 0 ? 'success' : 'error'} size="small" />
+        </Box>
+        <Grid container spacing={1} sx={{ fontSize: '0.875rem' }}>
+          <Grid item xs={6}><Typography variant="body2" color="text.secondary">总价值: ¥{totalValue.toFixed(2)}</Typography></Grid>
+          <Grid item xs={6}><Typography variant="body2" color="text.secondary">采购单价: ¥{price.toFixed(2)} / {unit}</Typography></Grid>
+          <Grid item xs={6}><Typography variant="body2" color="text.secondary">规格: {specs}</Typography></Grid>
+          <Grid item xs={6}><Typography variant="body2" color="text.secondary">单价/(克): ¥{pricePerBaseUnit.toFixed(4)}</Typography></Grid>
+        </Grid>
+        <Box sx={{display: 'flex', justifyContent: 'center', pt: 1, color: 'text.secondary'}}>
+          <KeyboardArrowDownIcon sx={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
+        </Box>
+      </CardContent>
+      {isExpanded && stockByPost && (
+        <CardContent sx={{ pt: 0, borderTop: '1px solid #f0f0f0' }}>
+          <Typography sx={{ mb: 1, fontWeight: 500 }}>各岗位库存:</Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            {posts.map(p => {
+              const stockInfo = stockByPost[p.id];
+              return (
+                <Chip
+                  key={p.id}
+                  label={`${p.name}: ${stockInfo ? stockInfo.quantity.toFixed(2) : '0.00'} ${unit}`}
+                  variant="outlined"
+                  size="small"
+                />
+              );
+            })}
+          </Box>
+        </CardContent>
+      )}
+    </Card>
+  );
+};
+
 const IngredientsPage = () => {
   const [allIngredients, setAllIngredients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { showSnackbar } = useSnackbar();
+
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
 
   const [stocks, setStocks] = useState({});
 
@@ -65,12 +110,25 @@ const IngredientsPage = () => {
   const [isSnapshotting, setIsSnapshotting] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
 
+  // Snapshot creation dialog state
+  const [snapshotNotes, setSnapshotNotes] = useState('');
+  const [clearDataOnCreate, setClearDataOnCreate] = useState(false);
+
+  // Comparison Dialog State
+  const [comparisonDialogOpen, setComparisonDialogOpen] = useState(false);
+  const [snapshotA, setSnapshotA] = useState('');
+  const [snapshotB, setSnapshotB] = useState('');
+  const [comparisonResult, setComparisonResult] = useState(null);
+  const [loadingComparison, setLoadingComparison] = useState(false);
+
   const [snapshots, setSnapshots] = useState([]);
   const [selectedSnapshotId, setSelectedSnapshotId] = useState('current');
   const [snapshotData, setSnapshotData] = useState(null);
   const [expandedRowId, setExpandedRowId] = useState(null);
 
   const isSnapshotView = selectedSnapshotId !== 'current';
+
+  const [downloading, setDownloading] = useState(false);
 
   const handleRowToggle = (id) => {
     setExpandedRowId(expandedRowId === id ? null : id);
@@ -204,18 +262,58 @@ const IngredientsPage = () => {
     setRestoreDialogOpen(false);
   };
 
+  const getConsumptionColor = (value) => {
+    if (value > 0) return theme.palette.error.main; // 消耗，红色
+    if (value < 0) return theme.palette.success.main; // 盈余，绿色
+    return theme.palette.text.primary;
+  };
+
+  const handleCompare = async () => {
+    if (!snapshotA || !snapshotB) {
+      showSnackbar('请选择两个历史快照进行对比', 'warning');
+      return;
+    }
+    setLoadingComparison(true);
+    setComparisonResult(null);
+    try {
+      const response = await fetch(`/api/ingredients/compare?from=${snapshotA}&to=${snapshotB}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const result = await response.json();
+      if (result.success) {
+        setComparisonResult(result.data);
+        showSnackbar('快照对比成功', 'success');
+      } else {
+        throw new Error(result.message || '对比失败');
+      }
+    } catch (err) {
+      showSnackbar(`对比快照时出错: ${err.message}`, 'error');
+    } finally {
+      setLoadingComparison(false);
+    }
+  };
+
   const handleConfirmSnapshot = async () => {
-    handleCloseDialog();
     setIsSnapshotting(true);
     try {
-      const response = await fetch('/api/inventory/snapshot', { method: 'POST' });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || '操作失败');
-      showSnackbar(data.message, 'success');
-      fetchSnapshots(); // Refresh snapshot list
-      fetchIngredientsAndSetStocks(); // Refresh the main ingredient list to show cleared stocks
+      const response = await fetch('/api/inventory/snapshot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: snapshotNotes, clearData: clearDataOnCreate }),
+      });
+      const result = await response.json();
+      if (result.success) {
+        showSnackbar('快照已成功创建！', 'success');
+        fetchSnapshots(); // Refresh snapshot list
+        handleCloseDialog();
+        setSnapshotNotes('');
+        setClearDataOnCreate(false);
+      } else {
+        throw new Error(result.message || '创建快照失败');
+      }
     } catch (err) {
-      showSnackbar(err.message, 'error');
+      showSnackbar(`创建快照时出错: ${err.message}`, 'error');
     } finally {
       setIsSnapshotting(false);
     }
@@ -245,109 +343,78 @@ const IngredientsPage = () => {
   // Calculate grand total inventory value -- THIS SECTION IS BEING REMOVED
   // let grandTotalInventoryValue = 0; // This line is removed
   const processedIngredients = useMemo(() => {
-    const ingredientList = isSnapshotView ? (snapshotData?.inventoryState || []) : allIngredients;
-
+    const ingredientList = isSnapshotView ? (snapshotData?.ingredients || []) : allIngredients;
+    
     return ingredientList.map(ing => {
-      const norms = ing.norms || 1;
-      const price = ing.price || 0;
-      const baseUnit = ing.min || 'g'; // Default to 'g' if min is not specified
+      const stockByPost = ing.stockByPost || {};
+      const currentStock = Object.values(stockByPost).reduce((acc, { quantity }) => acc + (quantity || 0), 0);
+      const totalValue = currentStock * (ing.price || 0);
+      const pricePerBaseUnit = (ing.price && ing.norms) ? ing.price / ing.norms : 0;
       
-      const pricePerBaseUnit = norms > 0 ? price / norms : 0;
-      
-      let currentStock, totalValue;
-
-      if (isSnapshotView) {
-        currentStock = ing.totalStocked || 0;
-        totalValue = currentStock * price;
-      } else {
-        currentStock = stocks[ing.name] || 0;
-        totalValue = currentStock * price;
-      }
-
-      const displayPosts = Array.isArray(ing.post) ? ing.post.map(p => POSTNAME[p] || '未知').join(', ') : (POSTNAME[ing.post] || '未分配');
-
       return {
         ...ing,
-        baseUnit,
-        pricePerBaseUnit,
         currentStock,
         totalValue,
-        displayPosts
+        pricePerBaseUnit,
       };
     });
-  }, [allIngredients, stocks, isSnapshotView, snapshotData]);
+  }, [allIngredients, isSnapshotView, snapshotData]);
   
   // grandTotalInventoryValue = useMemo(() => { // This useMemo hook for grandTotalInventoryValue is removed
   //   return ingredientsWithCalculatedValues.reduce((sum, ingredient) => sum + ingredient.totalValue, 0);
   // }, [ingredientsWithCalculatedValues]);
 
-  const sortedIngredients = useMemo(() => {
-    function customDescendingComparator(a, b, orderBy) {
-        let aValue = a[orderBy];
-        let bValue = b[orderBy];
+  const { grandTotalInventoryValue, visibleRows } = useMemo(() => {
+    let grandTotal = 0;
+    processedIngredients.forEach(ing => {
+      grandTotal += ing.totalValue || 0;
+    });
 
-        if (orderBy === 'price') {
-            aValue = a.price || 0;
-            bValue = b.price || 0;
-        } else if (orderBy === 'pricePerBaseUnit') {
-            aValue = a.pricePerBaseUnit || 0;
-            bValue = b.pricePerBaseUnit || 0;
-        } else if (orderBy === 'currentStock') {
-            aValue = a.currentStock !== undefined ? a.currentStock : -Infinity;
-            bValue = b.currentStock !== undefined ? b.currentStock : -Infinity;
-        } else if (orderBy === 'totalValue') {
-            aValue = a.totalValue !== undefined ? a.totalValue : -Infinity;
-        } else if (typeof aValue === 'string' && typeof bValue === 'string') {
-            const strA = aValue || '';
-            const strB = bValue || '';
-            return strB.localeCompare(strA, 'zh-Hans-CN');
-        }
-
-        if (bValue < aValue) {
-            return -1;
-        }
-        if (bValue > aValue) {
-            return 1;
-        }
-        return 0;
-    }
-
-    function customGetComparator(order, orderBy) {
-        return order === 'desc'
-            ? (a, b) => customDescendingComparator(a, b, orderBy)
-            : (a, b) => -customDescendingComparator(a, b, orderBy);
-    }
-    return stableSort(processedIngredients, customGetComparator(order, orderBy));
+    const sortedRows = stableSort(processedIngredients, getComparator(order, orderBy));
+    
+    return { grandTotalInventoryValue: grandTotal, visibleRows: sortedRows };
   }, [processedIngredients, order, orderBy]);
 
-  const ingredientsToDisplay = useMemo(() => {
-    const source = isSnapshotView && snapshotData ? snapshotData.ingredients : allIngredients;
-    return source.map(ing => {
-      let currentStock = 0;
-      if (ing.stockByPost) {
-        if (typeof ing.stockByPost === 'object' && ing.stockByPost !== null) {
-          currentStock = Object.values(ing.stockByPost).reduce((sum, post) => sum + (post.quantity || 0), 0);
-        }
+  const sortedIngredients = useMemo(() => {
+    const dataToSort = isSnapshotView && snapshotData ? snapshotData.ingredients : allIngredients;
+    return stableSort(dataToSort, getComparator(order, orderBy));
+  }, [order, orderBy, allIngredients, snapshotData, isSnapshotView]);
+
+  // 导出Excel功能
+  const handleExportExcel = async () => {
+    setDownloading(true);
+    try {
+      const response = await fetch('/api/inventory/export-realtime', {
+        method: 'GET',
+      });
+      if (!response.ok) {
+        throw new Error('导出失败');
       }
-      const price = ing.price || 0;
-      const totalValue = currentStock * price;
-      const pricePerBaseUnit = (ing.norms && ing.price) ? (ing.price / ing.norms) : 0;
-      return { ...ing, _id: ing._id || ing.name, currentStock, totalValue, pricePerBaseUnit };
-    });
-  }, [allIngredients, snapshotData, isSnapshotView]);
-  
-  const grandTotalInventoryValue = useMemo(() => {
-    if (isSnapshotView && snapshotData) {
-        return snapshotData.totalValue;
+      const blob = await response.blob();
+      // 获取文件名
+      let filename = 'realtime_inventory.xlsx';
+      const disposition = response.headers.get('Content-Disposition');
+      if (disposition && disposition.indexOf('filename=') !== -1) {
+        filename = decodeURIComponent(disposition.split('filename=')[1].replace(/['\"]/g, ''));
+      }
+      // 创建下载链接
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      showSnackbar('导出成功', 'success');
+    } catch (err) {
+      showSnackbar('导出失败: ' + err.message, 'error');
+    } finally {
+      setDownloading(false);
     }
-    return ingredientsToDisplay.reduce((sum, ing) => sum + ing.totalValue, 0)
-  }, [ingredientsToDisplay, isSnapshotView, snapshotData]);
+  };
 
-  const sortedIngredientsToDisplay = useMemo(() => 
-    stableSort(ingredientsToDisplay, getComparator(order, orderBy)),
-  [ingredientsToDisplay, order, orderBy]);
-
-  if (loading) {
+  if (loading && allIngredients.length === 0 && !snapshotData) {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
         <Box display="flex" justifyContent="center" alignItems="center" minHeight="50vh">
@@ -371,30 +438,46 @@ const IngredientsPage = () => {
   }
 
   return (
-    <Container maxWidth="xl" sx={{ py: 3 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h5" gutterBottom component="div">
-          原料基础信息维护
-          <Tooltip title="查看原料页面操作指南">
-            <IconButton component={Link} to="/operation-guide#ingredients-page" size="small" sx={{ ml: 1 }}>
-              <HelpOutlineIcon />
-            </IconButton>
-          </Tooltip>
-        </Typography>
-        {/* The following Typography component displaying grandTotalInventoryValue is removed
-        <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-          总库存价值: ¥{grandTotalInventoryValue.toFixed(2)}
-        </Typography>
-        */}
-      </Stack>
-      
-      <Paper elevation={2} sx={{ p: { xs: 1.5, sm: 2, md: 3 }, mb: 3}}>
-        <Typography variant="body1">
-          此处显示各原料在所有岗位上的库存总和。要更新特定岗位的库存，请前往"库存盘点"页面。
-        </Typography>
-      </Paper>
+    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+        <Typography variant="h5">原料管理</Typography>
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<DownloadIcon />}
+          onClick={handleExportExcel}
+          disabled={downloading}
+        >
+          {downloading ? '导出中...' : '导出Excel'}
+        </Button>
+      </Box>
 
-      <Paper sx={{ p: { xs: 1, sm: 2 }, m: { xs: 0, sm: 1 }, boxShadow: 3 }}>
+      <Typography variant="h4" sx={{ my: 3, textAlign: 'center' }}>
+        原料库存总览
+      </Typography>
+
+      <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3, gap: 2 }}>
+         <Button
+            variant="contained"
+            color="primary"
+            onClick={() => setComparisonDialogOpen(true)}
+            startIcon={<CompareArrowsIcon />}
+            sx={{ py: 1.5, px: 3 }}
+          >
+            对比快照/计算消耗
+          </Button>
+          <Button 
+            variant="contained" 
+            color="secondary"
+            onClick={handleOpenDialog} 
+            startIcon={<CameraAltIcon />}
+            sx={{ py: 1.5, px: 3 }}
+          >
+            生成新快照
+          </Button>
+      </Box>
+
+      <Paper elevation={2} sx={{ p: { xs: 1, sm: 2 }, m: { xs: 0, sm: 1 }, boxShadow: 3 }}>
         <Grid container spacing={2} justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
             <Grid item xs={12} md>
                 <Typography variant="h4" component="h1" gutterBottom sx={{ m: 0 }}>
@@ -417,18 +500,6 @@ const IngredientsPage = () => {
                         ))}
                     </Select>
                 </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6} md="auto">
-                <Button
-                    fullWidth
-                    variant="contained"
-                    color="secondary"
-                    startIcon={<CameraAltIcon />}
-                    onClick={handleOpenDialog}
-                    disabled={isSnapshotting || isSnapshotView}
-                >
-                    {isSnapshotting ? '正在生成...' : '生成本周库存快照'}
-                </Button>
             </Grid>
             <Grid item xs={12} sm={6} md="auto">
                 <Button
@@ -456,109 +527,178 @@ const IngredientsPage = () => {
             库存总价值: ¥{grandTotalInventoryValue.toFixed(2)}
         </Typography>
 
-        <TableContainer component={Paper} elevation={2}>
-          <Table sx={{ minWidth: 850 }} aria-label="ingredients stock table">
-            <TableHead>
-              <TableRow>
-                {headCells.map((headCell) => (
-                  <TableCell
-                    key={headCell.id}
-                    align={headCell.align || (headCell.numeric ? 'right' : 'left')}
-                    padding={headCell.disablePadding ? 'none' : 'normal'}
-                    sortDirection={orderBy === headCell.id ? order : false}
-                    sx={{ ...commonHeaderCellSx, width: headCell.width }}
-                  >
-                    {headCell.sortable ? (
-                      <TableSortLabel
-                        active={orderBy === headCell.id}
-                        direction={orderBy === headCell.id ? order : 'asc'}
-                        onClick={(event) => handleRequestSort(event, headCell.id)}
-                      >
-                        {headCell.label}
-                        {orderBy === headCell.id ? (
-                          <Box component="span" sx={visuallyHidden}>
-                            {order === 'desc' ? 'sorted descending' : 'sorted ascending'}
-                          </Box>
-                        ) : null}
-                      </TableSortLabel>
-                    ) : (
-                      headCell.label
-                    )}
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {sortedIngredients.map((ingredient, index) => {
-                const labelId = `ingredients-table-checkbox-${index}`;
-                return (
-                  <React.Fragment key={ingredient.id || ingredient.name}>
-                  <TableRow
-                    hover
-                    role="checkbox"
-                    tabIndex={-1}
-                    key={ingredient.id || ingredient.name}
-                  >
-                    <TableCell component="th" id={labelId} scope="row">
-                      <Stack>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>{ingredient.name}</Typography>
-                        {isSnapshotView && ingredient.ingredientId && (
-                           <Typography variant="caption" color="text.secondary">ID: {ingredient.ingredientId}</Typography>
-                        )}
-                      </Stack>
-                    </TableCell>
-                    <TableCell>{ingredient.displayPosts}</TableCell>
-                    <TableCell align="right">{ingredient.unit}</TableCell>
-                    <TableCell align="right">{`${ingredient.norms || 'N/A'} ${ingredient.baseUnit}`}</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>¥{ingredient.price?.toFixed(2) || '0.00'}</TableCell>
-                    <TableCell align="right">¥{ingredient.pricePerBaseUnit?.toFixed(4) || '0.0000'}</TableCell>
-                    <TableCell 
-                      align="right"
-                      onClick={() => !isSnapshotView && handleRowToggle(ingredient._id)}
-                      sx={{ 
-                        cursor: isSnapshotView ? 'default' : 'pointer', 
-                        fontWeight: 'bold',
-                      }}
-                      title={isSnapshotView ? '历史快照不支持展开' : "点击展开/折叠岗位详情"}
+        {isDesktop ? (
+          <TableContainer component={Paper} sx={{ boxShadow: 3 }}>
+            <Table stickyHeader aria-label="ingredients table">
+              <TableHead>
+                <TableRow>
+                  <TableCell padding="checkbox" />
+                  {headCells.map((headCell) => (
+                    <TableCell
+                      key={headCell.id}
+                      align={headCell.align || (headCell.numeric ? 'right' : 'left')}
+                      padding={headCell.disablePadding ? 'none' : 'normal'}
+                      sortDirection={orderBy === headCell.id ? order : false}
+                      sx={{ ...commonHeaderCellSx, width: headCell.width }}
                     >
-                      {ingredient.currentStock?.toFixed(2) || '0.00'}
-                      {!isSnapshotView && (expandedRowId === ingredient._id ? ' ▲' : ' ▼')}
+                      {headCell.sortable ? (
+                        <TableSortLabel
+                          active={orderBy === headCell.id}
+                          direction={orderBy === headCell.id ? order : 'asc'}
+                          onClick={(event) => handleRequestSort(event, headCell.id)}
+                        >
+                          {headCell.label}
+                          {orderBy === headCell.id ? (
+                            <Box component="span" sx={visuallyHidden}>
+                              {order === 'desc' ? 'sorted descending' : 'sorted ascending'}
+                            </Box>
+                          ) : null}
+                        </TableSortLabel>
+                      ) : (
+                        headCell.label
+                      )}
                     </TableCell>
-                    <TableCell align="right">¥{ingredient.totalValue?.toFixed(2) || '0.00'}</TableCell>
-                  </TableRow>
-                  {!isSnapshotView && expandedRowId === ingredient._id && (
-                    <TableRow>
-                      <TableCell colSpan={headCells.length} style={{ background: '#fafafa', padding: '12px 24px', borderBottom: '1px solid #e0e0e0' }}>
-                        <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>各岗位库存详情:</Typography>
-                          {ingredient.stockByPost && Object.keys(ingredient.stockByPost).length > 0 ? (
-                            <ul style={{ margin: 0, paddingLeft: '20px' }}>
-                              {Object.entries(ingredient.stockByPost)
-                                .filter(([, stock]) => stock.quantity > 0)
-                                .map(([postId, stock]) => (
-                                  <li key={postId}>
-                                    <Typography variant="body2" component="span">{POSTNAME[postId] || `未知岗位 (${postId})`}: </Typography>
-                                    <Typography variant="body2" component="span" sx={{ fontWeight: 500 }}>{stock.quantity.toLocaleString()} {stock.unit}</Typography>
-                                  </li>
-                                ))}
-                            </ul>
-                          ) : (
-                            <Typography variant="body2" color="textSecondary" sx={{pl: 2}}>无库存记录</Typography>
-                          )}
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  </React.Fragment>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        {ingredientsToDisplay.length === 0 && !loading && (
+                  ))}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {visibleRows.map((ingredient) => {
+                  const { _id, name, unit, specs, price, currentStock, totalValue, stockByPost, pricePerBaseUnit } = ingredient;
+                  const isExpanded = expandedRowId === _id;
+                  
+                  return (
+                    <React.Fragment key={_id}>
+                      <TableRow 
+                        hover 
+                        onClick={() => handleRowToggle(_id)} 
+                        sx={{ 
+                          cursor: 'pointer', 
+                          '& > *': { borderBottom: isExpanded ? 'none' : 'unset' },
+                          backgroundColor: isExpanded ? 'action.hover' : 'transparent'
+                        }}
+                      >
+                        <TableCell padding="checkbox">
+                          <IconButton size="small">
+                            <KeyboardArrowDownIcon sx={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
+                          </IconButton>
+                        </TableCell>
+                        <TableCell sx={commonCellSx}>{name}</TableCell>
+                        <TableCell sx={commonCellSx}>
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                            {Object.entries(POSTNAME).map(([pId, pName]) => {
+                              const stockInfo = stockByPost && stockByPost[pId];
+                              if (stockInfo && stockInfo.quantity > 0) {
+                                return <Chip key={pId} label={`${pName}: ${stockInfo.quantity.toFixed(2)}`} size="small" variant="outlined" />;
+                              }
+                              return null;
+                            })}
+                          </Box>
+                        </TableCell>
+                        <TableCell align="right" sx={commonCellSx}>{unit}</TableCell>
+                        <TableCell align="right" sx={commonCellSx}>{specs}</TableCell>
+                        <TableCell align="right" sx={commonCellSx}>¥{price.toFixed(2)}</TableCell>
+                        <TableCell align="right" sx={commonCellSx}>¥{pricePerBaseUnit.toFixed(4)}</TableCell>
+                        <TableCell align="right" sx={commonCellSx}>
+                          <Chip label={currentStock.toFixed(2)} color={currentStock > 0 ? 'success' : 'error'} />
+                        </TableCell>
+                        <TableCell align="right" sx={commonCellSx}>¥{totalValue.toFixed(2)}</TableCell>
+                      </TableRow>
+                      {isExpanded && (
+                        <TableRow sx={{ backgroundColor: isExpanded ? 'action.hover' : 'transparent' }}>
+                          <TableCell colSpan={headCells.length + 1} sx={{ p: 0, borderBottom: '1px solid rgba(224, 224, 224, 1)' }}>
+                              <Box sx={{ p: 2, backgroundColor: 'grey.50' }}>
+                                <Typography variant="subtitle2" gutterBottom>各岗位库存详情</Typography>
+                                <Grid container spacing={1}>
+                                  {Object.entries(POSTNAME).map(([pId, pName]) => {
+                                    const stockInfo = stockByPost && stockByPost[pId];
+                                    return (
+                                      <Grid item xs={12} sm={6} md={4} lg={3} key={pId}>
+                                        <Chip
+                                          label={`${pName}: ${stockInfo ? stockInfo.quantity.toFixed(2) : '0.00'} ${unit}`}
+                                          variant="outlined"
+                                          sx={{ width: '100%', justifyContent: 'flex-start', pl: 1 }}
+                                        />
+                                      </Grid>
+                                    );
+                                  })}
+                                </Grid>
+                              </Box>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        ) : (
+          <Box>
+            {visibleRows.map((ingredient) => (
+              <IngredientCard 
+                key={ingredient._id} 
+                ingredient={ingredient} 
+                posts={Object.entries(POSTNAME).map(([id, name]) => ({ id, name }))}
+                onRowToggle={handleRowToggle}
+                isExpanded={expandedRowId === ingredient._id}
+              />
+            ))}
+          </Box>
+        )}
+
+        {visibleRows.length === 0 && !loading && (
             <Typography sx={{textAlign: 'center', mt: 3, color: 'text.secondary'}}>
                 {isSnapshotView ? '快照数据为空。' : '未找到原料数据。请确保API服务正常或数据库中有数据。'}
             </Typography>
         )}
       </Paper>
+
+      {/* <Paper elevation={2} sx={{ p: 2, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>库存快照操作</Typography>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} md={4}>
+            <FormControl fullWidth>
+              <InputLabel>查看快照</InputLabel>
+              <Select
+                value={selectedSnapshotId}
+                label="查看快照"
+                onChange={handleSnapshotChange}
+              >
+                <MenuItem value="current"><em>当前实时库存</em></MenuItem>
+                {snapshots.map(s => (
+                  <MenuItem key={s._id} value={s._id}>{moment(s.createdAt).format('YYYY-MM-DD HH:mm:ss')} - {s.notes || '无备注'}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} md={8}>
+            <Stack direction="row" spacing={1} justifyContent="flex-start" sx={{ flexWrap: 'wrap', gap: 1 }}>
+              <Button
+                variant="contained"
+                color="secondary"
+                onClick={() => setComparisonDialogOpen(true)}
+                startIcon={<CompareArrowsIcon />}
+              >
+                对比快照/计算消耗
+              </Button>
+              <Button variant="contained" onClick={handleOpenDialog} startIcon={<CameraAltIcon />}>
+                生成新快照
+              </Button>
+              <Tooltip title="将当前库存数据还原至所选快照的状态">
+                <span>
+                  <Button variant="outlined" color="warning" onClick={handleOpenRestoreDialog} disabled={selectedSnapshotId === 'current'}>
+                    还原到此快照
+                  </Button>
+                </span>
+              </Tooltip>
+            </Stack>
+          </Grid>
+        </Grid>
+      </Paper> */}
+
+      {loadingComparison && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', my: 3 }}><CircularProgress /></Box>
+      )}
 
 
       <Dialog
@@ -570,6 +710,16 @@ const IngredientsPage = () => {
           <DialogContentText>
             此操作将以当前各岗位填写的库存数量为准，生成一份全店的库存快照，作为后续计算和还原的基准。快照生成后，今日库存将被清零以便开始新的盘点。
           </DialogContentText>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={clearDataOnCreate}
+                onChange={e => setClearDataOnCreate(e.target.checked)}
+              />
+            }
+            label="生成快照后清空当前库存（用于新一轮盘点）"
+            sx={{ mt: 2 }}
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>取消</Button>
@@ -594,6 +744,96 @@ const IngredientsPage = () => {
           <Button onClick={handleConfirmRestore} color="warning" autoFocus>
             确认还原
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Comparison Dialog */}
+      <Dialog open={comparisonDialogOpen} onClose={() => setComparisonDialogOpen(false)} fullWidth maxWidth="md">
+        <DialogTitle>对比快照与消耗分析</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1, mb: 2 }}>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>起始节点</InputLabel>
+                <Select value={snapshotA} label="起始节点" onChange={(e) => setSnapshotA(e.target.value)}>
+                  <MenuItem value="current"><em>当前实时库存</em></MenuItem>
+                  {snapshots.map(s => (
+                    <MenuItem key={s._id} value={s._id}>{moment(s.createdAt).format('YYYY-MM-DD HH:mm:ss')}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>结束节点</InputLabel>
+                <Select value={snapshotB} label="结束节点" onChange={(e) => setSnapshotB(e.target.value)}>
+                  <MenuItem value="current"><em>当前实时库存</em></MenuItem>
+                  {snapshots.map(s => (
+                    <MenuItem key={s._id} value={s._id}>{moment(s.createdAt).format('YYYY-MM-DD HH:mm:ss')}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+            <Button
+              variant="contained"
+              onClick={handleCompare}
+              disabled={loadingComparison || !snapshotA || !snapshotB}
+              startIcon={loadingComparison ? <CircularProgress size={20} /> : <CompareArrowsIcon />}
+            >
+              计算消耗
+            </Button>
+          </Box>
+
+          {loadingComparison && <Box sx={{ display: 'flex', justifyContent: 'center', my: 3 }}><CircularProgress /></Box>}
+
+          {comparisonResult && (
+            <Paper elevation={2} sx={{ p: 2 }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>对比结果</Typography>
+              <TableContainer>
+                <Table stickyHeader size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>原料名称</TableCell>
+                      <TableCell align="right">起始库存</TableCell>
+                      <TableCell align="right">结束库存</TableCell>
+                      <TableCell align="right">消耗量</TableCell>
+                      <TableCell>单位</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {comparisonResult.items.map((item) => (
+                      <TableRow key={item.ingredientId}>
+                        <TableCell>{item.ingredientName}</TableCell>
+                        <TableCell align="right">{item.quantityA.toFixed(2)}</TableCell>
+                        <TableCell align="right">{item.quantityB.toFixed(2)}</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 'bold', color: getConsumptionColor(item.consumption) }}>
+                          {item.consumption.toFixed(2)}
+                        </TableCell>
+                        <TableCell>{item.unit}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                  <TableFooter>
+                    <TableRow sx={{ '& td, & th': { fontWeight: 'bold', fontSize: '1rem', borderTop: '2px solid rgba(224, 224, 224, 1)' } }}>
+                      <TableCell component="th">总计金额</TableCell>
+                      <TableCell align="right">¥{comparisonResult.totals.valueA.toFixed(2)}</TableCell>
+                      <TableCell align="right">¥{comparisonResult.totals.valueB.toFixed(2)}</TableCell>
+                      <TableCell align="right" sx={{ color: getConsumptionColor(comparisonResult.totals.valueConsumption) }}>
+                        ¥{comparisonResult.totals.valueConsumption.toFixed(2)}
+                      </TableCell>
+                      <TableCell></TableCell>
+                    </TableRow>
+                  </TableFooter>
+                </Table>
+              </TableContainer>
+            </Paper>
+          )}
+
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setComparisonDialogOpen(false)}>关闭</Button>
         </DialogActions>
       </Dialog>
     </Container>

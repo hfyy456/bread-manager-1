@@ -108,18 +108,48 @@ export const DataProvider = ({ children }) => {
 
   const updateIngredientStock = useCallback(async (updates) => {
     // updates should be an array of objects: [{ ingredientName, location, quantity, unit }]
+    
+    // There should only be one location/postId for a given receiving transaction
+    if (!updates || updates.length === 0) {
+      return { success: true }; // Nothing to update
+    }
+    const postId = updates[0].location; 
+    
+    const stocks = updates.map(update => {
+      const ingredient = ingredientsMap.get(update.ingredientName);
+      if (!ingredient) {
+        // This case should ideally be handled before calling, but as a safeguard:
+        console.error(`Ingredient not found in map: ${update.ingredientName}`);
+        return null;
+      }
+      return {
+        ingredientId: ingredient._id,
+        quantity: parseFloat(update.quantity) || 0,
+        unit: update.unit,
+        ingredientName: update.ingredientName // for error reporting
+      };
+    }).filter(Boolean); // Filter out any nulls from not found ingredients
+
+    if (stocks.length === 0) {
+      return { success: false, message: "没有有效的原料可供更新。" };
+    }
+
+    const body = { postId, stocks };
+
     try {
-      const response = await fetch('/api/inventory/update', {
+      const response = await fetch('/api/inventory/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(updates),
+        body: JSON.stringify(body),
       });
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || 'Failed to update inventory on the server.');
+        // The backend might return specific errors in an 'errors' array
+        const errorMessage = result.errors ? result.errors.join(', ') : result.message;
+        throw new Error(errorMessage || 'Failed to update inventory on the server.');
       }
       
       // Optimistically update local state
@@ -132,15 +162,12 @@ export const DataProvider = ({ children }) => {
           if (ingredientToUpdate) {
             const newStockByPost = { ...(ingredientToUpdate.stockByPost || {}) };
             
-            if (newStockByPost[update.location]) {
-              newStockByPost[update.location].quantity = (parseFloat(newStockByPost[update.location].quantity) || 0) + parseFloat(update.quantity);
-            } else {
+            // Backend overwrites the stock for the post, so we do the same for optimistic update
               newStockByPost[update.location] = {
                 quantity: parseFloat(update.quantity),
                 unit: update.unit,
+              lastUpdated: new Date().toISOString(),
               };
-            }
-            newStockByPost[update.location].lastUpdated = new Date().toISOString();
 
             const updatedIngredient = { ...ingredientToUpdate, stockByPost: newStockByPost };
             
@@ -160,7 +187,7 @@ export const DataProvider = ({ children }) => {
         return newIngredients;
       });
 
-      return { success: true };
+      return { success: true, message: result.message };
     } catch (error) {
       console.error("Failed to update ingredient stock:", error);
       return { success: false, message: error.message };

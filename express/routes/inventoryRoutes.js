@@ -6,7 +6,9 @@ const {
   listSnapshots, 
   getSnapshotDetails,
   restoreInventoryFromSnapshot,
-  getInventoryState
+  getInventoryState,
+  exportInventoryExcel,
+  exportInventoryRealtimeExcel
 } = require('../controllers/inventoryController');
 
 // @route   POST /api/inventory/submit
@@ -33,5 +35,13 @@ router.post('/restore/:id', restoreInventoryFromSnapshot);
 // @route   GET /api/inventory/state
 // @desc    Get the current stock state for all ingredients
 router.get('/state', getInventoryState);
+
+// @route   GET /api/inventory/export
+// @desc    导出最新库存快照为Excel
+router.get('/export', exportInventoryExcel);
+
+// @route   GET /api/inventory/export-realtime
+// @desc    导出实时库存为Excel
+router.get('/export-realtime', exportInventoryRealtimeExcel);
 
 module.exports = router; 

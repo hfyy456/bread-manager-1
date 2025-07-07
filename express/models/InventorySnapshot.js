@@ -2,17 +2,20 @@ const mongoose = require('mongoose');
 const moment = require('moment');
 
 const inventorySnapshotSchema = new mongoose.Schema({
+  year: {
+    type: Number,
+    required: true,
+  },
+  weekOfYear: {
+    type: Number,
+    required: true,
+  },
   snapshotDate: {
     type: Date,
     default: Date.now,
   },
-  weekOfYear: {
-    type: Number,
-    default: () => moment().week(),
-  },
-  year: {
-    type: Number,
-    default: () => moment().year(),
+  notes: {
+    type: String,
   },
   totalValue: {
     type: Number,
@@ -37,7 +40,7 @@ const inventorySnapshotSchema = new mongoose.Schema({
   ],
 }, { timestamps: true });
 
-inventorySnapshotSchema.index({ year: 1, weekOfYear: 1 }, { unique: true });
+inventorySnapshotSchema.index({ createdAt: -1 });
 
 const InventorySnapshot = mongoose.model('InventorySnapshot', inventorySnapshotSchema);
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import {
     Container, Typography, Paper, Grid, Box, Tabs, Tab, AppBar, Tooltip, IconButton,
-    TextField, CircularProgress, Alert as MuiAlert, useTheme
+    TextField, CircularProgress, Alert as MuiAlert, useTheme, LinearProgress
 } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
@@ -47,22 +47,18 @@ const MaterialConsumptionPanel = ({ consumptionData, ingredientsMap }) => {
         return (
             <Paper elevation={2} sx={{ p: 2, mt: 3 }}>
             <Typography variant="h6" gutterBottom sx={{ textAlign: 'center', mb: 2 }}>理论原料消耗</Typography>
-                <Grid container spacing={1.5}>
+                <Grid container spacing={2}>
                 {consumptionList.map(({ name, quantity, unit, stockInBaseUnit, stockInPurchaseUnits, purchaseUnit, norms }) => {
                     const consumedInBaseUnit = quantity || 0;
                     
-                    // For progress bar, compare base units for accuracy
                     let progress = 0;
                     if (stockInBaseUnit > 0) {
                         progress = Math.min((consumedInBaseUnit / stockInBaseUnit) * 100, 100);
                     } else if (consumedInBaseUnit > 0) {
-                        progress = 100; // Consumed something with zero or undefined stock
+                        progress = 100;
                     }
                     
                     const isOverBudget = consumedInBaseUnit > stockInBaseUnit;
-                    const progressBarColor = isOverBudget ? 'error.light' : 'primary.light';
-
-                    // For display, convert consumed quantity to purchase units
                     const consumedForDisplay = consumedInBaseUnit / norms;
                     
                     const tooltipTitle = `${name}: 已消耗 ${consumedForDisplay.toFixed(2)}${purchaseUnit} (${consumedInBaseUnit.toFixed(2)}${unit}) / 总库存 ${stockInPurchaseUnits.toFixed(2)}${purchaseUnit} (${stockInBaseUnit.toFixed(2)}${unit})`;
@@ -70,24 +66,21 @@ const MaterialConsumptionPanel = ({ consumptionData, ingredientsMap }) => {
                     return (
                         <Grid item xs={12} sm={6} md={4} lg={3} key={name}>
                             <Tooltip title={tooltipTitle} placement="top">
-                                <Paper variant="outlined" sx={{ p: 1.5, position: 'relative', overflow: 'hidden' }}>
-                                    <Box
-                                        sx={{
-                                            position: 'absolute', top: 0, left: 0, height: '100%',
-                                            width: `${progress}%`,
-                                            backgroundColor: progressBarColor,
-                                            transition: 'width 0.5s ease-in-out',
-                                            zIndex: 1,
-                                        }}
-                                    />
-                                    <Box sx={{ position: 'relative', zIndex: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <Typography variant="body2" component="span" sx={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexGrow: 1, pr: 1 }}>
+                                <Paper variant="outlined" sx={{ p: 1.5 }}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                                        <Typography variant="body2" component="span" sx={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                             {name}
                                         </Typography>
-                                        <Typography variant="body2" component="span" noWrap sx={{ fontWeight: isOverBudget ? 'bold' : 'normal', color: isOverBudget ? 'error.main' : 'text.secondary' }}>
+                                        <Typography variant="body2" component="span" noWrap sx={{ fontWeight: isOverBudget ? 'bold' : 'normal', color: isOverBudget ? 'error.main' : 'text.secondary', pl: 1 }}>
                                             {`${consumedForDisplay.toFixed(2)} / ${stockInPurchaseUnits.toFixed(2)} ${purchaseUnit}`}
                                         </Typography>
                                     </Box>
+                                    <LinearProgress
+                                        variant="determinate"
+                                        value={progress}
+                                        color={isOverBudget ? 'error' : 'primary'}
+                                        sx={{ height: 8, borderRadius: 4 }}
+                                    />
                                 </Paper>
                             </Tooltip>
                         </Grid>

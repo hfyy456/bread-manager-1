@@ -1,4 +1,5 @@
 const Ingredient = require("../models/Ingredient");
+const InventorySnapshot = require('../models/InventorySnapshot');
 
 // @desc    获取所有原料
 // @route   POST /api/ingredients/list
@@ -215,6 +216,129 @@ const getCurrentTotalInventoryValue = async (req, res) => {
   }
 };
 
+const compareSnapshots = async (req, res) => {
+  try {
+    const { from, to } = req.query;
+
+    if (!from || !to) {
+      return res.status(400).json({ success: false, message: '必须提供起始和结束两个节点。' });
+    }
+
+    // Helper function to get data either from a snapshot or from current inventory
+    const getSnapshotData = async (id) => {
+      if (id === 'current') {
+        const ingredients = await Ingredient.find({}).lean();
+        return {
+          ingredients: ingredients.map(ing => ({
+            ingredientId: ing._id,
+            stockByPost: ing.stockByPost || {},
+          })),
+        };
+      } else {
+        const snapshot = await InventorySnapshot.findById(id).lean();
+        if (!snapshot) throw new Error(`ID为 ${id} 的快照未找到。`);
+        return snapshot;
+      }
+    };
+    
+    const [snapshotA, snapshotB] = await Promise.all([
+      getSnapshotData(from),
+      getSnapshotData(to)
+    ]);
+
+    const allIngredientIds = [
+      ...snapshotA.ingredients.map(i => i.ingredientId),
+      ...snapshotB.ingredients.map(i => i.ingredientId)
+    ];
+    
+    // Fetch all necessary ingredient data, including price info
+    const ingredientsData = await Ingredient.find({ '_id': { $in: allIngredientIds } }).lean();
+    const ingredientsMap = new Map(ingredientsData.map(i => [String(i._id), {
+      name: i.name, 
+      unit: i.unit,
+      pricePerBaseUnit: (i.price && i.norms) ? (i.price / i.norms) : 0
+    }]));
+    
+    let totalValueA = 0;
+    let totalValueB = 0;
+
+    const stockA_Map = new Map();
+    for(const item of snapshotA.ingredients) {
+        let totalStock = 0;
+        if(item.stockByPost) {
+             for (const postStock of Object.values(item.stockByPost)) {
+                totalStock += postStock.quantity || 0;
+            }
+        }
+        stockA_Map.set(String(item.ingredientId), totalStock);
+        const ingredientInfo = ingredientsMap.get(String(item.ingredientId));
+        if (ingredientInfo) {
+            totalValueA += totalStock * ingredientInfo.pricePerBaseUnit;
+        }
+    }
+
+    const comparisonResult = [];
+    const processedIds = new Set();
+
+    for (const itemB of snapshotB.ingredients) {
+      const ingredientId = String(itemB.ingredientId);
+      let totalStockB = 0;
+      if(itemB.stockByPost) {
+        for (const postStock of Object.values(itemB.stockByPost)) {
+            totalStockB += postStock.quantity || 0;
+        }
+      }
+      
+      const ingredientInfo = ingredientsMap.get(ingredientId);
+      if (ingredientInfo) {
+          totalValueB += totalStockB * ingredientInfo.pricePerBaseUnit;
+      }
+
+      const quantityA = stockA_Map.get(ingredientId) || 0;
+
+      comparisonResult.push({
+        ingredientId: ingredientId,
+        ingredientName: ingredientInfo ? ingredientInfo.name : '未知原料',
+        quantityA: quantityA,
+        quantityB: totalStockB,
+        consumption: quantityA - totalStockB,
+        unit: ingredientInfo ? ingredientInfo.unit : '未知单位'
+      });
+      processedIds.add(ingredientId);
+    }
+    
+    for (const [ingredientId, quantityA] of stockA_Map.entries()) {
+        if(!processedIds.has(ingredientId)){
+            const ingredientInfo = ingredientsMap.get(ingredientId);
+            comparisonResult.push({
+                ingredientId: ingredientId,
+                ingredientName: ingredientInfo ? ingredientInfo.name : '未知原料',
+                quantityA: quantityA,
+                quantityB: 0,
+                consumption: quantityA,
+                unit: ingredientInfo ? ingredientInfo.unit : '未知单位'
+            });
+        }
+    }
+
+    res.json({ 
+      success: true, 
+      data: {
+        items: comparisonResult,
+        totals: {
+          valueA: totalValueA,
+          valueB: totalValueB,
+          valueConsumption: totalValueA - totalValueB
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error comparing snapshots:', error);
+    res.status(500).json({ success: false, message: `服务器内部错误: ${error.message}` });
+  }
+};
+
 module.exports = {
   getAllIngredients,
   getIngredientById,
@@ -222,4 +346,5 @@ module.exports = {
   updateIngredient,
   deleteIngredient,
   getCurrentTotalInventoryValue,
+  compareSnapshots
 };
