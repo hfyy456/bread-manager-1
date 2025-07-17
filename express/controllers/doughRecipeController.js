@@ -1,3 +1,11 @@
+/*
+ * @Author: Sirius 540363975@qq.com
+ * @Date: 2025-07-17 22:54:38
+ * @LastEditors: Sirius 540363975@qq.com
+ * @LastEditTime: 2025-07-18 03:29:36
+ * @FilePath: \bread-manager-1\express\controllers\doughRecipeController.js
+ * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+ */
 const DoughRecipe = require('../models/DoughRecipe');
 
 const getAllDoughRecipes = async (req, res) => {

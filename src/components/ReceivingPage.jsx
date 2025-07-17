@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
     Container, Typography, Paper, Grid, Box, TextField, Button, IconButton,
-    CircularProgress, Snackbar, Alert as MuiAlert, Autocomplete, Tooltip, Divider
+    CircularProgress, Snackbar, Alert as MuiAlert, Autocomplete, Tooltip, Divider,
+    Radio, RadioGroup, FormControlLabel, FormControl, FormLabel
 } from '@mui/material';
 import { AddCircleOutline, DeleteOutline, CloudUpload } from '@mui/icons-material';
 import { v4 as uuidv4 } from 'uuid';
+import { useStore } from './StoreContext'; // 引入 useStore
 
 const Alert = React.forwardRef(function Alert(props, ref) {
     return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
@@ -18,6 +20,8 @@ const ReceivingPage = () => {
     const [receivingDate, setReceivingDate] = useState(new Date().toISOString().split('T')[0]);
     const [items, setItems] = useState([{ id: uuidv4(), ingredient: null, orderedQty: '', receivedQty: '' }]);
     const [selectedFile, setSelectedFile] = useState(null);
+    const [target, setTarget] = useState('store'); // 'store' 或 'warehouse'
+    const { currentStore } = useStore(); // 获取当前门店信息
     
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isParsing, setIsParsing] = useState(false); // For OCR parsing
@@ -157,6 +161,7 @@ const ReceivingPage = () => {
             deliveryId,
             receivingDate,
             items: validItems,
+            target, // 将入库目标包含在提交数据中
         };
 
         setIsSubmitting(true);
@@ -218,6 +223,21 @@ const ReceivingPage = () => {
                             onChange={(e) => setReceivingDate(e.target.value)}
                             InputLabelProps={{ shrink: true }}
                         />
+                    </Grid>
+                    <Grid item xs={12}>
+                        <FormControl component="fieldset">
+                            <FormLabel component="legend">入库目标</FormLabel>
+                            <RadioGroup
+                                row
+                                aria-label="入库目标"
+                                name="target"
+                                value={target}
+                                onChange={(e) => setTarget(e.target.value)}
+                            >
+                                <FormControlLabel value="store" control={<Radio />} label={`当前门店 (${currentStore?.name || '未选择'})`} disabled={!currentStore} />
+                                <FormControlLabel value="warehouse" control={<Radio />} label="中央仓库" />
+                            </RadioGroup>
+                        </FormControl>
                     </Grid>
                     <Grid item xs={12} sm={6}>
                          <Button

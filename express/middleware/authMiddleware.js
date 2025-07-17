@@ -3,13 +3,20 @@
 
 const mockAuthMiddleware = (req, res, next) => {
   // Mock user object. In a real app, this would come from the database after validating credentials.
+  
+  // The frontend now specifies the store via localStorage, which we read from the header.
+  const currentStoreIdFromHeader = req.headers['x-current-store-id'];
+  
+  // For convenience, also attach it directly to the request object
+  req.currentStoreId = currentStoreIdFromHeader;
+
   req.user = {
     // A mock user ID
     _id: '60d0fe4f5311236168a109ca', // Example user ID
     name: '开发用户',
-    // We'll hardcode the "杭州IN77" store ID for now.
-    // This simulates the user having selected a store to work with.
-    currentStoreId: '6878def4ae6e08fa4af88e34', 
+    // Dynamically set the current store ID based on the request header
+    // The default storeId is now primarily handled by the frontend's localStorage logic.
+    currentStoreId: currentStoreIdFromHeader,
     // In a real app, this would be a list of stores the user has access to.
     stores: [
       { storeId: '6878def4ae6e08fa4af88e34', role: 'admin' },
@@ -21,4 +28,4 @@ const mockAuthMiddleware = (req, res, next) => {
   next();
 };
 
-module.exports = { mockAuthMiddleware }; 
+module.exports = mockAuthMiddleware; 

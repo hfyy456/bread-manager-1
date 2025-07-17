@@ -6,6 +6,8 @@ import { Link } from 'react-router-dom';
 import moment from 'moment';
 import { POSTNAME } from '../config/constants';
 import { useSnackbar } from './SnackbarProvider.jsx';
+import { useStore } from './StoreContext.jsx'; // 1. 引入 useStore
+
 // Helper functions for sorting
 function descendingComparator(a, b, orderBy) {
   let aValue = a[orderBy];
@@ -130,11 +132,15 @@ const IngredientsPage = () => {
 
   const [downloading, setDownloading] = useState(false);
 
+  const { currentStore } = useStore(); // 2. 获取当前门店信息
+
   const handleRowToggle = (id) => {
     setExpandedRowId(expandedRowId === id ? null : id);
   };
 
   const fetchIngredientsAndSetStocks = useCallback(async () => {
+    if (!currentStore) return; // 如果还没有当前门店信息，则不执行获取
+
     setLoading(true);
     setError(null);
     try {
@@ -142,6 +148,7 @@ const IngredientsPage = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-current-store-id': currentStore._id, // 关键：在请求头中发送当前门店ID
         },
         body: JSON.stringify({}), // Empty body for POST
       });
@@ -191,11 +198,17 @@ const IngredientsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentStore]); // 关键：useCallback 依赖于 currentStore
 
   const fetchSnapshots = useCallback(async () => {
+    if (!currentStore) return; // 同样检查 currentStore
+
     try {
-      const response = await fetch('/api/inventory/snapshots');
+      const response = await fetch('/api/inventory/snapshots', {
+        headers: {
+          'x-current-store-id': currentStore._id, // 也为快照列表请求添加门店ID
+        },
+      });
       const result = await response.json();
       if(result.success) {
         setSnapshots(result.data);
@@ -203,7 +216,7 @@ const IngredientsPage = () => {
     } catch (err) {
       console.error("Failed to fetch snapshots list", err);
     }
-  }, []);
+  }, [currentStore]); // 关键：useCallback 依赖于 currentStore
 
   const fetchSnapshotDetails = useCallback(async (id) => {
     if (id === 'current') {
@@ -213,7 +226,11 @@ const IngredientsPage = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/inventory/snapshots/${id}`);
+      const response = await fetch(`/api/inventory/snapshots/${id}`, {
+        headers: {
+          'x-current-store-id': currentStore._id, // 为快照详情请求添加门店ID
+        },
+      });
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.message || '获取快照详情失败');
       setSnapshotData(result.data);
@@ -223,12 +240,15 @@ const IngredientsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [fetchIngredientsAndSetStocks]);
+  }, [fetchIngredientsAndSetStocks, currentStore]); // 依赖项现在也包括 currentStore
 
   useEffect(() => {
-    fetchSnapshots();
-    fetchIngredientsAndSetStocks();
-  }, [fetchSnapshots, fetchIngredientsAndSetStocks]);
+    // 只有在当前门店加载完毕后才获取数据
+    if (currentStore) {
+      fetchSnapshots();
+      fetchIngredientsAndSetStocks();
+    }
+  }, [fetchSnapshots, fetchIngredientsAndSetStocks, currentStore]); // 3. 将 currentStore 加入依赖项
 
   const handleSnapshotChange = (event) => {
     const id = event.target.value;

@@ -13,8 +13,10 @@ const fillingRecipeRoutes = require('./routes/fillingRecipeRoutes');
 const doughRecipeRoutes = require('./routes/doughRecipeRoutes');
 const ingredientsCompareRoutes = require('./routes/ingredients.js'); // 新增对比路由
 const storeRoutes = require('./routes/storeRoutes'); // 新增门店路由
+const warehouseRoutes = require('./routes/warehouseRoutes'); // 1. 引入仓库路由
+const transferRequestRoutes = require('./routes/transferRequestRoutes'); // For mobile requests
 
-const { mockAuthMiddleware } = require('./middleware/authMiddleware'); // 引入模拟认证中间件
+const authMiddleware = require('./middleware/authMiddleware'); // 引入模拟认证中间件
 
 const app = express();
 const port = process.env.PORT || 10099;
@@ -26,7 +28,7 @@ connectDB();
 app.use(express.json()); // 解析 JSON 请求体
 
 // 全局应用模拟认证中间件。所有API请求都将带有一个模拟的 req.user 对象
-app.use('/api', mockAuthMiddleware);
+app.use('/api', authMiddleware);
 
 // React应用的构建输出目录 (位于项目根目录下的 build 文件夹)
 const reactBuildDir = path.resolve(__dirname, '..', 'build');
@@ -42,8 +44,10 @@ app.use('/api/dashboard', dashboardRoutes); // Added dashboardRoutes usage
 app.use('/api/receiving', receivingRoutes); // Use the new route
 app.use('/api', breadTypeRoutes);
 app.use('/api', fillingRecipeRoutes);
-app.use('/api', doughRecipeRoutes);
+app.use('/api/dough-recipes', authMiddleware, doughRecipeRoutes);
 app.use('/api/ingredients', ingredientsCompareRoutes); // 新增对比路由
+app.use('/api/warehouse', authMiddleware, warehouseRoutes); // 2. 注册仓库路由
+app.use('/api/transfer-requests', transferRequestRoutes); // Register the new route
 // 您可以在这里添加其他路由模块，例如:
 // const userRoutes = require('./routes/userRoutes');
 // app.use('/api/users', userRoutes);
@@ -54,6 +58,17 @@ if (fs.existsSync(indexPath)) {
   console.log('React 构建文件找到，将提供静态文件服务: ' + reactBuildDir);
   // 托管 reactBuildDir 目录中的静态文件
   app.use(express.static(reactBuildDir));
+
+  // --- Specific handler for the mobile entry point ---
+  const mobilePath = path.join(reactBuildDir, 'mobile.html');
+  if (fs.existsSync(mobilePath)) {
+    app.get('/mobile.html', (req, res) => {
+      res.sendFile(mobilePath);
+    });
+    console.log('移动端入口 mobile.html 已找到并配置。');
+  } else {
+    console.warn('警告: 在 build 目录中未找到 mobile.html。');
+  }
 
   // 对于所有其他GET请求，都返回React应用的index.html
   // 这对于处理React Router的客户端路由至关重要

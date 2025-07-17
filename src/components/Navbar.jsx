@@ -26,6 +26,7 @@ const navConfig = [
       { title: '库存总览', path: '/ingredients' },
       { title: '库存盘点', path: '/inventory-check' },
       { title: '收货入库', path: '/receiving' },
+      { title: '大仓库存管理', path: '/warehouse' }, // 添加大仓管理页面入口
       { title: '生产报损登记', path: '/production-waste-report' },
     ]
   },
@@ -84,12 +85,8 @@ const NavMenu = ({ item }) => {
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
 
-  const handleOpenMenu = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-  const handleCloseMenu = () => {
-    setAnchorEl(null);
-  };
+  const handleOpenMenu = (event) => setAnchorEl(event.currentTarget);
+  const handleCloseMenu = () => setAnchorEl(null);
 
   return (
     <Box>
@@ -98,7 +95,16 @@ const NavMenu = ({ item }) => {
         aria-haspopup="true"
         aria-expanded={open ? 'true' : undefined}
         onClick={handleOpenMenu}
-        sx={{ my: 1, color: 'white', display: 'block', fontFamily: 'Inter, sans-serif' }}
+        sx={{ 
+          my: 1, 
+          color: 'white', 
+          display: 'flex', // 确保内部元素水平排列
+          alignItems: 'center', // 垂直居中对齐
+          fontFamily: 'Inter, sans-serif',
+          fontWeight: 500,
+          whiteSpace: 'nowrap', // 强制不换行
+          px: { md: 0.75, lg: 2 } // 调整响应式内边距
+        }}
         endIcon={<ArrowDropDownIcon />}
       >
         {item.title}
@@ -127,8 +133,8 @@ const Navbar = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [anchorElNav, setAnchorElNav] = useState(null);
 
-  // 从 Context 获取门店信息
-  const { stores, currentStore, switchStore, loading, error } = useStore();
+  // 从 Context 获取门店信息，包括锁定状态
+  const { stores, currentStore, switchStore, loading, error, isStoreLocked } = useStore();
 
   const handleOpenNavMenu = (event) => setAnchorElNav(event.currentTarget);
   const handleCloseNavMenu = () => setAnchorElNav(null);
@@ -137,8 +143,8 @@ const Navbar = () => {
     switchStore(event.target.value);
   };
 
-  const storeSelector = (
-    <Box sx={{ minWidth: 180, ml: { xs: 0, md: 2 } }}>
+  const storeSelector = isStoreLocked ? null : ( // 如果门店被锁定，则不渲染选择器
+    <Box sx={{ minWidth: { md: 160, lg: 180 }, ml: { xs: 0, md: 1, lg: 2 } }}>
       {loading ? (
         <CircularProgress size={24} color="inherit" />
       ) : error ? (
@@ -205,19 +211,32 @@ const Navbar = () => {
           </Box>
           
           {/* Mobile Logo */}
-          <Typography variant="h5" noWrap component={Link} to="/" sx={{ mr: 2, display: { xs: 'flex', md: 'none' }, flexGrow: 1, fontFamily: 'Inter, sans-serif', fontWeight: 700, color: 'inherit', textDecoration: 'none' }}>
+          <Typography variant="h5" noWrap component={Link} to="/" sx={{ display: { xs: 'flex', md: 'none' }, flexGrow: 1, alignItems: 'center', fontFamily: 'Inter, sans-serif', fontWeight: 700, color: 'inherit', textDecoration: 'none' }}>
             物料消耗局
           </Typography>
           
           {/* Desktop Menu */}
-          <Box sx={{ flexGrow: 1, display: { xs: 'none', md: 'flex' }, justifyContent: 'flex-end', alignItems: 'center' }}>
+          <Box sx={{ flexGrow: 1, display: { xs: 'none', md: 'flex' }, justifyContent: 'flex-end', alignItems: 'center', gap: { md: 0, lg: 1 } }}>
             {navConfig.map((item) => (
               item.children ? (
                 <NavMenu key={item.title} item={item} />
               ) : (
-                <Button key={item.title} component={Link} to={item.path} sx={{ my: 1, color: 'white', display: 'block', fontFamily: 'Inter, sans-serif' }}>
+                <Button 
+                  key={item.title} 
+                  component={Link} 
+                  to={item.path} 
+                  sx={{ 
+                    my: 1, 
+                    color: 'white', 
+                    display: 'block', 
+                    fontFamily: 'Inter, sans-serif', 
+                    fontWeight: 500,
+                    whiteSpace: 'nowrap', // 强制不换行
+                    px: { md: 0.75, lg: 2 } // 调整响应式内边距
+                  }}
+                >
                   {item.title}
-            </Button>
+                </Button>
               )
             ))}
             {storeSelector}

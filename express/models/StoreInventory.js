@@ -13,6 +13,13 @@ const storeInventorySchema = new mongoose.Schema({
     required: true,
     index: true
   },
+  mainWarehouseStock: { // 本店主仓库库存
+    type: new mongoose.Schema({
+      quantity: { type: Number, required: true, default: 0 },
+      unit: { type: String, required: false }, // 单位通常与原料采购单位一致
+    }, { _id: false }),
+    default: () => ({ quantity: 0, unit: '' })
+  },
   stockByPost: {
     type: Map,
     of: new mongoose.Schema({

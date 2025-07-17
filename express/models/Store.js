@@ -11,6 +11,11 @@ const storeSchema = new mongoose.Schema({
     type: String,
     trim: true 
   },
+  isCentral: { // 新增字段，标识是否为总仓库
+    type: Boolean,
+    default: false,
+    index: true,
+  },
   // 可以在此添加更多门店相关信息，例如联系电话、营业时间等
 }, { timestamps: true });
 

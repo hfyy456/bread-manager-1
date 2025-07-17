@@ -16,6 +16,8 @@ import DashboardPage from './components/DashboardPage';
 import { DataProvider } from "./components/DataContext.jsx";
 import BreadTypeEditor from './components/BreadTypeEditor';
 import { SnackbarProvider } from './components/SnackbarProvider.jsx';
+import ReceivingPage from './components/ReceivingPage';
+import WarehousePage from './components/WarehousePage';
 
 // Lazy load components
 const IngredientsPage = lazy(() => import('./components/IngredientsPage'));
@@ -71,7 +73,8 @@ function App() {
                   <Route path="/operation-guide" element={<OperationGuidePage />} />
                   <Route path="/production-waste-report" element={<ProductionWastePage />} />
                   <Route path="/daily-report-preview" element={<DailyReportPreviewPage />} />
-                  <Route path="/receiving" element={<ReceiveStock />} />
+                  <Route path="/receiving" element={<ReceivingPage />} />
+                  <Route path="/warehouse" element={<WarehousePage />} />
                     <Route path="/bread-type-editor" element={<BreadTypeEditor />} />
                     <Route path="/bread-type-editor/:id" element={<BreadTypeEditor />} />
                 </Routes>

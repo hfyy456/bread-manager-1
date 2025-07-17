@@ -1,4 +1,5 @@
 const Ingredient = require("../models/Ingredient");
+const StoreInventory = require('../models/StoreInventory');
 const InventorySnapshot = require('../models/InventorySnapshot');
 
 // @desc    获取所有原料
@@ -6,25 +7,47 @@ const InventorySnapshot = require('../models/InventorySnapshot');
 // @access  Public
 const getAllIngredients = async (req, res) => {
   try {
-    const ingredients = await Ingredient.find().lean().sort({ createdAt: -1 });
+    const { currentStoreId } = req.user;
+    if (!currentStoreId) {
+      return res.status(401).json({ success: false, message: '无法确定当前操作的门店，请重新选择门店。' });
+    }
 
-    // 动态计算每个原料的总库存
-    const ingredientsWithTotalStock = ingredients.map(ing => {
+    // 1. 获取所有原料的基础定义列表
+    const allIngredients = await Ingredient.find({}).lean().sort({ createdAt: -1 });
+
+    // 2. 获取当前门店的库存记录
+    const storeInventories = await StoreInventory.find({ storeId: currentStoreId }).lean();
+    
+    // 3. 将库存记录转换为Map，方便快速查找: { ingredientId => stockByPost }
+    const inventoryMap = new Map(
+      storeInventories.map(inv => [inv.ingredientId.toString(), inv.stockByPost || {}])
+    );
+    
+    // 4. 合并原料定义与门店库存
+    const ingredientsWithStoreStock = allIngredients.map(ing => {
+      // 从Map中获取当前原料在当前门店的库存信息
+      const stockByPost = inventoryMap.get(ing._id.toString()) || {};
+      
+      // 计算总库存
       let totalStock = 0;
-      if (ing.stockByPost && typeof ing.stockByPost === 'object' && Object.keys(ing.stockByPost).length > 0) {
-        for (const stock of Object.values(ing.stockByPost)) {
+      if (Object.keys(stockByPost).length > 0) {
+        for (const stock of Object.values(stockByPost)) {
           totalStock += stock.quantity || 0;
         }
       }
+
+      // 返回合并后的对象
+      // 注意：用从 StoreInventory 获取的 stockByPost 覆盖 Ingredient 中可能存在的旧数据
       return {
         ...ing,
-        currentStock: totalStock // 将计算出的总库存添加到返回对象中
+        stockByPost, // 门店专属库存
+        currentStock: totalStock // 门店专属总库存
       };
     });
 
-    res.json({ success: true, data: ingredientsWithTotalStock });
+    res.json({ success: true, data: ingredientsWithStoreStock });
   } catch (err) {
-    console.error("获取原料错误:", err.message);
+    console.error("获取原料列表及库存错误:", err.message);
     res
       .status(500)
       .json({ success: false, message: "服务器错误: " + err.message });

@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useContext, useEffect } from 'react';
 
 const StoreContext = createContext(null);
 
@@ -9,42 +9,79 @@ export const StoreProvider = ({ children }) => {
   const [currentStore, setCurrentStore] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  const fetchStores = useCallback(async () => {
-    try {
-      // 在真实应用中，这里应该是一个受保护的端点，返回当前用户有权访问的门店
-      // 为简化，我们先创建一个公共的API来获取所有门店列表
-      const response = await fetch('/api/stores'); // 假设我们将创建一个获取所有门店的API
-      if (!response.ok) {
-        throw new Error('获取门店列表失败');
-      }
-      const result = await response.json();
-      if (result.success) {
-        setStores(result.data);
-        // 默认选择第一个门店
-        if (result.data.length > 0) {
-          setCurrentStore(result.data[0]);
-        }
-      } else {
-        throw new Error(result.message || '获取门店列表失败');
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const [isStoreLocked, setIsStoreLocked] = useState(false);
 
   useEffect(() => {
-    fetchStores();
-  }, [fetchStores]);
+    const fetchStoresAndSetInitial = async () => {
+      try {
+        setLoading(true);
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const storeIdFromUrl = urlParams.get('store');
+        const storeIdFromSession = sessionStorage.getItem('lockedStoreId');
+
+        // 确定是否要进入锁定模式
+        const lockedStoreId = storeIdFromUrl || storeIdFromSession;
+        if (lockedStoreId) {
+          setIsStoreLocked(true);
+          // 如果是通过URL参数新开启的会话，则更新sessionStorage
+          if (storeIdFromUrl && storeIdFromUrl !== storeIdFromSession) {
+            sessionStorage.setItem('lockedStoreId', storeIdFromUrl);
+          }
+        }
+
+        const response = await fetch('/api/stores');
+        if (!response.ok) throw new Error('获取门店列表失败');
+        
+        const result = await response.json();
+        if (!result.success) throw new Error(result.message || '获取门店列表失败');
+
+        const fetchedStores = result.data;
+        setStores(fetchedStores);
+        
+        if (fetchedStores.length > 0) {
+          let storeToSet;
+          // 优先级 1: URL参数 或 Session中记住的锁定ID
+          if (lockedStoreId) {
+            storeToSet = fetchedStores.find(s => s._id === lockedStoreId);
+            if (!storeToSet) {
+              console.error(`锁定的门店ID "${lockedStoreId}" 无效，将使用默认门店。`);
+              sessionStorage.removeItem('lockedStoreId'); // 清除无效的ID
+              setIsStoreLocked(false);
+              storeToSet = fetchedStores[0];
+            }
+          } else {
+            // 优先级 2: LocalStorage
+            const savedStoreId = localStorage.getItem('currentStoreId');
+            storeToSet = fetchedStores.find(s => s._id === savedStoreId) || fetchedStores[0];
+          }
+          
+          setCurrentStore(storeToSet);
+
+          // 仅在常规（未锁定）模式下管理localStorage
+          if (!lockedStoreId && localStorage.getItem('currentStoreId') !== storeToSet._id) {
+            localStorage.setItem('currentStoreId', storeToSet._id);
+          }
+        }
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchStoresAndSetInitial();
+  }, []);
 
   const switchStore = (storeId) => {
+    if (isStoreLocked) {
+      return;
+    }
+
     const store = stores.find(s => s._id === storeId);
-    if (store) {
-      setCurrentStore(store);
-      // 在真实应用中，可能需要在这里更新后端的session或用户的默认门店设置
-      console.log(`Switched to store: ${store.name}`);
+    if (store && store._id !== currentStore?._id) {
+      localStorage.setItem('currentStoreId', store._id);
+      window.location.reload();
     }
   };
 
@@ -54,7 +91,8 @@ export const StoreProvider = ({ children }) => {
     switchStore,
     loading,
     error,
-    refetchStores: fetchStores, // 提供一个重新获取的方法
+    isStoreLocked,
+    refetchStores: () => window.location.reload(),
   };
 
   return (

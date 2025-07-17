@@ -161,7 +161,7 @@ const createInventorySnapshot = async (req, res) => {
     });
 
     await snapshot.save();
-
+    
     let message = `成功为门店创建库存快照。`;
 
     if (clearData === true) {
