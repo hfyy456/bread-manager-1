@@ -46,26 +46,7 @@ const ingredientSchema = new mongoose.Schema({
     type: [String], // 或者 [mongoose.Schema.Types.ObjectId] 如果它们确实是其他集合的文档ID
     default: [],
   },
-  stockByPost: { // 新增字段：按岗位记录库存
-    type: Map,
-    of: new mongoose.Schema({
-      quantity: {
-        type: Number,
-        required: true,
-        default: 0,
-        min: [0, '库存数量不能为负数'],
-      },
-      unit: { // 盘点时使用的单位，通常是该物料的采购单位 this.unit
-        type: String,
-        required: true,
-      },
-      lastUpdated: {
-        type: Date,
-        default: Date.now,
-      },
-    }, { _id: false }),
-    default: {},
-  },
+  // stockByPost 字段已被移除，并由 StoreInventory 模型替代
   // Mongoose 会自动添加 createdAt 和 updatedAt 字段
 }, { timestamps: true });
 

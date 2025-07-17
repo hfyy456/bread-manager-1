@@ -10,25 +10,32 @@ const normalizeDate = (dateString) => {
 exports.createOrUpdateDailyReport = async (req, res) => {
     try {
         const { date, products, doughWastes, fillingWastes, generalRemarks } = req.body;
+        const { currentStoreId } = req.user; // 从中间件获取门店ID
 
         if (!date) {
             return res.status(400).json({ success: false, message: '日期是必填项' });
         }
+        if (!currentStoreId) {
+            return res.status(401).json({ success: false, message: '无法确定当前门店' });
+        }
 
-        const reportDate = normalizeDate(date); // Model setter also does this, but good for query
+        const reportDate = normalizeDate(date);
 
         const reportData = {
+            storeId: currentStoreId, // 关联门店ID
             date: reportDate,
             products,
             doughWastes,
             fillingWastes,
             generalRemarks,
-            updatedAt: Date.now() // Explicitly set updatedAt for updates
         };
 
+        // 查询条件现在包含门店ID
+        const query = { storeId: currentStoreId, date: reportDate };
+
         const report = await DailyReport.findOneAndUpdate(
-            { date: reportDate },
-            { $set: reportData }, // Use $set to ensure only provided fields are updated and defaults are preserved
+            query,
+            { $set: reportData },
             { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
         );
 
@@ -46,16 +53,22 @@ exports.createOrUpdateDailyReport = async (req, res) => {
 exports.getDailyReportByDate = async (req, res) => {
     try {
         const { date } = req.query;
+        const { currentStoreId } = req.user;
+
         if (!date) {
             return res.status(400).json({ success: false, message: '必须提供日期参数' });
+        }
+        if (!currentStoreId) {
+            return res.status(401).json({ success: false, message: '无法确定当前门店' });
         }
 
         const reportDate = normalizeDate(date);
         
-        const report = await DailyReport.findOne({ date: reportDate });
+        // 查询条件现在包含门店ID
+        const report = await DailyReport.findOne({ storeId: currentStoreId, date: reportDate });
 
         if (!report) {
-            return res.status(404).json({ success: false, message: '未找到指定日期的报表' });
+            return res.status(404).json({ success: false, message: '未找到当前门店指定日期的报表' });
         }
         res.status(200).json({ success: true, data: report });
     } catch (error) {
@@ -65,9 +78,13 @@ exports.getDailyReportByDate = async (req, res) => {
 };
 
 exports.getAllDailyReports = async (req, res) => {
+    const { currentStoreId } = req.user;
+    if (!currentStoreId) {
+        return res.status(401).json({ success: false, message: '无法确定当前门店' });
+    }
     try {
-        // Basic find all, sorted by date descending. Pagination could be added later.
-        const reports = await DailyReport.find().sort({ date: -1 });
+        // 只查询当前门店的报表
+        const reports = await DailyReport.find({ storeId: currentStoreId }).sort({ date: -1 });
         res.status(200).json({ success: true, count: reports.length, data: reports });
     } catch (error) {
         console.error('[DailyReportController] Error fetching all reports:', error);

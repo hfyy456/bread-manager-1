@@ -37,6 +37,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import { Link } from 'react-router-dom';
 import { InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
 import DownloadIcon from '@mui/icons-material/Download';
+import { Add as AddIcon, Remove as RemoveIcon } from '@mui/icons-material';
 
 const POSTNAME = {
   1: "搅拌",
@@ -295,7 +296,7 @@ const InventoryCheckPage = () => {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: { xs: 2, md: 3 } }}>
+    <Container maxWidth="lg" sx={{ py: { xs: 2, md: 3 }, pb: { xs: '100px', md: 3 } }}>
       <Box display="flex" alignItems="center" justifyContent="center" sx={{ mb: { xs: 2, md: 3 } }}>
         <Typography variant="h4" component="h1" sx={{ textAlign: 'center', mb: 0 }}>
           库存盘点
@@ -307,7 +308,7 @@ const InventoryCheckPage = () => {
         </Tooltip>
       </Box>
 
-      <Paper elevation={3} sx={{ p: { xs: 1.5, sm: 2.5 }, mb: {xs: 2, md: 3}, borderRadius: '12px' }}>
+      <Paper elevation={3} sx={{ p: { xs: 2, sm: 2.5 }, mb: {xs: 2, md: 3}, borderRadius: '12px' }}>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} sm={6} md={4}>
             <FormControl fullWidth>
@@ -318,6 +319,7 @@ const InventoryCheckPage = () => {
               value={selectedPost}
                 label="选择岗位"
               onChange={handlePostChange}
+                sx={{ minHeight: { xs: '56px', sm: '40px' } }}
             >
               {Object.entries(POSTNAME).map(([id, name]) => (
                 <MenuItem key={id} value={id}>{name}</MenuItem>
@@ -328,7 +330,7 @@ const InventoryCheckPage = () => {
         </Grid>
       </Paper>
 
-      <Paper elevation={3} sx={{ p: { xs: 1.5, sm: 2.5 }, mb: {xs: 2, md: 3}, borderRadius: '12px' }}>
+      <Paper elevation={3} sx={{ p: { xs: 2, sm: 2.5 }, mb: {xs: 2, md: 3}, borderRadius: '12px' }}>
         <Typography variant="h5" component="h2" sx={{ mb: 2 }}>
           {selectedPost ? `${POSTNAME[selectedPost]} - 物料列表` : '请先选择岗位'}
         </Typography>
@@ -336,68 +338,129 @@ const InventoryCheckPage = () => {
         {selectedPost && postIngredients.length > 0 && (
           isMobile ? (
             <Grid container spacing={2}>
-              {postIngredients.map(ing => (
+              {postIngredients.map(ing => {
+                const currentValue = stockInputs[ing._id] || '';
+                const hasValue = currentValue !== '';
+                return (
                 <Grid item xs={12} key={ing._id}>
-                  <Card variant="outlined" sx={{ borderRadius: '12px' }}>
-                    <CardContent>
-                      <Typography variant="h6" component="div" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                    <Card 
+                      variant="outlined" 
+                      sx={{ 
+                        borderRadius: '12px',
+                        border: hasValue ? '2px solid' : '1px solid',
+                        borderColor: hasValue ? 'success.main' : 'divider',
+                        transition: 'all 0.2s ease-in-out'
+                      }}
+                    >
+                      <CardContent sx={{ p: 2 }}>
+                        <Typography variant="h6" component="div" gutterBottom sx={{ fontWeight: 'bold', color: 'primary.main', mb: 2 }}>
                           {ing.name}
                         </Typography>
-                      <Grid container spacing={2} alignItems="flex-end">
+                        <Grid container spacing={2} alignItems="center">
                         <Grid item xs={12}>
                           <TextField
                               fullWidth
                               label="当前库存"
-                              variant="standard"
-                            value={stockInputs[ing._id] || ''}
+                              variant="outlined"
+                              value={currentValue}
                             onChange={(e) => handleStockInputChange(ing._id, e.target.value)}
                               type="number"
+                              inputProps={{ 
+                                min: 0, 
+                                step: 0.1,
+                                inputMode: 'decimal',
+                                style: { fontSize: '1.2rem', textAlign: 'center' }
+                              }}
                             InputProps={{
-                                endAdornment: <InputAdornment position="end">{ing.unit || ing.baseUnit || ing.min || 'g'}</InputAdornment>,
-                                sx: { fontSize: '1rem' }
+                                endAdornment: <InputAdornment position="end" sx={{ fontSize: '1.1rem' }}>{ing.unit || ing.baseUnit || ing.min || 'g'}</InputAdornment>,
                             }}
                             sx={{
-                                '& .MuiInput-underline:before': { borderBottomColor: 'grey.400' },
-                                '& .MuiInput-underline:hover:not(.Mui-disabled):before': { borderBottomColor: 'primary.light' },
+                                '& .MuiOutlinedInput-root': {
+                                  minHeight: '56px',
+                                  '& fieldset': {
+                                    borderColor: hasValue ? 'success.main' : 'grey.300',
+                                  },
+                                  '&:hover fieldset': {
+                                    borderColor: hasValue ? 'success.dark' : 'primary.main',
+                                  },
+                                  '&.Mui-focused fieldset': {
+                                    borderColor: 'primary.main',
+                                  },
+                                },
                               }}
                             />
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => {
+                                  const current = parseFloat(currentValue) || 0;
+                                  handleStockInputChange(ing._id, Math.max(0, current - 0.1).toFixed(1));
+                                }}
+                                sx={{ minWidth: '40px', minHeight: '40px' }}
+                              >
+                                <RemoveIcon />
+                              </Button>
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => handleStockInputChange(ing._id, '0')}
+                                sx={{ minWidth: '40px', minHeight: '40px' }}
+                              >
+                                0
+                              </Button>
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => {
+                                  const current = parseFloat(currentValue) || 0;
+                                  handleStockInputChange(ing._id, (current + 0.1).toFixed(1));
+                                }}
+                                sx={{ minWidth: '40px', minHeight: '40px' }}
+                              >
+                                <AddIcon />
+                              </Button>
+                            </Box>
                         </Grid>
                       </Grid>
                       </CardContent>
                     </Card>
                 </Grid>
-                  ))}
+                );
+              })}
             </Grid>
               ) : (
             <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: '8px' }}>
               <Table size="small" stickyHeader>
-                <TableHead>
-                  <TableRow>
+                    <TableHead>
+                      <TableRow>
                     <TableCell sx={commonHeaderCellSx}>物料名称</TableCell>
                     <TableCell sx={{...commonHeaderCellSx, minWidth: '180px'}} align="center">当前库存</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
                   {postIngredients.map(ing => (
                     <TableRow key={ing._id} hover>
                       <TableCell sx={{...commonCellSx, fontWeight: 500}}>{ing.name}</TableCell>
                       <TableCell sx={commonCellSx} align="right">
-                        <TextField
-                          fullWidth
-                          variant="standard"
-                          value={stockInputs[ing._id] || ''}
-                          onChange={(e) => handleStockInputChange(ing._id, e.target.value)}
-                          type="number"
+                            <TextField
+                              fullWidth
+                              variant="standard"
+                              value={stockInputs[ing._id] || ''}
+                              onChange={(e) => handleStockInputChange(ing._id, e.target.value)}
+                              type="number"
                           inputProps={{ min: 0 }}
-                          InputProps={{
-                            endAdornment: <InputAdornment position="end">{ing.unit || ing.baseUnit || ing.min || 'g'}</InputAdornment>,
-                            sx: { fontSize: '1rem' }
-                          }}
-                          sx={{
-                            '& .MuiInput-underline:before': { borderBottomColor: 'grey.400' },
-                            '& .MuiInput-underline:hover:not(.Mui-disabled):before': { borderBottomColor: 'primary.light' },
-                          }}
-                        />
+                              InputProps={{
+                                endAdornment: <InputAdornment position="end">{ing.unit || ing.baseUnit || ing.min || 'g'}</InputAdornment>,
+                                sx: { fontSize: '1rem' }
+                              }}
+                              sx={{
+                                '& .MuiInput-underline:before': { borderBottomColor: 'grey.400' },
+                                '& .MuiInput-underline:hover:not(.Mui-disabled):before': { borderBottomColor: 'primary.light' },
+                              }}
+                            />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -410,9 +473,9 @@ const InventoryCheckPage = () => {
                       </TableCell>
                     </TableRow>
                   )}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
           )
         )}
 
@@ -428,6 +491,8 @@ const InventoryCheckPage = () => {
           </Typography>
         )}
 
+        {/* 桌面端提交按钮 */}
+        {!isMobile && (
         <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
               <Button
                 variant="contained"
@@ -441,7 +506,44 @@ const InventoryCheckPage = () => {
             {isSubmitting ? '提交中...' : '提交盘点数据'}
               </Button>
             </Box>
+        )}
         </Paper>
+
+      {/* 移动端底部固定提交按钮 */}
+      {isMobile && (
+        <Box
+          sx={{
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            p: 2,
+            backgroundColor: 'background.paper',
+            borderTop: '1px solid',
+            borderColor: 'divider',
+            zIndex: 1000,
+          }}
+        >
+          <Button
+            variant="contained"
+            color="primary"
+            size="large"
+            fullWidth
+            startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
+            onClick={handleSubmitStock}
+            disabled={isSubmitting || !selectedPost || postIngredients.length === 0}
+            sx={{ 
+              borderRadius: '12px', 
+              py: 1.5,
+              fontSize: '1.1rem',
+              fontWeight: 'bold',
+              minHeight: '56px'
+            }}
+          >
+            {isSubmitting ? '提交中...' : `提交盘点数据 (${Object.values(stockInputs).filter(v => v !== '').length}/${postIngredients.length})`}
+          </Button>
+        </Box>
+      )}
 
       <Snackbar open={snackbarOpen} autoHideDuration={4000} onClose={handleCloseSnackbar} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
         <Alert onClose={handleCloseSnackbar} severity={snackbarSeverity} sx={{ width: '100%' }}>

@@ -2,6 +2,12 @@ const mongoose = require('mongoose');
 const moment = require('moment');
 
 const inventorySnapshotSchema = new mongoose.Schema({
+  storeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Store',
+    required: true,
+    index: true
+  },
   year: {
     type: Number,
     required: true,
@@ -40,7 +46,7 @@ const inventorySnapshotSchema = new mongoose.Schema({
   ],
 }, { timestamps: true });
 
-inventorySnapshotSchema.index({ createdAt: -1 });
+inventorySnapshotSchema.index({ storeId: 1, createdAt: -1 });
 
 const InventorySnapshot = mongoose.model('InventorySnapshot', inventorySnapshotSchema);
 

@@ -12,6 +12,9 @@ const breadTypeRoutes = require('./routes/breadTypeRoutes');
 const fillingRecipeRoutes = require('./routes/fillingRecipeRoutes');
 const doughRecipeRoutes = require('./routes/doughRecipeRoutes');
 const ingredientsCompareRoutes = require('./routes/ingredients.js'); // 新增对比路由
+const storeRoutes = require('./routes/storeRoutes'); // 新增门店路由
+
+const { mockAuthMiddleware } = require('./middleware/authMiddleware'); // 引入模拟认证中间件
 
 const app = express();
 const port = process.env.PORT || 10099;
@@ -22,12 +25,16 @@ connectDB();
 // --- 中间件 ---
 app.use(express.json()); // 解析 JSON 请求体
 
+// 全局应用模拟认证中间件。所有API请求都将带有一个模拟的 req.user 对象
+app.use('/api', mockAuthMiddleware);
+
 // React应用的构建输出目录 (位于项目根目录下的 build 文件夹)
 const reactBuildDir = path.resolve(__dirname, '..', 'build');
 const indexPath = path.join(reactBuildDir, 'index.html');
 
 // --- API 路由 ---
 // app.use('/api', sampleRoutes); // 移除旧的示例路由使用
+app.use('/api', storeRoutes); // 使用门店路由
 app.use('/api', ingredientRoutes); // 使用原料路由，所有 /api/ingredients/* 的请求将由此处理
 app.use('/api/inventory', inventoryRoutes); // 新增：使用盘点路由，所有 /api/inventory/* 的请求将由此处理
 app.use('/api/daily-reports', dailyReportRoutes); // 使用日报表路由

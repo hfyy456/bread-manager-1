@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { AppBar, Toolbar, Typography, Button, Container, Box, IconButton, Menu, MenuItem, Collapse } from '@mui/material';
+import { AppBar, Toolbar, Typography, Button, Container, Box, IconButton, Menu, MenuItem, Collapse, Select, CircularProgress, Alert, FormControl } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import { useTheme } from '@mui/material/styles';
 import { useMediaQuery } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { Dashboard } from '@mui/icons-material';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
+import StorefrontIcon from '@mui/icons-material/Storefront';
+import { useStore } from './StoreContext'; // 引入 useStore
 
 const navConfig = [
   { title: '数据看板', path: '/dashboard', icon: <Dashboard /> },
@@ -125,8 +127,51 @@ const Navbar = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [anchorElNav, setAnchorElNav] = useState(null);
 
+  // 从 Context 获取门店信息
+  const { stores, currentStore, switchStore, loading, error } = useStore();
+
   const handleOpenNavMenu = (event) => setAnchorElNav(event.currentTarget);
   const handleCloseNavMenu = () => setAnchorElNav(null);
+
+  const handleStoreChange = (event) => {
+    switchStore(event.target.value);
+  };
+
+  const storeSelector = (
+    <Box sx={{ minWidth: 180, ml: { xs: 0, md: 2 } }}>
+      {loading ? (
+        <CircularProgress size={24} color="inherit" />
+      ) : error ? (
+        <Alert severity="error" sx={{ py: 0, fontSize: '0.8rem' }}>加载失败</Alert>
+      ) : (
+        <FormControl fullWidth variant="standard">
+          <Select
+            value={currentStore?._id || ''}
+            onChange={handleStoreChange}
+            disabled={stores.length === 0}
+            IconComponent={ArrowDropDownIcon}
+            sx={{
+              color: 'white',
+              '& .MuiSelect-select': { display: 'flex', alignItems: 'center' },
+              '& .MuiSvgIcon-root': { color: 'white' },
+              '&:before': { borderColor: 'rgba(255, 255, 255, 0.42)' },
+              '&:after': { borderColor: 'white' },
+            }}
+          >
+            {stores.length > 0 ?
+              stores.map((store) => (
+                <MenuItem key={store._id} value={store._id}>
+                  <StorefrontIcon sx={{ mr: 1, fontSize: '1.2rem' }} />
+                  {store.name}
+                </MenuItem>
+              )) :
+              <MenuItem disabled>暂无门店</MenuItem>
+            }
+          </Select>
+        </FormControl>
+      )}
+    </Box>
+  );
 
   return (
     <AppBar position="static" color="primary">
@@ -150,6 +195,9 @@ const Navbar = () => {
               sx={{ display: { xs: 'block', md: 'none' } }}
               MenuListProps={{ style: { width: '250px' } }}
             >
+              <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+                {storeSelector}
+              </Box>
               {navConfig.map((item) => (
                 <MobileNavItem key={item.title} item={item} handleClose={handleCloseNavMenu} />
               ))}
@@ -162,7 +210,7 @@ const Navbar = () => {
           </Typography>
           
           {/* Desktop Menu */}
-          <Box sx={{ flexGrow: 1, display: { xs: 'none', md: 'flex' }, justifyContent: 'flex-end' }}>
+          <Box sx={{ flexGrow: 1, display: { xs: 'none', md: 'flex' }, justifyContent: 'flex-end', alignItems: 'center' }}>
             {navConfig.map((item) => (
               item.children ? (
                 <NavMenu key={item.title} item={item} />
@@ -172,6 +220,7 @@ const Navbar = () => {
             </Button>
               )
             ))}
+            {storeSelector}
           </Box>
         </Toolbar>
       </Container>

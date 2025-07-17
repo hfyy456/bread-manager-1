@@ -38,6 +38,12 @@ const DailyReportSchema = new mongoose.Schema({
             return date;
         }
     },
+    storeId: { // 新增字段
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Store',
+        required: true,
+        index: true
+    },
     products: [ProductReportSchema],
     doughWastes: [DoughWasteSchema],
     fillingWastes: [FillingWasteSchema],
@@ -53,5 +59,6 @@ DailyReportSchema.pre('save', function(next) {
 
 // Consider adding an index on the date for faster queries if you expect many reports.
 // DailyReportSchema.index({ date: 1 });
+DailyReportSchema.index({ storeId: 1, date: -1 });
 
 module.exports = mongoose.model('DailyReport', DailyReportSchema); 

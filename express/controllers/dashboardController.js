@@ -25,6 +25,11 @@ const getDateRange = (period, targetDateStr) => {
 const getDashboardSummary = async (req, res) => {
     try {
         const { periodType, date } = req.query; 
+        const { currentStoreId } = req.user; // 从中间件获取门店ID
+
+        if (!currentStoreId) {
+            return res.status(401).json({ success: false, message: '无法确定当前门店' });
+        }
         if (!periodType || !['daily', 'weekly', 'monthly'].includes(periodType)) {
             return res.status(400).json({ success: false, message: '请提供有效的汇总周期 (daily, weekly, monthly)' });
         }
@@ -34,9 +39,13 @@ const getDashboardSummary = async (req, res) => {
 
         const summaryRange = getDateRange(periodType, date);
         
-        const reports = await DailyReport.find({
+        // 查询条件加入 storeId
+        const query = {
+            storeId: currentStoreId,
             date: { $gte: summaryRange.startDate, $lte: summaryRange.endDate }
-        }).lean();
+        };
+
+        const reports = await DailyReport.find(query).lean();
 
         let trendStartDate, trendEndDate;
         const targetDateInBJT = moment(date).utcOffset('+08:00');
@@ -52,9 +61,13 @@ const getDashboardSummary = async (req, res) => {
             trendEndDate = targetDateInBJT.clone().endOf('month');
         }
 
-        const reportsForTrend = await DailyReport.find({
+        // 趋势查询也加入 storeId
+        const trendQuery = {
+            storeId: currentStoreId,
             date: { $gte: trendStartDate.toDate(), $lte: trendEndDate.toDate() }
-        }).sort({ date: 'asc' }).lean();
+        };
+
+        const reportsForTrend = await DailyReport.find(trendQuery).sort({ date: 'asc' }).lean();
 
         res.json({
             success: true,

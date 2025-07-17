@@ -1,4 +1,5 @@
 const Ingredient = require("../models/Ingredient");
+const StoreInventory = require('../models/StoreInventory'); // 新增
 const InventorySnapshot = require("../models/InventorySnapshot");
 const moment = require("moment");
 const POSTNAME = {
@@ -19,6 +20,11 @@ const XLSX = require("xlsx");
 // @access  Private (需要权限验证，例如确认是组长)
 const submitStockByPost = async (req, res) => {
   const { postId, stocks } = req.body; // stocks is an array: [{ ingredientId, quantity, unit }, ...]
+  const { currentStoreId } = req.user; // 从模拟认证中间件获取门店ID
+
+  if (!currentStoreId) {
+    return res.status(400).json({ success: false, message: "未指定当前操作的门店。" });
+  }
 
   if (!postId || !POSTNAME[postId]) {
     return res.status(400).json({ success: false, message: "无效的岗位ID。" });
@@ -50,37 +56,33 @@ const submitStockByPost = async (req, res) => {
     }
 
     operations.push(
-      Ingredient.findById(item.ingredientId)
-        .then((ingredient) => {
-          if (!ingredient) {
-            errors.push(
-              `未找到物料: ${item.ingredientName || item.ingredientId} (ID: ${
-                item.ingredientId
-              })。`
-            );
-            return null;
-          }
-
-          ingredient.stockByPost.set(String(postId), {
-            quantity: item.quantity,
-            unit: item.unit,
-            lastUpdated: new Date(),
-          });
-
-          ingredient.markModified("stockByPost");
-          return ingredient.save();
-        })
-        .then((savedDoc) => {
-          if (savedDoc) successCount++;
-        })
-        .catch((err) => {
-          console.error(`处理物料 ${item.ingredientId} 盘点时出错: `, err);
-          errors.push(
-            `物料 ${item.ingredientName || item.ingredientId} 更新失败: ${
-              err.message
-            }`
+      (async () => {
+        try {
+          // 查找或创建特定门店、特定原料的库存记录
+          const inventory = await StoreInventory.findOneAndUpdate(
+            { storeId: currentStoreId, ingredientId: item.ingredientId },
+            { $set: { 
+                [`stockByPost.${postId}`]: {
+                  quantity: item.quantity,
+                  unit: item.unit,
+                  lastUpdated: new Date(),
+                } 
+              } 
+            },
+            { new: true, upsert: true, setDefaultsOnInsert: true }
           );
-        })
+
+          if (inventory) {
+            successCount++;
+          } else {
+            // 这个分支理论上在 upsert:true 的情况下不会发生
+            errors.push(`物料 ${item.ingredientName || item.ingredientId} 的库存记录更新失败。`);
+          }
+        } catch (err) {
+          console.error(`处理物料 ${item.ingredientId} 盘点时出错: `, err);
+          errors.push(`物料 ${item.ingredientName || item.ingredientId} 更新失败: ${err.message}`);
+        }
+      })()
     );
   }
 
@@ -116,35 +118,41 @@ const submitStockByPost = async (req, res) => {
 const createInventorySnapshot = async (req, res) => {
   try {
     const { notes, clearData } = req.body;
+    const { currentStoreId } = req.user;
+
     const now = moment();
     const year = now.year();
     const weekOfYear = now.week();
 
-    const ingredients = await Ingredient.find({});
+    // 1. 获取当前门店的所有库存记录，并关联查询原料信息
+    const storeInventories = await StoreInventory.find({ storeId: currentStoreId })
+      .populate('ingredientId', 'name unit price norms'); // 查询关联的原料信息
 
     let grandTotalValue = 0;
-    const snapshotIngredients = ingredients.map((ing) => {
+    const snapshotIngredients = storeInventories.map((inv) => {
+      const { ingredientId: ing, stockByPost } = inv;
+      if (!ing) return null; // 如果原料被删除，则跳过
+
       let totalStock = 0;
-      if (ing.stockByPost && typeof ing.stockByPost.values === "function") {
-        for (const stock of ing.stockByPost.values()) {
+      if (stockByPost && stockByPost.size > 0) {
+        for (const stock of stockByPost.values()) {
           totalStock += stock.quantity || 0;
         }
       }
 
-      // 假设价格是以基础单位计价的，需要换算
       const pricePerBaseUnit = (ing.price && ing.norms) ? (ing.price / ing.norms) : 0;
       const ingredientValue = totalStock * pricePerBaseUnit;
       grandTotalValue += ingredientValue;
 
       return {
         ingredientId: ing._id,
-        name: ing.name, // 保存名称和单位以备后用
-        unit: ing.unit,
-        stockByPost: ing.stockByPost,
+        // 注意：这里不再保存name和unit，因为快照详情查询时会重新populate
+        stockByPost: stockByPost,
       };
-    });
+    }).filter(Boolean); // 过滤掉为null的项
 
     const snapshot = new InventorySnapshot({
+      storeId: currentStoreId, // 关联门店ID
       year,
       weekOfYear,
       notes: notes || '',
@@ -154,12 +162,12 @@ const createInventorySnapshot = async (req, res) => {
 
     await snapshot.save();
 
-    let message = `成功创建库存快照。`;
+    let message = `成功为门店创建库存快照。`;
 
     if (clearData === true) {
-      // After successfully saving the snapshot, clear the stock data for all ingredients if requested
-      await Ingredient.updateMany({}, { $set: { stockByPost: {} } });
-      message += ' 已清空现有库存以便开始新的盘点。';
+      // 2. 如果需要，清空当前门店的库存数据
+      await StoreInventory.deleteMany({ storeId: currentStoreId });
+      message += ' 已清空当前门店的库存以便开始新的盘点。';
     }
 
     res.status(201).json({
@@ -169,9 +177,7 @@ const createInventorySnapshot = async (req, res) => {
     });
   } catch (error) {
     console.error("创建库存快照失败:", error);
-    res
-      .status(500)
-      .json({ success: false, message: `服务器错误: ${error.message}` });
+    res.status(500).json({ success: false, message: `服务器错误: ${error.message}` });
   }
 };
 
@@ -179,10 +185,11 @@ const createInventorySnapshot = async (req, res) => {
 // @route   GET /api/inventory/snapshots
 // @access  Private
 const listSnapshots = async (req, res) => {
+  const { currentStoreId } = req.user;
   try {
-    const snapshots = await InventorySnapshot.find({})
+    const snapshots = await InventorySnapshot.find({ storeId: currentStoreId }) // 按门店查询
       .sort({ createdAt: -1 })
-      .select("createdAt notes totalValue");
+      .select("createdAt notes totalValue year weekOfYear");
 
     res.json({ success: true, data: snapshots });
   } catch (error) {
@@ -195,11 +202,12 @@ const listSnapshots = async (req, res) => {
 // @route   GET /api/inventory/snapshots/:id
 // @access  Private
 const getSnapshotDetails = async (req, res) => {
+  const { currentStoreId } = req.user;
   try {
     const snapshot = await InventorySnapshot.findById(req.params.id);
 
-    if (!snapshot) {
-      return res.status(404).json({ success: false, message: "快照未找到" });
+    if (!snapshot || snapshot.storeId.toString() !== currentStoreId) { // 验证门店归属
+      return res.status(404).json({ success: false, message: "快照未找到或不属于当前门店" });
     }
 
     // 获取所有相关的原料信息
@@ -254,20 +262,24 @@ const getSnapshotDetails = async (req, res) => {
 // @access  Private
 const restoreInventoryFromSnapshot = async (req, res) => {
   const { id } = req.params;
+  const { currentStoreId } = req.user;
   try {
     const snapshot = await InventorySnapshot.findById(id);
-    if (!snapshot) {
-      return res.status(404).json({ success: false, message: "快照未找到" });
+    if (!snapshot || snapshot.storeId.toString() !== currentStoreId) { // 验证门店归属
+      return res.status(404).json({ success: false, message: "快照未找到或不属于当前门店" });
     }
 
-    // Step 1: Clear all current stock data
-    await Ingredient.updateMany({}, { $set: { stockByPost: {} } });
+    // 1. 清空当前门店的所有库存
+    await StoreInventory.deleteMany({ storeId: currentStoreId });
 
-    // Step 2: Restore stock data from the snapshot
+    // 2. 从快照还原库存到当前门店
     const restorePromises = snapshot.ingredients.map((item) => {
-      return Ingredient.findByIdAndUpdate(item.ingredientId, {
-        $set: { stockByPost: item.stockByPost },
-      });
+      // 使用 findOneAndUpdate 和 upsert:true 更安全
+      return StoreInventory.findOneAndUpdate(
+        { storeId: currentStoreId, ingredientId: item.ingredientId },
+        { stockByPost: item.stockByPost },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
     });
 
     await Promise.all(restorePromises);
