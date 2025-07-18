@@ -2,83 +2,71 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
     Container, Box, Paper, BottomNavigation, BottomNavigationAction,
     Typography, List, ListItem, ListItemText, CircularProgress, Alert,
-    Button, TextField, Chip, Grid, Card, CardContent, CardActions,
+    Button, TextField, Chip, Grid, Card, CardContent, CardActions, IconButton,
 } from '@mui/material';
 import ShoppingBasketIcon from '@mui/icons-material/ShoppingBasket';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import HistoryIcon from '@mui/icons-material/History';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
+import SearchOffIcon from '@mui/icons-material/SearchOff';
 import { Badge } from '@mui/material';
 import { POSTNAME } from '../config/constants';
 
-const ShopView = ({ onAddToCart, storeId }) => {
-    const [allIngredients, setAllIngredients] = useState([]);
+const ShopView = ({ 
+    onAddToCart, 
+    onUpdateCart, 
+    cartItems, 
+    ingredients,
+    loading,
+    error,
+}) => {
     const [filteredIngredients, setFilteredIngredients] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [quantities, setQuantities] = useState({});
     const [activeFilter, setActiveFilter] = useState('all');
 
-    const fetchStock = useCallback(async () => {
-        if (!storeId) return;
-        setLoading(true);
-        setError('');
-        try {
-            const response = await fetch('/api/warehouse/stock', {
-                headers: { 'x-current-store-id': storeId },
-            });
-            if (!response.ok) throw new Error('获取物料列表失败');
-            const data = await response.json();
-            const itemsWithStock = data.items?.filter(item => item.mainWarehouseStock && item.mainWarehouseStock.quantity > 0) || [];
-            setAllIngredients(itemsWithStock);
-            setFilteredIngredients(itemsWithStock);
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
-    }, [storeId]);
-
     useEffect(() => {
-        fetchStock();
-    }, [fetchStock]);
+        setFilteredIngredients(ingredients);
+        setActiveFilter('all');
+    }, [ingredients]);
 
     useEffect(() => {
         if (activeFilter === 'all') {
-            setFilteredIngredients(allIngredients);
+            setFilteredIngredients(ingredients);
         } else {
-            const filtered = allIngredients.filter(item => 
+            const filtered = ingredients.filter(item => 
                 item.ingredient.post?.includes(Number(activeFilter))
             );
             setFilteredIngredients(filtered);
         }
-    }, [activeFilter, allIngredients]);
+    }, [activeFilter, ingredients]);
     
-    const handleQuantityChange = (id, value) => {
-        setQuantities(prev => ({ ...prev, [id]: value }));
-    };
+    const handleIncrement = (item) => {
+        const existingCartItem = cartItems.find(cartItem => cartItem.ingredientId === item.ingredient._id);
+        const currentQuantityInCart = existingCartItem ? existingCartItem.quantity : 0;
 
-    const handleAddToCartClick = (item) => {
-        const quantity = quantities[item.ingredient._id];
-        const positionInfo = item.ingredient.post?.map(pId => POSTNAME[pId]).join(', ') || '未指定';
-
-        if (!quantity || quantity <= 0) {
-            alert('请输入有效的申请数量');
-            return;
-        }
-        if (quantity > item.mainWarehouseStock.quantity) {
-            alert('申请数量超过库存');
+        if (currentQuantityInCart + 1 > item.virtualStock) {
+            alert('申请数量超过可用库存');
             return;
         }
 
         onAddToCart({
             ingredientId: item.ingredient._id,
             name: item.ingredient.name,
-            quantity: Number(quantity),
+            quantity: 1,
             unit: item.ingredient.unit,
-            position: positionInfo, 
         });
-        
-        setQuantities(prev => ({ ...prev, [item.ingredient._id]: '' }));
+    };
+
+    const handleDecrement = (item) => {
+        const existingCartItem = cartItems.find(cartItem => cartItem.ingredientId === item.ingredient._id);
+        if (!existingCartItem) return;
+
+        const updatedCart = cartItems.map(cartItem => 
+            cartItem.ingredientId === item.ingredient._id
+                ? { ...cartItem, quantity: cartItem.quantity - 1 }
+                : cartItem
+        ).filter(cartItem => cartItem.quantity > 0);
+        onUpdateCart(updatedCart);
     };
 
     return (
@@ -86,13 +74,30 @@ const ShopView = ({ onAddToCart, storeId }) => {
             <Typography variant="h5" component="h1" gutterBottom sx={{ fontWeight: 'bold', textAlign: 'center', my: 2 }}>
                 申领中心
             </Typography>
-            <Paper sx={{ p: 1, mb: 2, position: 'sticky', top: 0, zIndex: 1, backgroundColor: 'rgba(255, 255, 255, 0.95)' }}>
-                <Typography variant="caption" display="block" sx={{mb: 1}}>按岗位筛选:</Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                    <Button size="small" variant={activeFilter === 'all' ? 'contained' : 'outlined'} onClick={() => setActiveFilter('all')}>全部</Button>
-                    {Object.entries(POSTNAME).map(([id, name]) => (
-                        <Button key={id} size="small" variant={activeFilter === id ? 'contained' : 'outlined'} onClick={() => setActiveFilter(id)}>{name}</Button>
-                    ))}
+            <Paper sx={{ p: 1.5, mb: 2, position: 'sticky', top: 0, zIndex: 1, backgroundColor: 'background.paper' }}>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>按岗位筛选</Typography>
+                <Box sx={{ position: 'relative' }}>
+                    <Box sx={{
+                        overflowX: 'auto',
+                        scrollbarWidth: 'none', // for Firefox
+                        '&::-webkit-scrollbar': { display: 'none' }, // for Chrome, Safari
+                    }}>
+                        <Box sx={{ display: 'flex', gap: 1, py: 0.5, pr: '30px' }}>
+                            <Button size="small" variant={activeFilter === 'all' ? 'contained' : 'outlined'} onClick={() => setActiveFilter('all')}>全部</Button>
+                            {Object.entries(POSTNAME).map(([id, name]) => (
+                                <Button key={id} size="small" variant={activeFilter === id ? 'contained' : 'outlined'} onClick={() => setActiveFilter(id)} sx={{ flexShrink: 0 }}>{name}</Button>
+                            ))}
+                        </Box>
+                    </Box>
+                    <Box sx={{
+                        position: 'absolute',
+                        top: 0,
+                        right: 0,
+                        width: '30px',
+                        height: '100%',
+                        background: theme => `linear-gradient(to left, ${theme.palette.background.paper}, transparent)`,
+                        pointerEvents: 'none',
+                    }} />
                 </Box>
             </Paper>
 
@@ -100,53 +105,78 @@ const ShopView = ({ onAddToCart, storeId }) => {
             {error && <Alert severity="error">{error}</Alert>}
 
             {!loading && !error && (
-                 <Grid container spacing={2}>
-                    {filteredIngredients.map(item => {
-                        const id = item.ingredient._id;
-                        const postInfo = item.ingredient.post?.map(pId => POSTNAME[pId]).join(', ') || '未分配';
+                 filteredIngredients.length > 0 ? (
+                    <Grid container spacing={2}>
+                        {filteredIngredients.map(item => {
+                            const id = item.ingredient._id;
+                            const itemInCart = cartItems.find(cartItem => cartItem.ingredientId === id);
 
-                        return (
-                            <Grid item xs={6} key={id}>
-                                <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', boxShadow: 3, borderRadius: 2 }}>
-                                    <CardContent sx={{ flexGrow: 1, p: 1.5 }}>
-                                        <Typography gutterBottom variant="h6" component="h2" sx={{ fontSize: '1rem', fontWeight: 'bold' }}>
-                                            {item.ingredient.name}
-                                        </Typography>
-                                        <Typography variant="body2" color="text.secondary">
-                                            库存: {item.mainWarehouseStock.quantity} {item.ingredient.unit}
-                                        </Typography>
-                                        <Chip label={postInfo} size="small" sx={{ mt: 1 }} />
-                                    </CardContent>
-                                    <CardActions sx={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', p: 1.5, pt: 0 }}>
-                                        <TextField
-                                            type="number"
-                                            size="small"
-                                            variant="outlined"
-                                            placeholder="数量"
-                                            value={quantities[id] || ''}
-                                            onChange={(e) => handleQuantityChange(id, e.target.value)}
-                                            inputProps={{ min: 1, max: item.mainWarehouseStock.quantity, style: { textAlign: 'center' } }}
-                                            sx={{ mb: 1 }}
-                                        />
-                                        <Button 
-                                            variant="contained" 
-                                            size="medium"
-                                            onClick={() => handleAddToCartClick(item)}
-                                        >
-                                            加入购物车
-                                        </Button>
-                                    </CardActions>
-                                </Card>
-                            </Grid>
-                        );
-                    })}
-                </Grid>
+                            return (
+                                <Grid item xs={12} key={id}>
+                                    <Card sx={{ display: 'flex', flexDirection: 'column', boxShadow: 3, borderRadius: 2 }}>
+                                        <CardContent sx={{ flexGrow: 1, p: 1.5 }}>
+                                            <Typography gutterBottom variant="h6" component="h2" sx={{ fontSize: '1rem', fontWeight: 'bold' }}>
+                                                {item.ingredient.name}
+                                            </Typography>
+                                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                                规格: {item.ingredient.specs || '无'}
+                                            </Typography>
+                                            <Typography variant="body2" color="text.secondary">
+                                                可用库存: {item.virtualStock} {item.ingredient.unit}
+                                            </Typography>
+                                        </CardContent>
+                                        <CardActions sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', p: 1.5, pt: 0 }}>
+                                            {!itemInCart ? (
+                                                <Button 
+                                                    variant="contained" 
+                                                    size="medium"
+                                                    onClick={() => handleIncrement(item)}
+                                                >
+                                                    加入购物车
+                                                </Button>
+                                            ) : (
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <IconButton color="primary" onClick={() => handleDecrement(item)} size="small">
+                                                        <RemoveCircleOutlineIcon />
+                                                    </IconButton>
+                                                    <Typography variant="h6" component="span">{itemInCart.quantity}</Typography>
+                                                    <IconButton 
+                                                        color="primary" 
+                                                        onClick={() => handleIncrement(item)} 
+                                                        size="small" 
+                                                        disabled={itemInCart.quantity >= item.virtualStock}
+                                                    >
+                                                        <AddCircleOutlineIcon />
+                                                    </IconButton>
+                                                </Box>
+                                            )}
+                                        </CardActions>
+                                    </Card>
+                                </Grid>
+                            );
+                        })}
+                    </Grid>
+                 ) : (
+                    <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', mt: 4 }}>
+                        <SearchOffIcon sx={{ fontSize: 48, color: 'text.secondary' }} />
+                        <Typography variant="h6" color="text.secondary" sx={{ mt: 1 }}>
+                            {activeFilter === 'all' 
+                                ? '暂无可用物料' 
+                                : '当前筛选下没有物料'}
+                        </Typography>
+                        {activeFilter !== 'all' && (
+                            <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
+                                尝试选择其他岗位或“全部”。
+                            </Typography>
+                        )}
+                    </Paper>
+                 )
             )}
         </Box>
     );
 };
 
-const CartView = ({ cartItems, onUpdateCart, storeId }) => {
+const CartView = ({ cartItems, onUpdateCart, storeId, refetchData }) => {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
@@ -174,10 +204,54 @@ const CartView = ({ cartItems, onUpdateCart, storeId }) => {
         setSuccessMessage('');
 
         try {
+            // Re-fetch latest stock and requests to validate cart before submission
+            const [stockResponse, requestsResponse] = await Promise.all([
+                fetch('/api/warehouse/stock', { headers: { 'x-current-store-id': storeId } }),
+                fetch('/api/transfer-requests', { headers: { 'x-current-store-id': storeId } })
+            ]);
+
+            if (!stockResponse.ok) throw new Error('无法获取最新库存信息进行校验');
+            if (!requestsResponse.ok) throw new Error('无法获取最新申请信息进行校验');
+
+            const stockData = await stockResponse.json();
+            const requestsData = await requestsResponse.json();
+
+            // Calculate virtual stock just for validation
+            const pendingQuantities = {};
+            requestsData
+                .filter(req => req.status === 'pending' || req.status === 'approved')
+                .forEach(req => {
+                    req.items.forEach(item => {
+                        pendingQuantities[item.ingredientId] = (pendingQuantities[item.ingredientId] || 0) + item.quantity;
+                    });
+                });
+            
+            const latestVirtualStockMap = new Map();
+            (stockData.items || []).forEach(item => {
+                if (item.mainWarehouseStock) {
+                    const pendingQty = pendingQuantities[item.ingredient._id] || 0;
+                    const virtualStock = item.mainWarehouseStock.quantity - pendingQty;
+                    latestVirtualStockMap.set(item.ingredient._id, virtualStock > 0 ? virtualStock : 0);
+                }
+            });
+
+            // Validate cart items
+            const invalidItems = cartItems.filter(cartItem => {
+                const availableStock = latestVirtualStockMap.get(cartItem.ingredientId);
+                return cartItem.quantity > (availableStock === undefined ? 0 : availableStock);
+            });
+
+            if (invalidItems.length > 0) {
+                const itemNames = invalidItems.map(item => item.name).join(', ');
+                throw new Error(`库存不足或物料已下架: ${itemNames}。请返回修改数量或移除物料。`);
+            }
+            
+            // If validation passes, proceed to submit
             const itemsToSubmit = cartItems.map(item => ({
-                ingredient: item.ingredientId,
+                ingredientId: item.ingredientId,
+                name: item.name,
+                unit: item.unit,
                 quantity: item.quantity,
-                position: item.position,
             }));
 
             const response = await fetch('/api/transfer-requests', {
@@ -196,6 +270,7 @@ const CartView = ({ cartItems, onUpdateCart, storeId }) => {
             
             setSuccessMessage('您的调拨申请已成功提交！');
             onUpdateCart([]);
+            if (refetchData) refetchData();
 
         } catch (err) {
             setError(err.message);
@@ -233,17 +308,21 @@ const CartView = ({ cartItems, onUpdateCart, storeId }) => {
                         >
                             <ListItemText 
                                 primary={<Typography variant="body1" sx={{ fontWeight: 500 }}>{item.name}</Typography>}
-                                secondary={`岗位: ${item.position}`} 
                             />
-                            <TextField
-                                type="number"
-                                size="small"
-                                variant="outlined"
-                                value={item.quantity}
-                                onChange={(e) => handleQuantityChange(index, e.target.value)}
-                                sx={{ width: '80px', mx: 2 }}
-                                inputProps={{ min: 1 }}
-                            />
+                            <Box sx={{ display: 'flex', alignItems: 'center', mx: 2 }}>
+                                <TextField
+                                    type="number"
+                                    size="small"
+                                    variant="outlined"
+                                    value={item.quantity}
+                                    onChange={(e) => handleQuantityChange(index, e.target.value)}
+                                    sx={{ width: '70px' }}
+                                    inputProps={{ min: 1 }}
+                                />
+                                <Typography variant="body1" component="span" sx={{ ml: 1.5, minWidth: '30px', textAlign: 'left' }}>
+                                    {item.unit}
+                                </Typography>
+                            </Box>
                         </ListItem>
                     ))}
                 </List>
@@ -270,33 +349,7 @@ const CartView = ({ cartItems, onUpdateCart, storeId }) => {
     );
 };
 
-const HistoryView = ({ storeId }) => {
-    const [requests, setRequests] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-
-    const fetchHistory = useCallback(async () => {
-        if (!storeId) return;
-        setLoading(true);
-        setError('');
-        try {
-            const response = await fetch('/api/transfer-requests', {
-                headers: { 'x-current-store-id': storeId },
-            });
-            if (!response.ok) throw new Error('获取申请记录失败');
-            const data = await response.json();
-            setRequests(data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
-    }, [storeId]);
-
-    useEffect(() => {
-        fetchHistory();
-    }, [fetchHistory]);
-
+const HistoryView = ({ requests, loading, error }) => {
     const getStatusChipColor = (status) => {
         switch (status) {
             case 'completed': return 'success';
@@ -305,6 +358,13 @@ const HistoryView = ({ storeId }) => {
             case 'pending':
             default: return 'warning';
         }
+    };
+
+    const STATUS_MAP = {
+        pending: '待处理',
+        approved: '已批准',
+        rejected: '已拒绝',
+        completed: '已完成',
     };
     
     return (
@@ -323,30 +383,43 @@ const HistoryView = ({ storeId }) => {
                     </Paper>
                 ) : (
                     requests.map(req => (
-                        <Card key={req._id} sx={{ mb: 2, boxShadow: 3, borderRadius: 2 }} variant="outlined">
-                             <CardContent>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                                    <Typography variant="caption" color="text.secondary" display="block">
-                                       #{req._id.slice(-6)}
-                                    </Typography>
-                                    <Chip label={req.status} color={getStatusChipColor(req.status)} size="small" />
+                        <Card 
+                            key={req._id} 
+                            sx={{ 
+                                mb: 2, 
+                                boxShadow: 2, 
+                                borderRadius: 2, 
+                                borderLeft: '4px solid',
+                                borderColor: `${getStatusChipColor(req.status)}.main`
+                            }} 
+                            variant="outlined"
+                        >
+                             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                                    <Box>
+                                        <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                                           申请单 #{req._id.slice(-6)}
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary" display="block">
+                                            {new Date(req.createdAt).toLocaleString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                        </Typography>
+                                    </Box>
+                                    <Chip label={STATUS_MAP[req.status] || req.status} color={getStatusChipColor(req.status)} size="small" sx={{ mt: 0.5 }}/>
                                 </Box>
-                                <Typography variant="body2" color="text.secondary" sx={{mb: 1}}>
-                                    {new Date(req.createdAt).toLocaleString()}
-                                </Typography>
+                                
                                 <List dense sx={{ mt: 1, p: 0 }}>
                                     {req.items.map((item, index) => (
-                                        <ListItem key={index} sx={{ py: 0.5, px: 0 }}>
+                                        <ListItem key={index} sx={{ py: 0.25, px: 0 }}>
                                             <ListItemText 
-                                                primaryTypographyProps={{ variant: 'body1', fontWeight: 500 }}
-                                                secondaryTypographyProps={{ variant: 'body2' }}
-                                                primary={`${item.name} x ${item.quantity} ${item.unit || ''}`}
-                                                secondary={`岗位: ${item.position}`}
+                                                primary={item.name}
+                                                secondary={`x ${item.quantity} ${item.unit || ''}`}
+                                                primaryTypographyProps={{ variant: 'body1', fontWeight: 'medium' }}
+                                                secondaryTypographyProps={{ variant: 'body2', color: 'text.secondary' }}
                                             />
                                         </ListItem>
                                     ))}
                                 </List>
-                                {req.notes && <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic', color: 'text.secondary', p: 1, backgroundColor: '#f5f5f5', borderRadius: 1 }}>备注: {req.notes}</Typography>}
+                                {req.notes && <Typography variant="body2" sx={{ mt: 1.5, fontStyle: 'italic', color: 'text.secondary', p: 1.5, backgroundColor: 'grey.100', borderRadius: 1 }}>备注: {req.notes}</Typography>}
                             </CardContent>
                         </Card>
                     ))
@@ -361,6 +434,56 @@ const MobileRequestPage = () => {
     const [view, setView] = useState('shop');
     const [cart, setCart] = useState([]);
     const [error, setError] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [ingredientsWithVirtualStock, setIngredientsWithVirtualStock] = useState([]);
+    const [historyRequests, setHistoryRequests] = useState([]);
+
+    const fetchData = useCallback(async () => {
+        if (!storeId) return;
+        setLoading(true);
+        setError('');
+        try {
+            const [stockResponse, requestsResponse] = await Promise.all([
+                fetch('/api/warehouse/stock', { headers: { 'x-current-store-id': storeId } }),
+                fetch('/api/transfer-requests', { headers: { 'x-current-store-id': storeId } })
+            ]);
+
+            if (!stockResponse.ok) throw new Error('获取物料列表失败');
+            if (!requestsResponse.ok) throw new Error('获取申请记录失败');
+
+            const stockData = await stockResponse.json();
+            const requestsData = await requestsResponse.json();
+            
+            setHistoryRequests(requestsData.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+
+            const pendingQuantities = {};
+            requestsData
+                .filter(req => req.status === 'pending' || req.status === 'approved')
+                .forEach(req => {
+                    req.items.forEach(item => {
+                        pendingQuantities[item.ingredientId] = (pendingQuantities[item.ingredientId] || 0) + item.quantity;
+                    });
+                });
+
+            const calculatedIngredients = (stockData.items || [])
+                .filter(item => item.mainWarehouseStock && item.mainWarehouseStock.quantity > 0)
+                .map(item => {
+                    const pendingQty = pendingQuantities[item.ingredient._id] || 0;
+                    const virtualStock = item.mainWarehouseStock.quantity - pendingQty;
+                    return {
+                        ...item,
+                        virtualStock: virtualStock > 0 ? virtualStock : 0,
+                    };
+                });
+            
+            setIngredientsWithVirtualStock(calculatedIngredients);
+
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    }, [storeId]);
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -369,8 +492,13 @@ const MobileRequestPage = () => {
             setStoreId(storeIdFromUrl);
         } else {
             setError('URL中未指定门店ID，请通过有效的二维码或链接访问。');
+            setLoading(false);
         }
     }, []);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
     
     const handleAddToCart = (item) => {
         setCart(prevCart => {
@@ -391,18 +519,29 @@ const MobileRequestPage = () => {
     };
 
     const renderView = () => {
+        if (loading) {
+            return <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}><CircularProgress /></Box>;
+        }
         switch (view) {
             case 'cart':
-                return <CartView cartItems={cart} onUpdateCart={handleUpdateCart} storeId={storeId} />;
+                return <CartView cartItems={cart} onUpdateCart={handleUpdateCart} storeId={storeId} refetchData={fetchData} />;
             case 'history':
-                return <HistoryView storeId={storeId} />;
+                return <HistoryView requests={historyRequests} loading={loading} error={error} />;
             case 'shop':
             default:
-                return <ShopView onAddToCart={handleAddToCart} storeId={storeId} />;
+                return <ShopView 
+                    onAddToCart={handleAddToCart} 
+                    onUpdateCart={handleUpdateCart} 
+                    cartItems={cart} 
+                    ingredients={ingredientsWithVirtualStock}
+                    loading={loading}
+                    error={error}
+                    refetchData={fetchData}
+                />;
         }
     };
     
-    if (error) {
+    if (error && !loading) {
         return <Container sx={{ mt: 2 }}><Alert severity="error">{error}</Alert></Container>;
     }
 
