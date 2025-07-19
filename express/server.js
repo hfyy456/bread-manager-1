@@ -15,6 +15,7 @@ const ingredientsCompareRoutes = require('./routes/ingredients.js'); // 新增�
 const storeRoutes = require('./routes/storeRoutes'); // 新增门店路由
 const warehouseRoutes = require('./routes/warehouseRoutes'); // 1. 引入仓库路由
 const transferRequestRoutes = require('./routes/transferRequestRoutes'); // For mobile requests
+const feishuRoutes = require('./routes/feishuRoutes'); // For Feishu integration
 
 const authMiddleware = require('./middleware/authMiddleware'); // 引入模拟认证中间件
 
@@ -37,17 +38,18 @@ const indexPath = path.join(reactBuildDir, 'index.html');
 // --- API 路由 ---
 // app.use('/api', sampleRoutes); // 移除旧的示例路由使用
 app.use('/api', storeRoutes); // 使用门店路由
-app.use('/api', ingredientRoutes); // 使用原料路由，所有 /api/ingredients/* 的请求将由此处理
+app.use('/api/ingredients', ingredientRoutes); // 使用原料路由，所有 /api/ingredients/* 的请求将由此处理
 app.use('/api/inventory', inventoryRoutes); // 新增：使用盘点路由，所有 /api/inventory/* 的请求将由此处理
 app.use('/api/daily-reports', dailyReportRoutes); // 使用日报表路由
 app.use('/api/dashboard', dashboardRoutes); // Added dashboardRoutes usage
 app.use('/api/receiving', receivingRoutes); // Use the new route
-app.use('/api', breadTypeRoutes);
-app.use('/api', fillingRecipeRoutes);
+app.use('/api/bread-types', breadTypeRoutes);
+app.use('/api/filling-recipes', fillingRecipeRoutes);
 app.use('/api/dough-recipes', authMiddleware, doughRecipeRoutes);
 app.use('/api/ingredients', ingredientsCompareRoutes); // 新增对比路由
 app.use('/api/warehouse', authMiddleware, warehouseRoutes); // 2. 注册仓库路由
 app.use('/api/transfer-requests', transferRequestRoutes); // Register the new route
+app.use('/api/feishu', feishuRoutes);
 // 您可以在这里添加其他路由模块，例如:
 // const userRoutes = require('./routes/userRoutes');
 // app.use('/api/users', userRoutes);

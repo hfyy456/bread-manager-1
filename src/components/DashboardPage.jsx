@@ -9,7 +9,6 @@ import { LineChart, Line, PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip as
 import moment from 'moment';
 import { DataContext } from './DataContext'; 
 import { getBreadCostBreakdown, calculateDoughCost, calculateFillingCost, generateAggregatedRawMaterials } from '../utils/calculator'; 
-import TransferRequestList from './TransferRequestList';
 
 const MaterialConsumptionPanel = ({ consumptionData, ingredientsMap }) => {
         if (!consumptionData || Object.keys(consumptionData).length === 0) {
@@ -393,7 +392,7 @@ const DashboardPage = () => {
     );
 
     const renderPieChart = (data, title) => (
-        <Grid item xs={12} md={6} lg={4}>
+        <Grid item xs={12} md={6}>
             <Paper elevation={2} sx={{ p: 2, height: 350 }}>
                 <Typography variant="h6" gutterBottom sx={{ textAlign: 'center' }}>{title}</Typography>
                 {data && data.length > 0 ? (
@@ -412,46 +411,6 @@ const DashboardPage = () => {
             </Paper>
         </Grid>
     );
-
-    const renderDashboardContent = () => (
-        <>
-            <Typography variant="h6" gutterBottom>
-                {['每日', '每周', '每月'][currentTab]}数据汇总 {processedData.currentDate && `(${processedData.currentDate})`}
-            </Typography>
-            <Grid container spacing={3}>
-                {renderSummaryCard("总出品价值", `¥${processedData.summary.totalProductionValue.toFixed(2)}`)}
-                {renderSummaryCard("总成品报废价值", `¥${processedData.summary.totalFinishedWasteValue.toFixed(2)}`, 'error')}
-                {renderSummaryCard("当前总库存价值", `¥${processedData.inventoryValue.toFixed(2)}`)}
-                
-                <Grid item xs={12}>
-                    <Paper elevation={2} sx={{ p: 2, height: 350 }}>
-                        <Typography variant="h6" gutterBottom sx={{ textAlign: 'center' }}>生产/报废趋势</Typography>
-                        <ResponsiveContainer>
-                            <LineChart data={processedData.trendData}>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="date" />
-                                <YAxis tickFormatter={(value) => `¥${value}`} />
-                                <RechartsTooltip formatter={(value) => `¥${value.toFixed(2)}`} />
-                                <Legend />
-                                <Line type="monotone" dataKey="productionValue" name="出品价值" stroke={theme.palette.primary.main} activeDot={{ r: 8 }} />
-                                <Line type="monotone" dataKey="wasteValue" name="报废价值" stroke={theme.palette.error.main} />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </Paper>
-                </Grid>
-
-                {renderPieChart(processedData.productionByCategory, "各分类产值占比")}
-                {renderPieChart(processedData.wasteByCategory, "各分类报废占比")}
-
-                <Grid item xs={12}>
-                    <MaterialConsumptionPanel 
-                        consumptionData={processedData.materialConsumption}
-                        ingredientsMap={ingredientsMap}
-                    />
-                </Grid>
-            </Grid>
-        </>
-    );
     
     if (!dataLoaded) {
         return (
@@ -463,55 +422,93 @@ const DashboardPage = () => {
     }
 
     return (
-        <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-            <AppBar position="static" color="default" elevation={1} sx={{ borderTopLeftRadius: 4, borderTopRightRadius: 4 }}>
-                <Tabs 
-                    value={currentTab} 
+        <Container maxWidth="xl" sx={{ py: 3 }}>
+            <Box display="flex" alignItems="center" sx={{ mb: 2 }}>
+                <Typography variant="h4" component="h1" sx={{ fontWeight: 500, flexGrow: 1 }}>
+                    数据看板
+                </Typography>
+                <Tooltip title="查看操作指南">
+                    <IconButton component={RouterLink} to="/operation-guide#dashboard" size="small" sx={{ color: 'primary.main' }}>
+                        <InfoOutlinedIcon />
+                    </IconButton>
+                </Tooltip>
+            </Box>
+
+            <TextField
+                id="dashboard-date-picker"
+                label="选择基准日期"
+                type="date"
+                value={selectedDate}
+                onChange={handleDateChange}
+                sx={{ mb: 2, maxWidth: 220 }}
+                InputLabelProps={{ shrink: true }}
+                disabled={loading}
+            />
+
+            {error && (
+                <MuiAlert severity="error" sx={{ mb: 2 }}>
+                    {error}
+                </MuiAlert>
+            )}
+
+            <AppBar position="static" color="default" elevation={1} sx={{ borderTopLeftRadius: 4, borderTopRightRadius: 4}}>
+                <Tabs
+                    value={currentTab}
                     onChange={handleTabChange}
+                    aria-label="Dashboard time period tabs"
                     indicatorColor="primary"
                     textColor="primary"
-                    variant="scrollable"
-                    scrollButtons="auto"
-                    allowScrollButtonsMobile
+                    variant="fullWidth"
+                    disabled={loading}
                 >
-                    <Tab label="每日看板" />
-                    <Tab label="周度看板" />
-                    <Tab label="月度看板" />
-                    <Tab label="调拨审批" />
+                    <Tab label="按日汇总" />
+                    <Tab label="按周汇总" />
+                    <Tab label="按月汇总" />
                 </Tabs>
             </AppBar>
-            <Paper elevation={2} sx={{ borderTopLeftRadius: 0, borderTopRightRadius: 0, overflow: 'hidden' }}>
-                 <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
-                    <TextField
-                        id="dashboard-date-picker"
-                        label="选择基准日期"
-                        type="date"
-                        value={selectedDate}
-                        onChange={handleDateChange}
-                        sx={{ width: { xs: '100%', sm: 'auto' } }}
-                        InputLabelProps={{
-                            shrink: true,
-                        }}
-                    />
-                </Box>
-                {loading && <LinearProgress />}
-                {error && <MuiAlert severity="error" sx={{ m: 2 }}>{error}</MuiAlert>}
 
-                {!loading && !error && (
-                    <>
-                        <TabPanel value={currentTab} index={0}>
-                            {renderDashboardContent()}
-                        </TabPanel>
-                        <TabPanel value={currentTab} index={1}>
-                            {renderDashboardContent()}
-                        </TabPanel>
-                        <TabPanel value={currentTab} index={2}>
-                            {renderDashboardContent()}
-                        </TabPanel>
-                        <TabPanel value={currentTab} index={3}>
-                            <TransferRequestList />
-                        </TabPanel>
-                    </>
+            <Paper elevation={2} sx={{ borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
+                 {loading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
+                        <CircularProgress />
+                    </Box>
+                ) : (
+                    <TabPanel value={currentTab} index={currentTab}>
+                        <Typography variant="h6" gutterBottom>
+                           {['每日', '每周', '每月'][currentTab]}数据汇总 {processedData.currentDate && `(${processedData.currentDate})`}
+                                </Typography>
+                    <Grid container spacing={3}>
+                            {renderSummaryCard("总出品价值", processedData.summary.totalProductionValue)}
+                            {renderSummaryCard("总成品报废价值", processedData.summary.totalFinishedWasteValue, 'error')}
+                            {renderSummaryCard("当前总库存价值", processedData.inventoryValue)}
+                            
+                            <Grid item xs={12}>
+                                <Paper elevation={2} sx={{ p: 2, height: 350 }}>
+                                    <Typography variant="h6" gutterBottom sx={{ textAlign: 'center' }}>生产/报废趋势</Typography>
+                                    <ResponsiveContainer>
+                                        <LineChart data={processedData.trendData}>
+                                            <CartesianGrid strokeDasharray="3 3" />
+                                            <XAxis dataKey="date" />
+                                            <YAxis />
+                                            <RechartsTooltip formatter={(value) => `¥${value.toFixed(2)}`} />
+                                            <Legend />
+                                            <Line type="monotone" dataKey="productionValue" name="出品价值" stroke={theme.palette.primary.main} activeDot={{ r: 8 }} />
+                                            <Line type="monotone" dataKey="wasteValue" name="报废价值" stroke={theme.palette.error.main} />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                            </Paper>
+                        </Grid>
+
+                        
+
+                            <Grid item xs={12}>
+                                <MaterialConsumptionPanel 
+                                    consumptionData={processedData.materialConsumption}
+                                    ingredientsMap={ingredientsMap}
+                                />
+                        </Grid>
+                        </Grid>
+            </TabPanel>
                 )}
             </Paper>
         </Container>

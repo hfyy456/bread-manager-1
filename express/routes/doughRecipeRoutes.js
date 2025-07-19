@@ -7,9 +7,9 @@ const {
   deleteDoughRecipe 
 } = require('../controllers/doughRecipeController');
 
-router.post('/dough-recipes/list', getAllDoughRecipes);
-router.post('/dough-recipes/create', createDoughRecipe);
-router.put('/dough-recipes/:id', updateDoughRecipe);
-router.delete('/dough-recipes/:id', deleteDoughRecipe);
+router.post('/list', getAllDoughRecipes);
+router.post('/create', createDoughRecipe);
+router.put('/:id', updateDoughRecipe);
+router.delete('/:id', deleteDoughRecipe);
  
 module.exports = router; 

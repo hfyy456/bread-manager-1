@@ -8,10 +8,10 @@ const {
   deleteBreadType,
 } = require('../controllers/breadTypeController');
 
-router.post('/bread-types/list', getAllBreadTypes);
-router.post('/bread-types', createBreadType);
-router.get('/bread-types/:id', getBreadTypeById);
-router.put('/bread-types/:id', updateBreadType);
-router.delete('/bread-types/:id', deleteBreadType);
+router.post('/list', getAllBreadTypes);
+router.post('/', createBreadType);
+router.get('/:id', getBreadTypeById);
+router.put('/:id', updateBreadType);
+router.delete('/:id', deleteBreadType);
  
 module.exports = router; 

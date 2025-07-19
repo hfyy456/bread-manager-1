@@ -5,7 +5,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 
 router.get('/stock', authMiddleware, warehouseController.getWarehouseStock);
 router.post('/transfer', authMiddleware, warehouseController.transferStock);
-router.put('/stock/bulk', authMiddleware, warehouseController.bulkUpdateWarehouseStock); // For bulk updates
+router.post('/bulk-update-stock', authMiddleware, warehouseController.bulkUpdateWarehouseStock); // Corrected route
 router.put('/stock', authMiddleware, warehouseController.updateWarehouseStock); // For single updates
 
 module.exports = router; 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     Container, Box, Paper, BottomNavigation, BottomNavigationAction,
     Typography, List, ListItem, ListItemText, CircularProgress, Alert,
@@ -12,6 +12,118 @@ import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import SearchOffIcon from '@mui/icons-material/SearchOff';
 import { Badge } from '@mui/material';
 import { POSTNAME } from '../config/constants';
+import ReportProblemIcon from '@mui/icons-material/ReportProblem';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+
+// Custom hook to manage user authentication AND environment check
+const useUser = () => {
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true); // For user data fetching
+    const [error, setError] = useState('');
+    const [isFeishuEnv, setIsFeishuEnv] = useState(false);
+    const [checkingEnv, setCheckingEnv] = useState(true);
+
+    useEffect(() => {
+        const getQueryParam = (param) => new URLSearchParams(window.location.search).get(param);
+        const appId = getQueryParam('appId');
+        console.log("--- [Feishu Auth Hook] Initializing ---");
+        console.log(`- appId from URL: ${appId}`);
+
+        // Poll for the Feishu SDK to be ready
+        let checks = 0;
+        const maxChecks = 6; // 6 * 500ms = 3 seconds timeout
+        const intervalId = setInterval(() => {
+            console.log(`- Polling for SDK, check #${checks + 1}`);
+            if (window.h5sdk && window.tt) {
+                clearInterval(intervalId);
+                console.log("- SDK found! Proceeding with auth.");
+                setIsFeishuEnv(true);
+                setCheckingEnv(false);
+
+                // Now proceed with authentication
+                const userFromStorage = localStorage.getItem('user');
+                if (userFromStorage && userFromStorage !== "undefined") {
+                    console.log("- Found user in localStorage. Skipping auth flow.");
+                    setUser(JSON.parse(userFromStorage));
+                    setLoading(false);
+                    return;
+                }
+                console.log("- No user in localStorage.");
+
+                if (!appId) {
+                    console.error("[Feishu Auth Hook Error] appId is missing from URL.");
+                    setError('URL中缺少appId参数。');
+                    setLoading(false);
+                    return;
+                }
+
+                window.h5sdk.ready(() => {
+                    console.log("- h5sdk is ready. Calling tt.requestAccess.");
+                    console.log(`- Passing appId to tt.requestAccess: ${appId}`); // Log the appId being passed
+                   // window.h5sdk.biz.navigation.setTitle({ title: '大仓调拨申请' });
+
+                    const authTimeout = setTimeout(() => {
+                        console.error("[Feishu Auth Hook Error] tt.requestAccess timed out after 5 seconds.");
+                        setError("飞书授权请求超时，请稍后重试。");
+                        setLoading(false);
+                    }, 10000);
+
+                    tt.requestAccess({
+                        appID: appId,
+                        scopeList: [], // Added the missing scopeList parameter
+                        success: (res) => {
+                            clearTimeout(authTimeout);
+                            console.log("- tt.requestAccess succeeded. Code:", res.code);
+                            console.log("- Sending code to backend...");
+                            fetch('/api/feishu/auth', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ code: res.code, appID: appId }),
+                            })
+                            .then(response => {
+                                if (!response.ok) {
+                                    console.error("[Feishu Auth Hook Error] Backend fetch failed.", response);
+                                    throw new Error('获取用户信息失败');
+                                }
+                                return response.json();
+                            })
+                            .then(userData => {
+                                console.log("- Backend returned user data:", userData);
+                                localStorage.setItem('user', JSON.stringify(userData));
+                                setUser(userData);
+                            })
+                            .catch(err => {
+                                console.error("[Feishu Auth Hook Error] Error in fetch chain:", err);
+                                setError(err.message);
+                            })
+                            .finally(() => setLoading(false));
+                        },
+                        fail: (err) => {
+                            clearTimeout(authTimeout);
+                            console.error("[Feishu Auth Hook Error] tt.requestAccess failed:", err);
+                            setError(`飞书授权失败: ${JSON.stringify(err)}`);
+                            setLoading(false);
+                        },
+                    });
+                });
+            } else {
+                checks++;
+                if (checks >= maxChecks) {
+                    clearInterval(intervalId);
+                    console.warn('[Feishu Auth Hook] SDK polling timed out.');
+                    setCheckingEnv(false);
+                    setIsFeishuEnv(false);
+                    setLoading(false);
+                }
+            }
+        }, 500);
+
+        return () => clearInterval(intervalId);
+    }, []);
+
+    return { user, loading, error, isFeishuEnv, checkingEnv };
+};
+
 
 const ShopView = ({ 
     onAddToCart, 
@@ -176,7 +288,7 @@ const ShopView = ({
     );
 };
 
-const CartView = ({ cartItems, onUpdateCart, storeId, refetchData }) => {
+const CartView = ({ user, cartItems, onUpdateCart, storeId, refetchData }) => {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
@@ -254,13 +366,19 @@ const CartView = ({ cartItems, onUpdateCart, storeId, refetchData }) => {
                 quantity: item.quantity,
             }));
 
+            const payload = {
+                items: itemsToSubmit,
+                requestedBy: user?.name || '未知飞书用户', // Add user name to the payload
+                // 'notes' can be added here if there's a notes field in the UI
+            };
+
             const response = await fetch('/api/transfer-requests', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'x-current-store-id': storeId,
                 },
-                body: JSON.stringify({ items: itemsToSubmit }),
+                body: JSON.stringify(payload),
             });
 
             if (!response.ok) {
@@ -437,6 +555,18 @@ const MobileRequestPage = () => {
     const [loading, setLoading] = useState(true);
     const [ingredientsWithVirtualStock, setIngredientsWithVirtualStock] = useState([]);
     const [historyRequests, setHistoryRequests] = useState([]);
+    const { user, loading: userLoading, error: userError, isFeishuEnv, checkingEnv } = useUser();
+    
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const storeIdFromUrl = params.get('store');
+        if (storeIdFromUrl) {
+            setStoreId(storeIdFromUrl);
+        } else {
+            setError('URL中未指定门店ID，请通过有效的二维码或链接访问。');
+            setLoading(false);
+        }
+    }, []);
 
     const fetchData = useCallback(async () => {
         if (!storeId) return;
@@ -484,21 +614,13 @@ const MobileRequestPage = () => {
             setLoading(false);
         }
     }, [storeId]);
-
+    
     useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const storeIdFromUrl = params.get('store');
-        if (storeIdFromUrl) {
-            setStoreId(storeIdFromUrl);
-        } else {
-            setError('URL中未指定门店ID，请通过有效的二维码或链接访问。');
-            setLoading(false);
+        // Only fetch main data if we are in the correct env and have a user and storeId
+        if (isFeishuEnv && user && storeId) {
+            fetchData();
         }
-    }, []);
-
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+    }, [isFeishuEnv, user, storeId, fetchData]);
     
     const handleAddToCart = (item) => {
         setCart(prevCart => {
@@ -524,7 +646,7 @@ const MobileRequestPage = () => {
         }
         switch (view) {
             case 'cart':
-                return <CartView cartItems={cart} onUpdateCart={handleUpdateCart} storeId={storeId} refetchData={fetchData} />;
+                return <CartView user={user} cartItems={cart} onUpdateCart={handleUpdateCart} storeId={storeId} refetchData={fetchData} />;
             case 'history':
                 return <HistoryView requests={historyRequests} loading={loading} error={error} />;
             case 'shop':
@@ -541,13 +663,46 @@ const MobileRequestPage = () => {
         }
     };
     
-    if (error && !loading) {
-        return <Container sx={{ mt: 2 }}><Alert severity="error">{error}</Alert></Container>;
+    if (checkingEnv || userLoading) {
+        return (
+            <Container sx={{ mt: 4, textAlign: 'center' }}>
+                <CircularProgress />
+                <Typography sx={{ mt: 2 }}>
+                    {checkingEnv ? '正在检查运行环境...' : '正在获取用户信息...'}
+                </Typography>
+            </Container>
+        );
+    }
+
+    if (!isFeishuEnv) {
+        return (
+            <Container sx={{ mt: 4 }}>
+                <Paper sx={{ p: 3, textAlign: 'center', backgroundColor: 'warning.light' }}>
+                    <ReportProblemIcon sx={{ fontSize: 48, color: 'warning.main' }} />
+                    <Typography variant="h5" sx={{ mt: 2, fontWeight: 'bold' }}>
+                        请在飞书客户端中打开
+                    </Typography>
+                    <Typography sx={{ mt: 1 }}>
+                        此页面需要飞书应用环境支持，请复制链接并在飞书中访问。
+                    </Typography>
+                </Paper>
+            </Container>
+        );
+    }
+    
+    if (userError) {
+         return <Container sx={{ mt: 2 }}><Alert severity="error">{userError}</Alert></Container>;
     }
 
     return (
         <Box sx={{ pb: 7 }}>
             <Container>
+                <Box sx={{ display: 'flex', alignItems: 'center', p: 1, mb: 1 }}>
+                    <AccountCircleIcon sx={{ color: 'action.active', mr: 1 }} />
+                    <Typography variant="subtitle1">
+                        欢迎, {user?.name || '用户'}
+                    </Typography>
+                </Box>
                 {renderView()}
             </Container>
             <Paper sx={{ position: 'fixed', bottom: 0, left: 0, right: 0 }} elevation={3}>

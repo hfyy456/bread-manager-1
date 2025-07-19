@@ -18,6 +18,9 @@ import BreadTypeEditor from './components/BreadTypeEditor';
 import { SnackbarProvider } from './components/SnackbarProvider.jsx';
 import ReceivingPage from './components/ReceivingPage';
 import WarehousePage from './components/WarehousePage';
+import ApprovalPage from './components/ApprovalPage';
+import { useStore } from './components/StoreContext.jsx';
+import StoreSelectionPage from './components/StoreSelectionPage.jsx';
 
 // Lazy load components
 const IngredientsPage = lazy(() => import('./components/IngredientsPage'));
@@ -45,6 +48,20 @@ const theme = createTheme({
 });
 
 function App() {
+  const { currentStore, loading } = useStore();
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!currentStore) {
+    return <StoreSelectionPage />;
+  }
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -75,6 +92,7 @@ function App() {
                   <Route path="/daily-report-preview" element={<DailyReportPreviewPage />} />
                   <Route path="/receiving" element={<ReceivingPage />} />
                   <Route path="/warehouse" element={<WarehousePage />} />
+                  <Route path="/approvals" element={<ApprovalPage />} />
                     <Route path="/bread-type-editor" element={<BreadTypeEditor />} />
                     <Route path="/bread-type-editor/:id" element={<BreadTypeEditor />} />
                 </Routes>

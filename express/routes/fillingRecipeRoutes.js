@@ -7,9 +7,9 @@ const {
   deleteFillingRecipe 
 } = require('../controllers/fillingRecipeController');
 
-router.post('/filling-recipes/list', getAllFillingRecipes);
-router.post('/filling-recipes/create', createFillingRecipe);
-router.put('/filling-recipes/:id', updateFillingRecipe);
-router.delete('/filling-recipes/:id', deleteFillingRecipe);
+router.post('/list', getAllFillingRecipes);
+router.post('/create', createFillingRecipe);
+router.put('/:id', updateFillingRecipe);
+router.delete('/:id', deleteFillingRecipe);
  
 module.exports = router; 
