@@ -13,6 +13,10 @@ window.fetch = function (url, options) {
   
   const storeId = lockedStoreId || regularStoreId;
 
+  // --- 增加日志 ---
+  console.log(`[Global Fetch] Requesting URL: ${url}`, { storeId, options });
+  // -----------------
+
   const newOptions = { ...options };
   
   if (!newOptions.headers) {

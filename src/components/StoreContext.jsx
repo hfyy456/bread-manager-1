@@ -48,20 +48,25 @@ export const StoreProvider = ({ children }) => {
               console.error(`锁定的门店ID "${lockedStoreId}" 无效，将使用默认门店。`);
               sessionStorage.removeItem('lockedStoreId'); // 清除无效的ID
               setIsStoreLocked(false);
-              storeToSet = fetchedStores[0];
+              // Fallback to localStorage or nothing
+              const savedStoreId = localStorage.getItem('currentStoreId');
+              storeToSet = fetchedStores.find(s => s._id === savedStoreId);
             }
           } else {
             // 优先级 2: LocalStorage
             const savedStoreId = localStorage.getItem('currentStoreId');
-            storeToSet = fetchedStores.find(s => s._id === savedStoreId) || fetchedStores[0];
+            storeToSet = fetchedStores.find(s => s._id === savedStoreId); // No fallback to first item
           }
           
           setCurrentStore(storeToSet);
 
-          // 仅在常规（未锁定）模式下管理localStorage
-          if (!lockedStoreId && localStorage.getItem('currentStoreId') !== storeToSet._id) {
+          // 仅在常规（未锁定）模式下，并且成功确定了门店的情况下，才同步localStorage
+          if (!lockedStoreId && storeToSet && localStorage.getItem('currentStoreId') !== storeToSet._id) {
             localStorage.setItem('currentStoreId', storeToSet._id);
           }
+        } else {
+          // 如果没有门店，确保 currentStore 为 null
+          setCurrentStore(null);
         }
       } catch (err) {
         setError(err.message);

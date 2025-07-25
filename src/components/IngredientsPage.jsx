@@ -3,7 +3,7 @@ import { Container, Typography, Paper, Table, TableBody, TableCell, TableContain
 import { InfoOutlined as InfoOutlinedIcon, HelpOutline as HelpOutlineIcon, CameraAlt as CameraAltIcon, KeyboardArrowDown as KeyboardArrowDownIcon, CompareArrows as CompareArrowsIcon, Download as DownloadIcon } from '@mui/icons-material';
 import { visuallyHidden } from '@mui/utils';
 import { Link } from 'react-router-dom';
-import moment from 'moment';
+import { format } from 'date-fns';
 import { POSTNAME } from '../config/constants';
 import { useSnackbar } from './SnackbarProvider.jsx';
 import { useStore } from './StoreContext.jsx'; // 1. 引入 useStore
@@ -41,17 +41,18 @@ function stableSort(array, comparator) {
 
 const headCells = [
   { id: 'name', numeric: false, disablePadding: false, label: '原料名称', sortable: true, width: '20%' },
-  { id: 'post', numeric: false, disablePadding: false, label: '负责岗位', sortable: false, width: '18%' },
+  { id: 'post', numeric: false, disablePadding: false, label: '负责岗位', sortable: false, width: '15%' },
+  { id: 'mainWarehouseStock', numeric: true, disablePadding: false, label: '大仓库存', sortable: true, align: 'right', width: '10%' },
   { id: 'unit', numeric: false, disablePadding: false, label: '采购单位', sortable: true, align: 'right', width: '8%' },
-  { id: 'specs', numeric: false, disablePadding: false, label: '规格', sortable: false, align: 'right', width: '15%' },
-  { id: 'price', numeric: true, disablePadding: false, label: '采购单价', sortable: true, align: 'right', width: '10%' },
-  { id: 'pricePerBaseUnit', numeric: true, disablePadding: false, label: '单价/(克)', sortable: true, align: 'right', width: '12%' },
+  { id: 'specs', numeric: false, disablePadding: false, label: '规格', sortable: false, align: 'right', width: '12%' },
+  { id: 'price', numeric: true, disablePadding: false, label: '采购单价', sortable: true, align: 'right', 'width': '9%' },
+  { id: 'pricePerBaseUnit', numeric: true, disablePadding: false, label: '单价/(克)', sortable: true, align: 'right', width: '10%' },
   { id: 'currentStock', numeric: true, disablePadding: false, label: '总库存', sortable: true, align: 'right', width: '8%' },
-  { id: 'totalValue', numeric: true, disablePadding: false, label: '总价值', sortable: true, align: 'right', width: '9%' },
+  { id: 'totalValue', numeric: true, disablePadding: false, label: '总价值', sortable: true, align: 'right', width: '8%' },
 ];
 
 const IngredientCard = ({ ingredient, posts, onRowToggle, isExpanded }) => {
-  const { name, post, unit, specs, price, pricePerBaseUnit, currentStock, totalValue, stockByPost } = ingredient;
+  const { name, post, unit, specs, price, pricePerBaseUnit, currentStock, totalValue, stockByPost, mainWarehouseStock } = ingredient;
   const cardSx = { mb: 2, boxShadow: 3, '&:hover': { boxShadow: 6 } };
 
   return (
@@ -59,13 +60,13 @@ const IngredientCard = ({ ingredient, posts, onRowToggle, isExpanded }) => {
       <CardContent onClick={() => onRowToggle(ingredient._id)} sx={{ cursor: 'pointer' }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
           <Typography variant="h6" component="div" sx={{ fontWeight: 'bold' }}>{name}</Typography>
-          <Chip label={`${currentStock.toFixed(2)} ${unit}`} color={currentStock > 0 ? 'success' : 'error'} size="small" />
+          <Chip label={`总库存: ${currentStock.toFixed(2)} ${unit}`} color={currentStock > 0 ? 'success' : 'error'} size="small" />
         </Box>
         <Grid container spacing={1} sx={{ fontSize: '0.875rem' }}>
+          <Grid item xs={6}><Typography variant="body2" color="text.secondary">大仓库存: {mainWarehouseStock?.quantity.toFixed(2) || '0.00'} {unit}</Typography></Grid>
           <Grid item xs={6}><Typography variant="body2" color="text.secondary">总价值: ¥{totalValue.toFixed(2)}</Typography></Grid>
           <Grid item xs={6}><Typography variant="body2" color="text.secondary">采购单价: ¥{price.toFixed(2)} / {unit}</Typography></Grid>
           <Grid item xs={6}><Typography variant="body2" color="text.secondary">规格: {specs}</Typography></Grid>
-          <Grid item xs={6}><Typography variant="body2" color="text.secondary">单价/(克): ¥{pricePerBaseUnit.toFixed(4)}</Typography></Grid>
         </Grid>
         <Box sx={{display: 'flex', justifyContent: 'center', pt: 1, color: 'text.secondary'}}>
           <KeyboardArrowDownIcon sx={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
@@ -324,16 +325,20 @@ const IngredientsPage = () => {
       });
       const result = await response.json();
       if (result.success) {
-        showSnackbar('快照已成功创建！', 'success');
+        showSnackbar('库存清理操作已成功完成！', 'success');
         fetchSnapshots(); // Refresh snapshot list
+        // 重新获取当前库存数据以刷新页面显示
+        if (clearDataOnCreate) {
+          fetchIngredientsAndSetStocks(); // 如果清理了库存，需要重新获取数据
+        }
         handleCloseDialog();
         setSnapshotNotes('');
         setClearDataOnCreate(false);
       } else {
-        throw new Error(result.message || '创建快照失败');
+        throw new Error(result.message || '清理库存失败');
       }
     } catch (err) {
-      showSnackbar(`创建快照时出错: ${err.message}`, 'error');
+      showSnackbar(`清理库存时出错: ${err.message}`, 'error');
     } finally {
       setIsSnapshotting(false);
     }
@@ -363,14 +368,23 @@ const IngredientsPage = () => {
   // Calculate grand total inventory value -- THIS SECTION IS BEING REMOVED
   // let grandTotalInventoryValue = 0; // This line is removed
   const processedIngredients = useMemo(() => {
-    const ingredientList = isSnapshotView ? (snapshotData?.ingredients || []) : allIngredients;
+    const sourceData = isSnapshotView && snapshotData ? snapshotData.ingredients : allIngredients;
     
-    return ingredientList.map(ing => {
-      const stockByPost = ing.stockByPost || {};
-      const currentStock = Object.values(stockByPost).reduce((acc, { quantity }) => acc + (quantity || 0), 0);
-      const totalValue = currentStock * (ing.price || 0);
-      const pricePerBaseUnit = (ing.price && ing.norms) ? ing.price / ing.norms : 0;
+    return sourceData.map(ing => {
+      const mainStock = ing.mainWarehouseStock?.quantity || 0;
+      let postStock = 0;
+      if (ing.stockByPost) {
+        postStock = Object.values(ing.stockByPost).reduce((sum, post) => sum + (post?.quantity || 0), 0);
+      }
       
+      const currentStock = mainStock + postStock;
+      const price = ing.price || 0;
+      const totalValue = currentStock * price;
+
+      const pricePerBaseUnit = (ing.baseUnit && ing.norms && ing.price) 
+          ? (ing.price / (ing.norms / (ing.baseUnit === 'kg' ? 1000 : 1))) 
+          : 0;
+
       return {
         ...ing,
         currentStock,
@@ -378,7 +392,7 @@ const IngredientsPage = () => {
         pricePerBaseUnit,
       };
     });
-  }, [allIngredients, isSnapshotView, snapshotData]);
+  }, [allIngredients, snapshotData, isSnapshotView]);
   
   // grandTotalInventoryValue = useMemo(() => { // This useMemo hook for grandTotalInventoryValue is removed
   //   return ingredientsWithCalculatedValues.reduce((sum, ingredient) => sum + ingredient.totalValue, 0);
@@ -493,7 +507,7 @@ const IngredientsPage = () => {
             startIcon={<CameraAltIcon />}
             sx={{ py: 1.5, px: 3 }}
           >
-            生成新快照
+            清理岗位库存
           </Button>
       </Box>
 
@@ -515,7 +529,7 @@ const IngredientsPage = () => {
                         <MenuItem value="current"><em>当前实时库存</em></MenuItem>
                         {snapshots.map(snap => (
                             <MenuItem key={snap._id} value={snap._id}>
-                                {`${snap.year}年 第${snap.weekOfYear}周 (创建于 ${moment(snap.createdAt).format('YYYY-MM-DD')})`}
+                                {`${snap.year}年 第${snap.weekOfYear}周 (创建于 ${format(new Date(snap.createdAt), 'yyyy-MM-dd')})`}
                             </MenuItem>
                         ))}
                     </Select>
@@ -538,7 +552,7 @@ const IngredientsPage = () => {
             <InfoOutlinedIcon fontSize="small" />
             <Typography variant="body2">
                 {isSnapshotView 
-                    ? `您正在查看 ${moment(snapshotData?.createdAt).format('YYYY年MM月DD日')} 创建的历史快照。`
+                    ? `您正在查看 ${format(new Date(snapshotData?.createdAt), 'yyyy年MM月dd日')} 创建的历史快照。`
                     : '此页面汇总所有岗位盘点的实时库存数据。总库存为各岗位库存之和。'}
             </Typography>
         </Stack>
@@ -583,7 +597,7 @@ const IngredientsPage = () => {
               </TableHead>
               <TableBody>
                 {visibleRows.map((ingredient) => {
-                  const { _id, name, unit, specs, price, currentStock, totalValue, stockByPost, pricePerBaseUnit } = ingredient;
+                  const { _id, name, unit, specs, price, currentStock, totalValue, stockByPost, pricePerBaseUnit, mainWarehouseStock } = ingredient;
                   const isExpanded = expandedRowId === _id;
                   
                   return (
@@ -614,6 +628,7 @@ const IngredientsPage = () => {
                             })}
                           </Box>
                         </TableCell>
+                        <TableCell align="right" sx={commonCellSx}>{mainWarehouseStock?.quantity.toFixed(2) || '0.00'}</TableCell>
                         <TableCell align="right" sx={commonCellSx}>{unit}</TableCell>
                         <TableCell align="right" sx={commonCellSx}>{specs}</TableCell>
                         <TableCell align="right" sx={commonCellSx}>¥{price.toFixed(2)}</TableCell>
@@ -686,7 +701,7 @@ const IngredientsPage = () => {
               >
                 <MenuItem value="current"><em>当前实时库存</em></MenuItem>
                 {snapshots.map(s => (
-                  <MenuItem key={s._id} value={s._id}>{moment(s.createdAt).format('YYYY-MM-DD HH:mm:ss')} - {s.notes || '无备注'}</MenuItem>
+                  <MenuItem key={s._id} value={s._id}>{format(new Date(s.createdAt), 'yyyy-MM-dd HH:mm:ss')} - {s.notes || '无备注'}</MenuItem>
                 ))}
               </Select>
             </FormControl>
@@ -702,7 +717,7 @@ const IngredientsPage = () => {
                 对比快照/计算消耗
               </Button>
               <Button variant="contained" onClick={handleOpenDialog} startIcon={<CameraAltIcon />}>
-                生成新快照
+                清理岗位库存
               </Button>
               <Tooltip title="将当前库存数据还原至所选快照的状态">
                 <span>
@@ -778,7 +793,7 @@ const IngredientsPage = () => {
                 <Select value={snapshotA} label="起始节点" onChange={(e) => setSnapshotA(e.target.value)}>
                   <MenuItem value="current"><em>当前实时库存</em></MenuItem>
                   {snapshots.map(s => (
-                    <MenuItem key={s._id} value={s._id}>{moment(s.createdAt).format('YYYY-MM-DD HH:mm:ss')}</MenuItem>
+                    <MenuItem key={s._id} value={s._id}>{format(new Date(s.createdAt), 'yyyy-MM-dd HH:mm:ss')}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
@@ -789,7 +804,7 @@ const IngredientsPage = () => {
                 <Select value={snapshotB} label="结束节点" onChange={(e) => setSnapshotB(e.target.value)}>
                   <MenuItem value="current"><em>当前实时库存</em></MenuItem>
                   {snapshots.map(s => (
-                    <MenuItem key={s._id} value={s._id}>{moment(s.createdAt).format('YYYY-MM-DD HH:mm:ss')}</MenuItem>
+                    <MenuItem key={s._id} value={s._id}>{format(new Date(s.createdAt), 'yyyy-MM-dd HH:mm:ss')}</MenuItem>
                   ))}
                 </Select>
               </FormControl>

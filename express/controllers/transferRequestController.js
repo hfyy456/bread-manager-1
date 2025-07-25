@@ -48,9 +48,19 @@ exports.getRequestsByStore = async (req, res) => {
     }
 
     try {
-        const requests = await TransferRequest.find({ storeId })
+        const { startDate, endDate } = req.query;
+        let filter = { storeId };
+
+        if (startDate && endDate) {
+            filter.createdAt = {
+                $gte: new Date(new Date(startDate).setHours(0, 0, 0, 0)),
+                $lte: new Date(new Date(endDate).setHours(23, 59, 59, 999)),
+            };
+        }
+
+        const requests = await TransferRequest.find(filter)
             .sort({ createdAt: -1 }) // Show latest requests first
-            .limit(100); // Limit to a reasonable number for mobile view
+            .limit(200); // Limit to a reasonable number
 
         res.json(requests);
     } catch (error) {

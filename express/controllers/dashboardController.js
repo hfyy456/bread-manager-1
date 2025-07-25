@@ -1,25 +1,25 @@
 const DailyReport = require('../models/DailyReport');
-const moment = require('moment');
+const { format, isValid, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays } = require('date-fns');
 
 // Helper to get date ranges, considering Beijing Time (UTC+8)
 const getDateRange = (period, targetDateStr) => {
-    const targetDateInBJT = moment(targetDateStr).utcOffset('+08:00');
+    const targetDate = new Date(targetDateStr);
     let startDate, endDate;
 
     if (period === 'daily') {
-        startDate = targetDateInBJT.clone().startOf('day');
-        endDate = targetDateInBJT.clone().endOf('day');
+        startDate = startOfDay(targetDate);
+        endDate = endOfDay(targetDate);
     } else if (period === 'weekly') {
-        startDate = targetDateInBJT.clone().startOf('isoWeek');
-        endDate = targetDateInBJT.clone().endOf('isoWeek');
+        startDate = startOfWeek(targetDate, { weekStartsOn: 1 }); // ISO week starts on Monday
+        endDate = endOfWeek(targetDate, { weekStartsOn: 1 });
     } else if (period === 'monthly') {
-        startDate = targetDateInBJT.clone().startOf('month');
-        endDate = targetDateInBJT.clone().endOf('month');
+        startDate = startOfMonth(targetDate);
+        endDate = endOfMonth(targetDate);
     } else {
         throw new Error('Invalid period specified');
     }
     
-    return { startDate: startDate.toDate(), endDate: endDate.toDate() };
+    return { startDate, endDate };
 };
 
 const getDashboardSummary = async (req, res) => {
@@ -33,7 +33,7 @@ const getDashboardSummary = async (req, res) => {
         if (!periodType || !['daily', 'weekly', 'monthly'].includes(periodType)) {
             return res.status(400).json({ success: false, message: '请提供有效的汇总周期 (daily, weekly, monthly)' });
         }
-        if (!date || !moment(date, 'YYYY-MM-DD', true).isValid()) {
+        if (!date || !isValid(new Date(date))) {
             return res.status(400).json({ success: false, message: '请提供有效的日期 (YYYY-MM-DD)' });
         }
 
@@ -48,23 +48,23 @@ const getDashboardSummary = async (req, res) => {
         const reports = await DailyReport.find(query).lean();
 
         let trendStartDate, trendEndDate;
-        const targetDateInBJT = moment(date).utcOffset('+08:00');
+        const targetDate = new Date(date);
 
         if (periodType === 'daily') {
-            trendStartDate = targetDateInBJT.clone().subtract(6, 'days').startOf('day');
-            trendEndDate = targetDateInBJT.clone().endOf('day');
+            trendStartDate = startOfDay(subDays(targetDate, 6));
+            trendEndDate = endOfDay(targetDate);
         } else if (periodType === 'weekly') {
-            trendStartDate = targetDateInBJT.clone().startOf('isoWeek');
-            trendEndDate = targetDateInBJT.clone().endOf('isoWeek');
+            trendStartDate = startOfWeek(targetDate, { weekStartsOn: 1 });
+            trendEndDate = endOfWeek(targetDate, { weekStartsOn: 1 });
         } else { // monthly
-            trendStartDate = targetDateInBJT.clone().startOf('month');
-            trendEndDate = targetDateInBJT.clone().endOf('month');
+            trendStartDate = startOfMonth(targetDate);
+            trendEndDate = endOfMonth(targetDate);
         }
 
         // 趋势查询也加入 storeId
         const trendQuery = {
             storeId: currentStoreId,
-            date: { $gte: trendStartDate.toDate(), $lte: trendEndDate.toDate() }
+            date: { $gte: trendStartDate, $lte: trendEndDate }
         };
 
         const reportsForTrend = await DailyReport.find(trendQuery).sort({ date: 'asc' }).lean();
@@ -74,7 +74,7 @@ const getDashboardSummary = async (req, res) => {
             data: {
                 periodReports: reports,
                 trendReports: reportsForTrend,
-                currentDate: moment(date).format('YYYY-MM-DD')
+                currentDate: format(new Date(date), 'yyyy-MM-dd')
             }
         });
 

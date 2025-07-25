@@ -1,7 +1,7 @@
 const Ingredient = require("../models/Ingredient");
 const StoreInventory = require('../models/StoreInventory'); // 新增
 const InventorySnapshot = require("../models/InventorySnapshot");
-const moment = require("moment");
+const { format, getYear, getWeek, startOfWeek } = require('date-fns');
 const POSTNAME = {
   1: "搅拌",
   2: "丹麦",
@@ -120,9 +120,9 @@ const createInventorySnapshot = async (req, res) => {
     const { notes, clearData } = req.body;
     const { currentStoreId } = req.user;
 
-    const now = moment();
-    const year = now.year();
-    const weekOfYear = now.week();
+    const now = new Date();
+    const year = getYear(now);
+    const weekOfYear = getWeek(now);
 
     // 1. 获取当前门店的所有库存记录，并关联查询原料信息
     const storeInventories = await StoreInventory.find({ storeId: currentStoreId })
@@ -286,9 +286,7 @@ const restoreInventoryFromSnapshot = async (req, res) => {
 
     res.json({
       success: true,
-      message: `库存已成功从 ${moment(snapshot.createdAt).format(
-        "YYYY-MM-DD"
-      )} 的快照中还原。`,
+      message: `库存已成功从 ${format(snapshot.createdAt, 'yyyy-MM-dd')} 的快照中还原。`,
     });
   } catch (error) {
     console.error("从快照还原库存失败:", error);
@@ -350,7 +348,7 @@ const exportInventoryExcel = async (req, res) => {
             post,
             stock.quantity,
             stock.unit,
-            stock.lastUpdated ? moment(stock.lastUpdated).format("YYYY-MM-DD HH:mm:ss") : "-"
+            stock.lastUpdated ? format(stock.lastUpdated, "yyyy-MM-dd HH:mm:ss") : "-"
           ]);
         }
       } else {
@@ -364,7 +362,7 @@ const exportInventoryExcel = async (req, res) => {
     // 写入buffer
     const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
     // 设置响应头
-    res.setHeader("Content-Disposition", `attachment; filename=inventory_snapshot_${moment(snapshot.createdAt).format("YYYYMMDD_HHmmss")}.xlsx`);
+    res.setHeader("Content-Disposition", `attachment; filename=inventory_snapshot_${format(snapshot.createdAt, "yyyyMMdd_HHmmss")}.xlsx`);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.send(buf);
   } catch (error) {

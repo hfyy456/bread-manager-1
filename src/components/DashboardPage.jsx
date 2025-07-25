@@ -6,8 +6,21 @@ import {
 import { Link as RouterLink } from 'react-router-dom';
 import { InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
 import { LineChart, Line, PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
-import moment from 'moment';
-import { DataContext } from './DataContext'; 
+import { 
+  formatDateInBJT, 
+  toBJTime, 
+  DATE_FORMATS,
+  startOfDay,
+  endOfDay,
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth,
+  addDays,
+  subDays
+} from '../utils/dateUtils';
+import { DataContext } from './DataContext';
+import { useStore } from './StoreContext';
 import { getBreadCostBreakdown, calculateDoughCost, calculateFillingCost, generateAggregatedRawMaterials } from '../utils/calculator'; 
 
 const MaterialConsumptionPanel = ({ consumptionData, ingredientsMap }) => {
@@ -127,9 +140,12 @@ const DashboardPage = () => {
         dataLoaded 
     } = useContext(DataContext);
 
+    // Get the current store using the useStore hook
+    const { currentStore } = useStore();
+
     useEffect(() => {
         const fetchDashboardReports = async () => {
-            if (!selectedDate || !dataLoaded) return;
+            if (!selectedDate || !dataLoaded || !currentStore) return;
             setLoading(true);
             setError(null);
             
@@ -137,7 +153,11 @@ const DashboardPage = () => {
             const periodType = periodMap[currentTab];
 
             try {
-                const response = await fetch(`/api/dashboard/summary?periodType=${periodType}&date=${selectedDate}`);
+                const response = await fetch(`/api/dashboard/summary?periodType=${periodType}&date=${selectedDate}`, {
+                    headers: {
+                        'x-current-store-id': currentStore._id // Add the store ID to the request headers
+                    }
+                });
                 const result = await response.json();
                 if (!response.ok || !result.success) {
                     throw new Error(result.message || `获取看板数据失败`);
@@ -153,7 +173,7 @@ const DashboardPage = () => {
         };
 
         fetchDashboardReports();
-    }, [selectedDate, currentTab, dataLoaded]);
+    }, [selectedDate, currentTab, dataLoaded, currentStore]);
 
     const processedData = useMemo(() => {
         if (!dataLoaded || !rawReports.periodReports) {
@@ -306,35 +326,41 @@ const DashboardPage = () => {
         const trendDataMap = new Map();
         const periodMap = { 0: 'daily', 1: 'weekly', 2: 'monthly' };
         const periodType = periodMap[currentTab];
-        const targetDateInBJT = moment(selectedDate).utcOffset('+08:00');
+        const targetDateInBJT = toBJTime(selectedDate);
         const trendFormat = 'MM-DD';
 
         // Initialize the trend map with all days in the period to ensure a continuous axis.
         if (periodType === 'daily') {
-            const startDate = targetDateInBJT.clone().subtract(6, 'days');
-            for (let m = startDate; m.isSameOrBefore(targetDateInBJT, 'day'); m.add(1, 'days')) {
-                const dateKey = m.format(trendFormat);
+            const startDate = subDays(targetDateInBJT, 6);
+            let currentDate = startDate;
+            while (currentDate <= targetDateInBJT) {
+                const dateKey = formatDateInBJT(currentDate, DATE_FORMATS.MONTH_DAY);
                 trendDataMap.set(dateKey, { date: dateKey, productionValue: 0, wasteValue: 0 });
+                currentDate = addDays(currentDate, 1);
             }
         } else if (periodType === 'weekly') {
-            const startDate = targetDateInBJT.clone().startOf('isoWeek');
-            const endDate = targetDateInBJT.clone().endOf('isoWeek');
-            for (let m = startDate; m.isSameOrBefore(endDate, 'day'); m.add(1, 'days')) {
-                const dateKey = m.format(trendFormat);
+            const startDate = startOfWeek(targetDateInBJT, { weekStartsOn: 1 });
+            const endDate = endOfWeek(targetDateInBJT, { weekStartsOn: 1 });
+            let currentDate = startDate;
+            while (currentDate <= endDate) {
+                const dateKey = formatDateInBJT(currentDate, DATE_FORMATS.MONTH_DAY);
                 trendDataMap.set(dateKey, { date: dateKey, productionValue: 0, wasteValue: 0 });
+                currentDate = addDays(currentDate, 1);
             }
         } else { // monthly
-            const startDate = targetDateInBJT.clone().startOf('month');
-            const endDate = targetDateInBJT.clone().endOf('month');
-            for (let m = startDate; m.isSameOrBefore(endDate, 'day'); m.add(1, 'days')) {
-                const dateKey = m.format(trendFormat);
+            const startDate = startOfMonth(targetDateInBJT);
+            const endDate = endOfMonth(targetDateInBJT);
+            let currentDate = startDate;
+            while (currentDate <= endDate) {
+                const dateKey = formatDateInBJT(currentDate, DATE_FORMATS.MONTH_DAY);
                 trendDataMap.set(dateKey, { date: dateKey, productionValue: 0, wasteValue: 0 });
+                currentDate = addDays(currentDate, 1);
             }
         }
         
         // Populate the map with actual data from reports
         rawReports.trendReports.forEach(report => {
-            const dateKey = moment(report.date).utcOffset('+08:00').format(trendFormat);
+            const dateKey = formatDateInBJT(report.date, DATE_FORMATS.MONTH_DAY);
             
             let dailyProductionValue = 0;
             let dailyWasteValue = 0;

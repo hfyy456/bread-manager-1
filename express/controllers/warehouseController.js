@@ -3,14 +3,14 @@ const Ingredient = require('../models/Ingredient');
 
 // Get all ingredients with their main warehouse stock for the current store
 const getWarehouseStock = async (req, res) => {
-    const storeId = req.currentStoreId;
-    if (!storeId) {
-        return res.status(400).json({ message: '请求头中缺少门店ID (x-current-store-id)，无法获取库存。' });
-    }
-
     try {
-        const allIngredients = await Ingredient.find().lean();
-        const storeInventories = await StoreInventory.find({ storeId: storeId }).lean();
+        const storeId = req.header('x-current-store-id');
+        if (!storeId) {
+            return res.status(400).json({ message: 'Store ID is required in headers' });
+        }
+        
+        const allIngredients = await Ingredient.find({}).sort({ name: 1 }).lean();
+        const storeInventories = await StoreInventory.find({ storeId }).lean();
 
         const inventoryMap = storeInventories.reduce((map, item) => {
             if (item.ingredientId) {
@@ -19,39 +19,30 @@ const getWarehouseStock = async (req, res) => {
             return map;
         }, {});
 
-        let grandTotal = 0;
         const items = allIngredients.map(ingredient => {
             const inventoryItem = inventoryMap[ingredient._id.toString()];
-            // Use optional chaining (?.) for safety against missing nested fields
-            const quantity = inventoryItem?.mainWarehouseStock?.quantity || 0;
+            const mainStockQuantity = inventoryItem?.mainWarehouseStock?.quantity || 0;
             const price = ingredient.price || 0;
-            const totalPrice = quantity * price;
-
-            grandTotal += totalPrice;
+            const totalPrice = mainStockQuantity * price;
 
             return {
-                ingredient: {
-                    _id: ingredient._id,
-                    name: ingredient.name,
-                    unit: ingredient.unit,
-                    specs: ingredient.specs,
-                    price: price,
-                    post: ingredient.post, // Restore post information
-                },
+                ingredient: ingredient,
                 mainWarehouseStock: {
-                    quantity: quantity,
-                    // Use optional chaining here as well
+                    quantity: mainStockQuantity,
                     unit: inventoryItem?.mainWarehouseStock?.unit || ingredient.unit,
                 },
                 totalPrice: totalPrice.toFixed(2),
-                _id: inventoryItem ? inventoryItem._id : null
+                _id: inventoryItem?._id,
             };
         });
 
-        res.json({ items, grandTotal: grandTotal.toFixed(2) });
+        const grandTotal = items.reduce((sum, item) => sum + parseFloat(item.totalPrice), 0);
+
+        res.json({ success: true, items, grandTotal: grandTotal.toFixed(2) });
+
     } catch (error) {
         console.error('Error fetching warehouse stock:', error);
-        res.status(500).json({ message: '获取主仓库库存失败' });
+        res.status(500).json({ success: false, message: 'Server error while fetching stock' });
     }
 };
 

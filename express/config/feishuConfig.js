@@ -15,6 +15,10 @@ const feishuConfig = {
       APP_ID: "cli_a7021bacde3f900e",
       APP_SECRET: "1xSAYDjpbVv8rEQu9dP0GfRBmKf5jzEO",
     },
+    "cli_a8f5146d3479900b":{
+      APP_ID: "cli_a8f5146d3479900b",
+      APP_SECRET: "AfThnIUnsYKNzKtb9DvCKh8vxDOipBin",
+    }
 };
 
 module.exports = feishuConfig; 

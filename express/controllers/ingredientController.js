@@ -18,30 +18,28 @@ const getAllIngredients = async (req, res) => {
     // 2. 获取当前门店的库存记录
     const storeInventories = await StoreInventory.find({ storeId: currentStoreId }).lean();
     
-    // 3. 将库存记录转换为Map，方便快速查找: { ingredientId => stockByPost }
+    // 3. 将库存记录转换为Map，方便快速查找: { ingredientId => inventoryData }
     const inventoryMap = new Map(
-      storeInventories.map(inv => [inv.ingredientId.toString(), inv.stockByPost || {}])
+      storeInventories.map(inv => [
+        inv.ingredientId.toString(), 
+        { 
+          stockByPost: inv.stockByPost || {},
+          mainWarehouseStock: inv.mainWarehouseStock || { quantity: 0, unit: '' }
+        }
+      ])
     );
     
     // 4. 合并原料定义与门店库存
     const ingredientsWithStoreStock = allIngredients.map(ing => {
       // 从Map中获取当前原料在当前门店的库存信息
-      const stockByPost = inventoryMap.get(ing._id.toString()) || {};
+      const inventoryData = inventoryMap.get(ing._id.toString());
+      const stockByPost = inventoryData?.stockByPost || {};
+      const mainWarehouseStock = inventoryData?.mainWarehouseStock || { quantity: 0, unit: ing.unit };
       
-      // 计算总库存
-      let totalStock = 0;
-      if (Object.keys(stockByPost).length > 0) {
-        for (const stock of Object.values(stockByPost)) {
-          totalStock += stock.quantity || 0;
-        }
-      }
-
-      // 返回合并后的对象
-      // 注意：用从 StoreInventory 获取的 stockByPost 覆盖 Ingredient 中可能存在的旧数据
       return {
         ...ing,
-        stockByPost, // 门店专属库存
-        currentStock: totalStock // 门店专属总库存
+        stockByPost,         // 门店专属岗位库存
+        mainWarehouseStock,    // 门店专属大仓库存
       };
     });
 
