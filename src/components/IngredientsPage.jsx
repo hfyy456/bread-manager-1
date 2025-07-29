@@ -7,6 +7,9 @@ import { format } from 'date-fns';
 import { POSTNAME } from '../config/constants';
 import { useSnackbar } from './SnackbarProvider.jsx';
 import { useStore } from './StoreContext.jsx'; // 1. 引入 useStore
+import StockBreakdown from './StockBreakdown.jsx';
+import InventoryStats from './InventoryStats.jsx';
+import InventoryDebugger from './InventoryDebugger.jsx';
 
 // Helper functions for sorting
 function descendingComparator(a, b, orderBy) {
@@ -40,9 +43,9 @@ function stableSort(array, comparator) {
 }
 
 const headCells = [
-  { id: 'name', numeric: false, disablePadding: false, label: '原料名称', sortable: true, width: '20%' },
-  { id: 'post', numeric: false, disablePadding: false, label: '负责岗位', sortable: false, width: '15%' },
-  { id: 'mainWarehouseStock', numeric: true, disablePadding: false, label: '大仓库存', sortable: true, align: 'right', width: '10%' },
+  { id: 'name', numeric: false, disablePadding: false, label: '原料名称', sortable: true, width: '18%' },
+  { id: 'post', numeric: false, disablePadding: false, label: '负责岗位', sortable: false, width: '12%' },
+  { id: 'stockBreakdown', numeric: false, disablePadding: false, label: '库存分解', sortable: false, align: 'right', width: '15%' },
   { id: 'unit', numeric: false, disablePadding: false, label: '采购单位', sortable: true, align: 'right', width: '8%' },
   { id: 'specs', numeric: false, disablePadding: false, label: '规格', sortable: false, align: 'right', width: '12%' },
   { id: 'price', numeric: true, disablePadding: false, label: '采购单价', sortable: true, align: 'right', 'width': '9%' },
@@ -63,10 +66,19 @@ const IngredientCard = ({ ingredient, posts, onRowToggle, isExpanded }) => {
           <Chip label={`总库存: ${currentStock.toFixed(2)} ${unit}`} color={currentStock > 0 ? 'success' : 'error'} size="small" />
         </Box>
         <Grid container spacing={1} sx={{ fontSize: '0.875rem' }}>
-          <Grid item xs={6}><Typography variant="body2" color="text.secondary">大仓库存: {mainWarehouseStock?.quantity.toFixed(2) || '0.00'} {unit}</Typography></Grid>
+          <Grid item xs={12} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="body2" color="text.secondary">库存分解:</Typography>
+            <StockBreakdown 
+              mainWarehouseStock={mainWarehouseStock?.quantity || 0}
+              postStock={currentStock - (mainWarehouseStock?.quantity || 0)}
+              unit={unit}
+              compact={true}
+              showTooltip={true}
+            />
+          </Grid>
           <Grid item xs={6}><Typography variant="body2" color="text.secondary">总价值: ¥{totalValue.toFixed(2)}</Typography></Grid>
           <Grid item xs={6}><Typography variant="body2" color="text.secondary">采购单价: ¥{price.toFixed(2)} / {unit}</Typography></Grid>
-          <Grid item xs={6}><Typography variant="body2" color="text.secondary">规格: {specs}</Typography></Grid>
+          <Grid item xs={12}><Typography variant="body2" color="text.secondary">规格: {specs}</Typography></Grid>
         </Grid>
         <Box sx={{display: 'flex', justifyContent: 'center', pt: 1, color: 'text.secondary'}}>
           <KeyboardArrowDownIcon sx={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
@@ -144,56 +156,58 @@ const IngredientsPage = () => {
 
     setLoading(true);
     setError(null);
+    
     try {
+      // 使用优化的聚合查询
       const response = await fetch('/api/ingredients/list', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-current-store-id': currentStore._id, // 关键：在请求头中发送当前门店ID
+          'x-current-store-id': currentStore._id,
+          'Cache-Control': 'no-cache', // 确保获取最新数据
         },
-        body: JSON.stringify({}), // Empty body for POST
+        body: JSON.stringify({}),
       });
+      
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
+      
       const result = await response.json();
+      
       if (result.success && Array.isArray(result.data)) {
         setAllIngredients(result.data);
         
-        // Calculate and set stocks from stockByPost
+        // 优化：直接从聚合结果计算库存，减少循环计算
         const newStocks = {};
         result.data.forEach(ingredient => {
             let totalStockedFromPosts = 0;
-            if (ingredient.stockByPost) {
-                let postStocks = ingredient.stockByPost;
-                if (postStocks instanceof Map) {
-                    for (const [_postId, stockEntry] of postStocks) {
-                        if (stockEntry && typeof stockEntry.quantity === 'number') {
-                            totalStockedFromPosts += stockEntry.quantity;
-                        }
+            const postStocks = ingredient.stockByPost;
+            
+            if (postStocks && typeof postStocks === 'object') {
+                // 使用Object.values直接获取所有值，避免类型检查
+                Object.values(postStocks).forEach(stockEntry => {
+                    if (stockEntry?.quantity) {
+                        totalStockedFromPosts += stockEntry.quantity;
                     }
-                } else if (typeof postStocks === 'object' && postStocks !== null) {
-                    for (const postId in postStocks) {
-                        if (postStocks.hasOwnProperty(postId) && postStocks[postId] && typeof postStocks[postId].quantity === 'number') {
-                            totalStockedFromPosts += postStocks[postId].quantity;
-                        }
-                    }
-                }
+                });
             }
+            
             newStocks[ingredient.name] = totalStockedFromPosts;
         });
+        
         setStocks(newStocks);
-        console.log("Aggregated stocks initialized from stockByPost:", newStocks);
+        console.log("优化后的库存数据加载完成，原料数量:", result.data.length);
 
       } else {
-        console.error("Failed to fetch ingredients or data format is incorrect:", result.message || 'Unknown API error');
-        setError(result.message || 'Failed to load ingredients or data format is incorrect.');
+        console.error("获取原料数据失败:", result.message || 'Unknown API error');
+        setError(result.message || '获取原料数据失败');
         setAllIngredients([]);
         setStocks({});
       }
     } catch (err) {
-      console.error("Error fetching ingredients:", err);
-      setError(`Error fetching ingredients: ${err.message}`);
+      console.error("获取原料数据错误:", err);
+      setError(`获取原料数据错误: ${err.message}`);
       setAllIngredients([]);
       setStocks({});
     } finally {
@@ -490,6 +504,20 @@ const IngredientsPage = () => {
         原料库存总览
       </Typography>
 
+      {/* 库存统计概览 */}
+      <Box sx={{ mb: 3 }}>
+        <InventoryStats ingredients={processedIngredients} />
+      </Box>
+
+      {/* 开发环境调试组件 */}
+      {process.env.NODE_ENV === 'development' && (
+        <Box sx={{ mb: 3 }}>
+          <InventoryDebugger />
+        </Box>
+      )}
+
+
+
       <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3, gap: 2 }}>
          <Button
             variant="contained"
@@ -628,7 +656,15 @@ const IngredientsPage = () => {
                             })}
                           </Box>
                         </TableCell>
-                        <TableCell align="right" sx={commonCellSx}>{mainWarehouseStock?.quantity.toFixed(2) || '0.00'}</TableCell>
+                        <TableCell align="right" sx={commonCellSx}>
+                          <StockBreakdown 
+                            mainWarehouseStock={mainWarehouseStock?.quantity || 0}
+                            postStock={currentStock - (mainWarehouseStock?.quantity || 0)}
+                            unit={unit}
+                            compact={false}
+                            showTooltip={true}
+                          />
+                        </TableCell>
                         <TableCell align="right" sx={commonCellSx}>{unit}</TableCell>
                         <TableCell align="right" sx={commonCellSx}>{specs}</TableCell>
                         <TableCell align="right" sx={commonCellSx}>¥{price.toFixed(2)}</TableCell>

@@ -84,7 +84,10 @@ const InventoryCheckPage = () => {
     try {
       const response = await fetch('/api/ingredients/list', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-current-store-id': localStorage.getItem('currentStoreId')
+        },
         body: JSON.stringify({}),
       });
       if (!response.ok) {

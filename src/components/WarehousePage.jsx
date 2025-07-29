@@ -3,7 +3,9 @@ import {
     Container, Typography, Paper, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, TextField, Button, Box, Alert,
     Dialog, DialogActions, DialogContent, DialogTitle,
+    Card, CardContent, CardActions, Chip, IconButton, Divider
 } from '@mui/material';
+import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useStore } from './StoreContext';
 import { useSnackbar } from './SnackbarProvider';
 
@@ -27,6 +29,9 @@ const WarehousePage = () => {
     const [dirty, setDirty] = useState({});
     const [isDiffDialogOpen, setIsDiffDialogOpen] = useState(false);
     const [diffData, setDiffData] = useState([]);
+    const [warehouseManagers, setWarehouseManagers] = useState([]);
+    const [newManagerName, setNewManagerName] = useState('');
+    const [managersLoading, setManagersLoading] = useState(false);
     const { showSnackbar } = useSnackbar();
 
     const fetchWarehouseStock = useCallback(async () => {
@@ -57,9 +62,23 @@ const WarehousePage = () => {
         }
     }, [currentStore]);
 
+    const fetchWarehouseManagers = useCallback(async () => {
+        if (!currentStore) return;
+        try {
+            const response = await fetch(`/api/stores/${currentStore._id}`);
+            if (response.ok) {
+                const result = await response.json();
+                setWarehouseManagers(result.data?.warehouseManagers || []);
+            }
+        } catch (error) {
+            console.error('获取库管列表失败:', error);
+        }
+    }, [currentStore]);
+
     useEffect(() => {
         fetchWarehouseStock();
-    }, [fetchWarehouseStock]);
+        fetchWarehouseManagers();
+    }, [fetchWarehouseStock, fetchWarehouseManagers]);
 
     const handleStockChange = (ingredientId, value) => {
         setEditStock(prev => ({
@@ -136,6 +155,65 @@ const WarehousePage = () => {
         }
     };
 
+    const handleAddManager = async () => {
+        if (!newManagerName.trim()) {
+            showSnackbar('请输入库管姓名', 'warning');
+            return;
+        }
+
+        if (warehouseManagers.includes(newManagerName.trim())) {
+            showSnackbar('该库管已存在', 'warning');
+            return;
+        }
+
+        setManagersLoading(true);
+        try {
+            const updatedManagers = [...warehouseManagers, newManagerName.trim()];
+            const response = await fetch(`/api/stores/${currentStore._id}/warehouse-managers`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ warehouseManagers: updatedManagers }),
+            });
+
+            if (response.ok) {
+                setWarehouseManagers(updatedManagers);
+                setNewManagerName('');
+                showSnackbar('库管添加成功', 'success');
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.message || '添加库管失败');
+            }
+        } catch (error) {
+            showSnackbar(error.message, 'error');
+        } finally {
+            setManagersLoading(false);
+        }
+    };
+
+    const handleRemoveManager = async (managerName) => {
+        setManagersLoading(true);
+        try {
+            const updatedManagers = warehouseManagers.filter(name => name !== managerName);
+            const response = await fetch(`/api/stores/${currentStore._id}/warehouse-managers`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ warehouseManagers: updatedManagers }),
+            });
+
+            if (response.ok) {
+                setWarehouseManagers(updatedManagers);
+                showSnackbar('库管删除成功', 'success');
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.message || '删除库管失败');
+            }
+        } catch (error) {
+            showSnackbar(error.message, 'error');
+        } finally {
+            setManagersLoading(false);
+        }
+    };
+
     if (!currentStore) {
         return <Container><Typography>请先选择一个门店。</Typography></Container>;
     }
@@ -164,6 +242,59 @@ const WarehousePage = () => {
             </Box>
 
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+            {/* 库管配置区域 */}
+            <Card sx={{ mb: 3 }}>
+                <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                        库管配置
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        配置可以在移动端批准申请的库管人员
+                    </Typography>
+                    
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                        {warehouseManagers.map((manager) => (
+                            <Chip
+                                key={manager}
+                                label={manager}
+                                onDelete={() => handleRemoveManager(manager)}
+                                deleteIcon={<DeleteIcon />}
+                                color="primary"
+                                variant="outlined"
+                                disabled={managersLoading}
+                            />
+                        ))}
+                        {warehouseManagers.length === 0 && (
+                            <Typography variant="body2" color="text.secondary">
+                                暂无库管配置
+                            </Typography>
+                        )}
+                    </Box>
+                </CardContent>
+                <CardActions>
+                    <TextField
+                        size="small"
+                        placeholder="输入库管姓名"
+                        value={newManagerName}
+                        onChange={(e) => setNewManagerName(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handleAddManager()}
+                        disabled={managersLoading}
+                        sx={{ mr: 1 }}
+                    />
+                    <Button
+                        variant="contained"
+                        startIcon={<AddIcon />}
+                        onClick={handleAddManager}
+                        disabled={managersLoading || !newManagerName.trim()}
+                        size="small"
+                    >
+                        添加库管
+                    </Button>
+                </CardActions>
+            </Card>
+
+            <Divider sx={{ mb: 3 }} />
 
             <TableContainer component={Paper}>
                 <Table stickyHeader>

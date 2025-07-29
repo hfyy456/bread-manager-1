@@ -16,9 +16,11 @@ import DashboardPage from './components/DashboardPage';
 import { DataProvider } from "./components/DataContext.jsx";
 import BreadTypeEditor from './components/BreadTypeEditor';
 import { SnackbarProvider } from './components/SnackbarProvider.jsx';
+import { LoadingProvider } from './contexts/LoadingContext.jsx';
 import ReceivingPage from './components/ReceivingPage';
 import WarehousePage from './components/WarehousePage';
 import ApprovalPage from './components/ApprovalPage';
+import WarehouseStockTest from './components/WarehouseStockTest';
 import { useStore } from './components/StoreContext.jsx';
 import StoreSelectionPage from './components/StoreSelectionPage.jsx';
 
@@ -66,8 +68,9 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Router>
-        <DataProvider>
-          <SnackbarProvider>
+        <LoadingProvider>
+          <DataProvider>
+            <SnackbarProvider>
           <div className="min-h-screen bg-neutral-100">
             <Navbar />
             <main className="container mx-auto px-4 py-6">
@@ -93,14 +96,16 @@ function App() {
                   <Route path="/receiving" element={<ReceivingPage />} />
                   <Route path="/warehouse" element={<WarehousePage />} />
                   <Route path="/approvals" element={<ApprovalPage />} />
+                  <Route path="/warehouse-test" element={<WarehouseStockTest />} />
                     <Route path="/bread-type-editor" element={<BreadTypeEditor />} />
                     <Route path="/bread-type-editor/:id" element={<BreadTypeEditor />} />
                 </Routes>
               </Suspense>
             </main>
           </div>
-          </SnackbarProvider>
-        </DataProvider>
+            </SnackbarProvider>
+          </DataProvider>
+        </LoadingProvider>
       </Router>
     </ThemeProvider>
   );

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Container,
   Typography,
@@ -26,12 +26,20 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
-} from '@mui/material';
-import SaveIcon from '@mui/icons-material/Save';
-import { Add as AddIcon, Remove as RemoveIcon } from '@mui/icons-material';
+} from "@mui/material";
+import SaveIcon from "@mui/icons-material/Save";
+import { Add as AddIcon, Remove as RemoveIcon } from "@mui/icons-material";
 
 const POSTNAME = {
-  1: "搅拌", 2: "丹麦", 3: "整形", 4: "烤炉", 5: "冷加工", 6: "收银打包", 7: '水吧', 8: "馅料", 9: "小库房"
+  1: "搅拌",
+  2: "丹麦",
+  3: "整形",
+  4: "烤炉",
+  5: "冷加工",
+  6: "收银打包",
+  7: "水吧",
+  8: "馅料",
+  9: "小库房",
 };
 
 const Alert = React.forwardRef(function Alert(props, ref) {
@@ -42,15 +50,15 @@ const MobileInventoryCheck = () => {
   const [allIngredients, setAllIngredients] = useState([]);
   const [loadingIngredients, setLoadingIngredients] = useState(true);
   const [errorIngredients, setErrorIngredients] = useState(null);
-  
-  const [selectedPost, setSelectedPost] = useState('');
+
+  const [selectedPost, setSelectedPost] = useState("");
   const [postIngredients, setPostIngredients] = useState([]);
   const [stockInputs, setStockInputs] = useState({});
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [snackbarSeverity, setSnackbarSeverity] = useState('info');
+  const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [snackbarSeverity, setSnackbarSeverity] = useState("info");
 
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [pendingSubmitData, setPendingSubmitData] = useState(null);
@@ -60,17 +68,25 @@ const MobileInventoryCheck = () => {
     setLoadingIngredients(true);
     setErrorIngredients(null);
     try {
-      const response = await fetch('/api/ingredients/list', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/ingredients/list", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-current-store-id": localStorage.getItem("currentStoreId"),
+        },
         body: JSON.stringify({}),
       });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
       const result = await response.json();
       if (result.success && Array.isArray(result.data)) {
+        console.log("MobileInventoryCheck - 获取到的原料数据:", result.data);
+        console.log("第一个原料的post字段:", result.data[0]?.post);
         setAllIngredients(result.data);
       } else {
-        setErrorIngredients(result.message || 'Failed to load ingredients data.');
+        setErrorIngredients(
+          result.message || "Failed to load ingredients data."
+        );
       }
     } catch (err) {
       setErrorIngredients(`Error fetching ingredients: ${err.message}`);
@@ -85,18 +101,51 @@ const MobileInventoryCheck = () => {
 
   useEffect(() => {
     if (selectedPost && allIngredients.length > 0) {
-      const filtered = allIngredients.filter(ing => 
-        Array.isArray(ing.post) && ing.post.map(String).includes(String(selectedPost))
-      );
+      console.log("MobileInventoryCheck - 选择的岗位:", selectedPost);
+      console.log("MobileInventoryCheck - 所有原料数量:", allIngredients.length);
+      
+      // 修改过滤逻辑：根据stockByPost字段过滤，显示该岗位有库存的原料
+      const filtered = allIngredients.filter((ing, index) => {
+        // 检查该原料是否在选择的岗位有库存
+        const hasStockInPost = ing.stockByPost && 
+                              ing.stockByPost[selectedPost] && 
+                              ing.stockByPost[selectedPost].quantity > 0;
+        
+        // 或者检查该原料是否分配给该岗位（备用逻辑）
+        const isAssignedToPost = Array.isArray(ing.post) &&
+                                ing.post.map(String).includes(String(selectedPost));
+        
+        if (index < 3) { // 只打印前3个原料的详细信息
+          console.log(`原料 ${index}: ${ing.name}`, {
+            stockByPost: ing.stockByPost,
+            hasStockInPost: hasStockInPost,
+            post: ing.post,
+            isAssignedToPost: isAssignedToPost,
+            selectedPost: selectedPost,
+            finalResult: hasStockInPost || isAssignedToPost
+          });
+        }
+        
+        // 显示该岗位有库存的原料，或者分配给该岗位的原料
+        return hasStockInPost || isAssignedToPost;
+      });
+      
+      console.log("MobileInventoryCheck - 过滤后的原料:", filtered);
+      console.log("MobileInventoryCheck - 过滤后的原料数量:", filtered.length);
+      
       setPostIngredients(filtered);
       const initialInputs = {};
-      filtered.forEach(ing => {
-        let currentQuantity = '';
+      filtered.forEach((ing) => {
+        let currentQuantity = "";
         if (ing.stockByPost) {
-            const stockMap = new Map(Object.entries(ing.stockByPost));
-            if (stockMap.has(selectedPost) && stockMap.get(selectedPost) && typeof stockMap.get(selectedPost).quantity === 'number') {
-                currentQuantity = stockMap.get(selectedPost).quantity.toString();
-            }
+          const stockMap = new Map(Object.entries(ing.stockByPost));
+          if (
+            stockMap.has(selectedPost) &&
+            stockMap.get(selectedPost) &&
+            typeof stockMap.get(selectedPost).quantity === "number"
+          ) {
+            currentQuantity = stockMap.get(selectedPost).quantity.toString();
+          }
         }
         initialInputs[ing._id] = currentQuantity;
       });
@@ -106,15 +155,15 @@ const MobileInventoryCheck = () => {
       setStockInputs({});
     }
   }, [selectedPost, allIngredients]);
-  
-  const handleShowSnackbar = (message, severity = 'info') => {
+
+  const handleShowSnackbar = (message, severity = "info") => {
     setSnackbarMessage(message);
     setSnackbarSeverity(severity);
     setSnackbarOpen(true);
   };
 
   const handleCloseSnackbar = (event, reason) => {
-    if (reason === 'clickaway') return;
+    if (reason === "clickaway") return;
     setSnackbarOpen(false);
   };
 
@@ -123,8 +172,8 @@ const MobileInventoryCheck = () => {
   };
 
   const handleStockInputChange = useCallback((ingredientId, value) => {
-    const sanitizedValue = value.replace(/[^0-9.]/g, '');
-    setStockInputs(prev => ({ ...prev, [ingredientId]: sanitizedValue }));
+    const sanitizedValue = value.replace(/[^0-9.]/g, "");
+    setStockInputs((prev) => ({ ...prev, [ingredientId]: sanitizedValue }));
   }, []);
 
   const handleIncrement = (ingredientId) => {
@@ -134,28 +183,33 @@ const MobileInventoryCheck = () => {
 
   const handleDecrement = (ingredientId) => {
     const currentValue = parseFloat(stockInputs[ingredientId] || 0);
-    handleStockInputChange(ingredientId, Math.max(0, currentValue - 1).toString());
+    handleStockInputChange(
+      ingredientId,
+      Math.max(0, currentValue - 1).toString()
+    );
   };
 
   const handleSubmitStock = async () => {
     if (!selectedPost) {
-      handleShowSnackbar('请先选择一个岗位。', 'warning');
+      handleShowSnackbar("请先选择一个岗位。", "warning");
       return;
     }
-    const missing = postIngredients.filter(ing => stockInputs[ing._id] === '' || stockInputs[ing._id] === undefined);
+    const missing = postIngredients.filter(
+      (ing) => stockInputs[ing._id] === "" || stockInputs[ing._id] === undefined
+    );
     const stockDataToSubmit = postIngredients
-      .map(ing => ({
+      .map((ing) => ({
         ingredientId: ing._id,
         ingredientName: ing.name,
         quantity: parseFloat(stockInputs[ing._id]),
-        unit: ing.unit || ing.baseUnit || ing.min || 'g',
+        unit: ing.unit || ing.baseUnit || ing.min || "g",
         baseUnit: ing.baseUnit || ing.min,
-        norms: ing.norms
+        norms: ing.norms,
       }))
-      .filter(item => !isNaN(item.quantity) && item.quantity >= 0);
+      .filter((item) => !isNaN(item.quantity) && item.quantity >= 0);
 
     if (stockDataToSubmit.length === 0 && postIngredients.length > 0) {
-      handleShowSnackbar('没有有效的库存数量被输入。', 'warning');
+      handleShowSnackbar("没有有效的库存数量被输入。", "warning");
       return;
     }
 
@@ -167,31 +221,34 @@ const MobileInventoryCheck = () => {
     }
 
     if (stockDataToSubmit.length > 0) {
-        await submitStockData(stockDataToSubmit);
+      await submitStockData(stockDataToSubmit);
     } else if (postIngredients.length === 0) {
-        handleShowSnackbar('当前岗位没有需要盘点的物料。', 'info');
+      handleShowSnackbar("当前岗位没有需要盘点的物料。", "info");
     }
   };
 
   const submitStockData = async (data) => {
     setIsSubmitting(true);
     try {
-      const response = await fetch('/api/inventory/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/inventory/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ postId: selectedPost, stocks: data }),
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.message || 'HTTP error!');
-      
+      if (!response.ok) throw new Error(result.message || "HTTP error!");
+
       if (result.success) {
-        handleShowSnackbar(result.message || '库存盘点数据提交成功！', 'success');
+        handleShowSnackbar(
+          result.message || "库存盘点数据提交成功！",
+          "success"
+        );
         fetchIngredients(); // 重新获取数据以更新理论库存
       } else {
-        throw new Error(result.message || '库存提交失败');
+        throw new Error(result.message || "库存提交失败");
       }
     } catch (error) {
-      handleShowSnackbar(`提交失败: ${error.message}`, 'error');
+      handleShowSnackbar(`提交失败: ${error.message}`, "error");
     } finally {
       setIsSubmitting(false);
       setConfirmDialogOpen(false);
@@ -206,13 +263,17 @@ const MobileInventoryCheck = () => {
   };
 
   const renderIngredientCard = (ing) => {
-    const theoreticalStock = ing.stockByPost?.[selectedPost]?.quantity?.toFixed(2) || '0.00';
+    const theoreticalStock =
+      ing.stockByPost?.[selectedPost]?.quantity?.toFixed(2) || "0.00";
     return (
       <Card key={ing._id} sx={{ mb: 2 }}>
         <CardContent>
-          <Typography variant="h6" component="div">{ing.name}</Typography>
+          <Typography variant="h6" component="div">
+            {ing.name}
+          </Typography>
           <Typography sx={{ mb: 1.5 }} color="text.secondary">
-            规格: {ing.specs || 'N/A'} | 单位: {ing.unit || ing.baseUnit || ing.min || 'g'}
+            规格: {ing.specs || "N/A"} | 单位:{" "}
+            {ing.unit || ing.baseUnit || ing.min || "g"}
           </Typography>
           <Box display="flex" alignItems="center">
             <TextField
@@ -220,19 +281,25 @@ const MobileInventoryCheck = () => {
               label="实际库存"
               variant="outlined"
               type="number"
-              value={stockInputs[ing._id] || ''}
+              value={stockInputs[ing._id] || ""}
               onChange={(e) => handleStockInputChange(ing._id, e.target.value)}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <IconButton onClick={() => handleDecrement(ing._id)} size="small">
+                    <IconButton
+                      onClick={() => handleDecrement(ing._id)}
+                      size="small"
+                    >
                       <RemoveIcon />
                     </IconButton>
                   </InputAdornment>
                 ),
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton onClick={() => handleIncrement(ing._id)} size="small">
+                    <IconButton
+                      onClick={() => handleIncrement(ing._id)}
+                      size="small"
+                    >
                       <AddIcon />
                     </IconButton>
                   </InputAdornment>
@@ -247,7 +314,6 @@ const MobileInventoryCheck = () => {
 
   return (
     <Container sx={{ pb: 8, pt: 2 }}>
-      
       <FormControl fullWidth sx={{ mb: 2 }}>
         <InputLabel id="post-select-label">选择岗位</InputLabel>
         <Select
@@ -256,31 +322,59 @@ const MobileInventoryCheck = () => {
           label="选择岗位"
           onChange={handlePostChange}
         >
-          <MenuItem value=""><em>请选择...</em></MenuItem>
+          <MenuItem value="">
+            <em>请选择...</em>
+          </MenuItem>
           {Object.entries(POSTNAME).map(([id, name]) => (
-            <MenuItem key={id} value={id}>{name}</MenuItem>
+            <MenuItem key={id} value={id}>
+              {name}
+            </MenuItem>
           ))}
         </Select>
       </FormControl>
 
-      {loadingIngredients && <Box sx={{ display: 'flex', justifyContent: 'center', my: 3 }}><CircularProgress /></Box>}
-      {errorIngredients && <Typography color="error" align="center">{errorIngredients}</Typography>}
-      
-      {!selectedPost && <Typography align="center" color="text.secondary">请先选择一个岗位开始盘点。</Typography>}
+      {loadingIngredients && (
+        <Box sx={{ display: "flex", justifyContent: "center", my: 3 }}>
+          <CircularProgress />
+        </Box>
+      )}
+      {errorIngredients && (
+        <Typography color="error" align="center">
+          {errorIngredients}
+        </Typography>
+      )}
+
+      {!selectedPost && (
+        <Typography align="center" color="text.secondary">
+          请先选择一个岗位开始盘点。
+        </Typography>
+      )}
 
       {selectedPost && !loadingIngredients && postIngredients.length > 0 && (
-        <List>
-          {postIngredients.map(renderIngredientCard)}
-        </List>
+        <>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            找到 {postIngredients.length} 个原料需要盘点
+          </Typography>
+          <List>{postIngredients.map(renderIngredientCard)}</List>
+        </>
       )}
 
       {selectedPost && !loadingIngredients && postIngredients.length === 0 && (
-        <Typography align="center" color="text.secondary" sx={{ mt: 4 }}>当前岗位下没有需要盘点的物料。</Typography>
+        <Typography align="center" color="text.secondary" sx={{ mt: 4 }}>
+          当前岗位下没有需要盘点的物料。
+        </Typography>
       )}
 
-      <Paper 
-        elevation={3} 
-        sx={{ position: 'fixed', bottom: 56, left: 0, right: 0, p: 2, zIndex: 1000 }}
+      <Paper
+        elevation={3}
+        sx={{
+          position: "fixed",
+          bottom: 56,
+          left: 0,
+          right: 0,
+          p: 2,
+          zIndex: 1000,
+        }}
       >
         <Button
           fullWidth
@@ -288,24 +382,45 @@ const MobileInventoryCheck = () => {
           color="primary"
           size="large"
           onClick={handleSubmitStock}
-          disabled={isSubmitting || !selectedPost || postIngredients.length === 0}
-          startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
+          disabled={
+            isSubmitting || !selectedPost || postIngredients.length === 0
+          }
+          startIcon={
+            isSubmitting ? (
+              <CircularProgress size={20} color="inherit" />
+            ) : (
+              <SaveIcon />
+            )
+          }
         >
-          {isSubmitting ? '正在提交...' : '提交盘点'}
+          {isSubmitting ? "正在提交..." : "提交盘点"}
         </Button>
       </Paper>
 
-      <Snackbar open={snackbarOpen} autoHideDuration={6000} onClose={handleCloseSnackbar} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
-        <Alert onClose={handleCloseSnackbar} severity={snackbarSeverity} sx={{ width: '100%' }}>
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+      >
+        <Alert
+          onClose={handleCloseSnackbar}
+          severity={snackbarSeverity}
+          sx={{ width: "100%" }}
+        >
           {snackbarMessage}
         </Alert>
       </Snackbar>
 
-      <Dialog open={confirmDialogOpen} onClose={() => setConfirmDialogOpen(false)}>
+      <Dialog
+        open={confirmDialogOpen}
+        onClose={() => setConfirmDialogOpen(false)}
+      >
         <DialogTitle>确认提交</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            您有 {missingCount} 项物料未填写库存，确定要提交吗？未填写的项目将不会被保存。
+            您有 {missingCount}{" "}
+            项物料未填写库存，确定要提交吗？未填写的项目将不会被保存。
           </DialogContentText>
         </DialogContent>
         <DialogActions>
@@ -319,4 +434,4 @@ const MobileInventoryCheck = () => {
   );
 };
 
-export default MobileInventoryCheck; 
+export default MobileInventoryCheck;

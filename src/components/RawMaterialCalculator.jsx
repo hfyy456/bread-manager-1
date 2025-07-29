@@ -3,7 +3,7 @@ import { Container, Typography, TextField, Button, Table, TableBody, TableCell, 
 import { Replay as ReplayIcon, Clear as ClearIcon, FileUpload as FileUploadIcon, Download, InfoOutlined as InfoOutlinedIcon, CheckCircle as CheckCircleIcon, Cancel as CancelIcon } from '@mui/icons-material';
 import * as XLSX from 'xlsx';
 import { Link } from 'react-router-dom';
-import { generateAggregatedRawMaterials, adjustCost, findIngredientById } from '../utils/calculator';
+import { generateAggregatedRawMaterials, adjustCost, findIngredientById, getBreadCostBreakdown } from '../utils/calculator';
 import { DataContext } from './DataContext.jsx';
 
 const Alert = React.forwardRef(function Alert(props, ref) {
@@ -100,6 +100,136 @@ const MaterialResultCard = ({ material }) => (
   </Card>
 );
 
+const CostAnalysisCard = ({ costAnalysis }) => {
+  if (!costAnalysis) return null;
+
+  return (
+    <Paper elevation={3} sx={{ p: { xs: 2, md: 3 }, mb: 4 }}>
+      <Typography variant="h6" component="h2" gutterBottom>
+        2. 成本核算分析
+      </Typography>
+      
+      {/* 总体成本概览 */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{ textAlign: 'center', p: 2, bgcolor: 'primary.50' }}>
+            <Typography variant="h6" color="primary.main">
+              ¥{costAnalysis.totalProductionCost.toFixed(2)}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              总生产成本
+            </Typography>
+          </Card>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{ textAlign: 'center', p: 2, bgcolor: 'success.50' }}>
+            <Typography variant="h6" color="success.main">
+              ¥{costAnalysis.totalProductionValue.toFixed(2)}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              总销售价值
+            </Typography>
+          </Card>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{ textAlign: 'center', p: 2, bgcolor: costAnalysis.totalProfit >= 0 ? 'success.50' : 'error.50' }}>
+            <Typography variant="h6" color={costAnalysis.totalProfit >= 0 ? 'success.main' : 'error.main'}>
+              ¥{costAnalysis.totalProfit.toFixed(2)}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              总利润
+            </Typography>
+          </Card>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Card sx={{ textAlign: 'center', p: 2, bgcolor: costAnalysis.overallProfitMargin >= 0 ? 'success.50' : 'error.50' }}>
+            <Typography variant="h6" color={costAnalysis.overallProfitMargin >= 0 ? 'success.main' : 'error.main'}>
+              {costAnalysis.overallProfitMargin.toFixed(1)}%
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              总利润率
+            </Typography>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* 产品成本明细表 */}
+      <TableContainer>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ fontWeight: 'bold' }}>产品名称</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 'bold' }}>数量</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 'bold' }}>单位成本</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 'bold' }}>单位售价</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 'bold' }}>总成本</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 'bold' }}>总价值</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 'bold' }}>利润</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 'bold' }}>利润率</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {costAnalysis.products.map((product) => (
+              <TableRow key={product.breadId} hover>
+                <TableCell component="th" scope="row">
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {product.breadName}
+                  </Typography>
+                </TableCell>
+                <TableCell align="right">{product.quantity}</TableCell>
+                <TableCell align="right">¥{product.unitCost.toFixed(2)}</TableCell>
+                <TableCell align="right">¥{product.unitPrice.toFixed(2)}</TableCell>
+                <TableCell align="right">¥{product.totalCost.toFixed(2)}</TableCell>
+                <TableCell align="right">¥{product.totalValue.toFixed(2)}</TableCell>
+                <TableCell align="right" sx={{ 
+                  color: product.totalProfit >= 0 ? 'success.main' : 'error.main',
+                  fontWeight: 'bold'
+                }}>
+                  ¥{product.totalProfit.toFixed(2)}
+                </TableCell>
+                <TableCell align="right" sx={{ 
+                  color: product.profitMargin >= 0 ? 'success.main' : 'error.main',
+                  fontWeight: 'bold'
+                }}>
+                  {product.profitMargin.toFixed(1)}%
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+          <TableFooter>
+            <TableRow sx={{ bgcolor: 'grey.50' }}>
+              <TableCell sx={{ fontWeight: 'bold' }}>合计</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                {costAnalysis.products.reduce((sum, p) => sum + p.quantity, 0)}
+              </TableCell>
+              <TableCell align="right">-</TableCell>
+              <TableCell align="right">-</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                ¥{costAnalysis.totalProductionCost.toFixed(2)}
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                ¥{costAnalysis.totalProductionValue.toFixed(2)}
+              </TableCell>
+              <TableCell align="right" sx={{ 
+                fontWeight: 'bold',
+                color: costAnalysis.totalProfit >= 0 ? 'success.main' : 'error.main'
+              }}>
+                ¥{costAnalysis.totalProfit.toFixed(2)}
+              </TableCell>
+              <TableCell align="right" sx={{ 
+                fontWeight: 'bold',
+                color: costAnalysis.overallProfitMargin >= 0 ? 'success.main' : 'error.main'
+              }}>
+                {costAnalysis.overallProfitMargin.toFixed(1)}%
+              </TableCell>
+            </TableRow>
+          </TableFooter>
+        </Table>
+      </TableContainer>
+    </Paper>
+  );
+};
+
 const AggregatedMaterialsTable = ({ materials }) => {
   const totalCost = useMemo(() => {
     return materials.reduce((acc, material) => acc + material.cost, 0);
@@ -143,6 +273,8 @@ const RawMaterialCalculator = () => {
   const [aggregatedMaterials, setAggregatedMaterials] = useState([]);
   const [showResults, setShowResults] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
+  const [costAnalysis, setCostAnalysis] = useState(null);
+  const [materialMultiplier, setMaterialMultiplier] = useState(1.05); // 原料需求系数，默认1.05倍
   const fileInputRef = useRef(null);
 
   const theme = useTheme();
@@ -174,6 +306,7 @@ const RawMaterialCalculator = () => {
       ...prevQuantities,
       [breadId]: isNaN(newQuantity) || newQuantity < 0 ? '' : newQuantity
     }));
+    setCostAnalysis(null);
     setShowResults(false);
   };
 
@@ -182,12 +315,15 @@ const RawMaterialCalculator = () => {
       ...prevQuantities,
       [breadId]: ''
     }));
+    setCostAnalysis(null);
     setShowResults(false);
   };
 
   const handleResetQuantities = () => {
     setQuantities({});
     setAggregatedMaterials([]);
+    setCostAnalysis(null);
+    setMaterialMultiplier(1.05); // 重置为默认推荐值
     setShowResults(false);
   };
 
@@ -306,12 +442,38 @@ const RawMaterialCalculator = () => {
     if (showLoader) setIsCalculating(true);
 
     const totalAggregated = {};
+    const productCostAnalysis = [];
+    let totalProductionCost = 0;
+    let totalProductionValue = 0;
 
     for (const breadId in quantities) {
       const quantity = quantities[breadId];
       if (quantity > 0) {
         const bread = breadTypes.find(b => b.id === breadId);
         if (bread) {
+          // 计算单个产品的成本分解
+          const breadCostBreakdown = getBreadCostBreakdown(bread, doughRecipesMap, fillingRecipesMap, ingredientsMap);
+          const unitCost = breadCostBreakdown ? breadCostBreakdown.totalCost : 0;
+          const totalCostForThisBread = unitCost * quantity;
+          const totalValueForThisBread = (bread.price || 0) * quantity;
+          
+          totalProductionCost += totalCostForThisBread;
+          totalProductionValue += totalValueForThisBread;
+
+          productCostAnalysis.push({
+            breadId: bread.id,
+            breadName: bread.name,
+            quantity: quantity,
+            unitCost: unitCost,
+            unitPrice: bread.price || 0,
+            totalCost: totalCostForThisBread,
+            totalValue: totalValueForThisBread,
+            unitProfit: (bread.price || 0) - unitCost,
+            totalProfit: totalValueForThisBread - totalCostForThisBread,
+            profitMargin: totalValueForThisBread > 0 ? ((totalValueForThisBread - totalCostForThisBread) / totalValueForThisBread * 100) : 0,
+            costBreakdown: breadCostBreakdown
+          });
+
           const breadMaterials = generateAggregatedRawMaterials(
             bread,
             breadTypes,
@@ -323,7 +485,7 @@ const RawMaterialCalculator = () => {
           
           breadMaterials.forEach(material => {
             const matCost = material.cost || 0;
-            const matQty = material.quantity || 0;
+            const matQty = (material.quantity || 0) * materialMultiplier; // 应用原料需求系数
 
             if (totalAggregated[material.id]) {
               totalAggregated[material.id].quantity += matQty;
@@ -339,6 +501,15 @@ const RawMaterialCalculator = () => {
         }
       }
     }
+
+    // 设置成本分析数据
+    setCostAnalysis({
+      products: productCostAnalysis,
+      totalProductionCost: totalProductionCost,
+      totalProductionValue: totalProductionValue,
+      totalProfit: totalProductionValue - totalProductionCost,
+      overallProfitMargin: totalProductionValue > 0 ? ((totalProductionValue - totalProductionCost) / totalProductionValue * 100) : 0
+    });
 
     const finalMaterials = Object.values(totalAggregated).map(material => {
       const ingredientDetails = ingredientsMap.get(material.name);
@@ -384,7 +555,7 @@ const RawMaterialCalculator = () => {
     if (showLoader) {
       setTimeout(() => setIsCalculating(false), 500);
     }
-  }, [quantities, breadTypes, doughRecipesMap, fillingRecipesMap, ingredients, ingredientsMap, loading, handleShowSnackbar]);
+  }, [quantities, breadTypes, doughRecipesMap, fillingRecipesMap, ingredients, ingredientsMap, loading, handleShowSnackbar, materialMultiplier]);
 
   useEffect(() => {
     if (showResults) {
@@ -410,6 +581,37 @@ const RawMaterialCalculator = () => {
         return;
     }
   
+    const workbook = XLSX.utils.book_new();
+    
+    // 1. 成本分析工作表
+    if (costAnalysis) {
+      const costAnalysisData = [
+        { '项目': '总生产成本', '金额(元)': costAnalysis.totalProductionCost.toFixed(2) },
+        { '项目': '总销售价值', '金额(元)': costAnalysis.totalProductionValue.toFixed(2) },
+        { '项目': '总利润', '金额(元)': costAnalysis.totalProfit.toFixed(2) },
+        { '项目': '总利润率', '金额(元)': costAnalysis.overallProfitMargin.toFixed(1) + '%' },
+        {},
+        { '产品名称': '产品名称', '数量': '数量', '单位成本(元)': '单位成本(元)', '单位售价(元)': '单位售价(元)', '总成本(元)': '总成本(元)', '总价值(元)': '总价值(元)', '利润(元)': '利润(元)', '利润率(%)': '利润率(%)' },
+        ...costAnalysis.products.map(product => ({
+          '产品名称': product.breadName,
+          '数量': product.quantity,
+          '单位成本(元)': product.unitCost.toFixed(2),
+          '单位售价(元)': product.unitPrice.toFixed(2),
+          '总成本(元)': product.totalCost.toFixed(2),
+          '总价值(元)': product.totalValue.toFixed(2),
+          '利润(元)': product.totalProfit.toFixed(2),
+          '利润率(%)': product.profitMargin.toFixed(1)
+        }))
+      ];
+      
+      const costWorksheet = XLSX.utils.json_to_sheet(costAnalysisData);
+      costWorksheet['!cols'] = [
+        { wch: 20 }, { wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }
+      ];
+      XLSX.utils.book_append_sheet(workbook, costWorksheet, '成本分析');
+    }
+
+    // 2. 原料需求工作表
     let totalCostForExport = 0;
     const dataToExport = aggregatedMaterials.map(material => {
         const ingredientInfo = ingredientsMap.get(material.id.trim());
@@ -444,27 +646,25 @@ const RawMaterialCalculator = () => {
       '原料名称': '采购总计',
       '预估订货成本(元)': totalCostForExport
     });
+    
+    if (materialMultiplier !== 1.0) {
+      dataToExport.push({});
+      dataToExport.push({
+        '原料名称': '说明',
+        '规格': `原料需求已应用 ${materialMultiplier}x 安全系数`
+      });
+    }
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-
-    // Set column widths for better readability
     worksheet['!cols'] = [
-        { wch: 25 }, // 原料名称
-        { wch: 15 }, // 规格
-        { wch: 12 }, // 需求总量(g)
-        { wch: 12 }, // 当前库存(g)
-        { wch: 12 }, // 需采购量(g)
-        { wch: 12 }, // 建议采购数量
-        { wch: 12 }, // 建议采购单位
-        { wch: 15 }, // 预估订货成本(元)
+        { wch: 25 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 15 }
     ];
     
-    const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, '原料需求汇总');
     
     const today = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(workbook, `原料需求汇总_${today}.xlsx`);
-    handleShowSnackbar('Excel 文件已成功导出！', 'success');
+    XLSX.writeFile(workbook, `生产计划成本分析_${today}.xlsx`);
+    handleShowSnackbar('Excel 文件已成功导出！包含成本分析和原料需求两个工作表。', 'success');
   };
 
   const { materialsForDisplay, totalCost } = useMemo(() => {
@@ -535,7 +735,7 @@ const RawMaterialCalculator = () => {
     <Container maxWidth="xl" sx={{ py: 4 }}>
       <Box display="flex" alignItems="center" justifyContent="center" sx={{ mb: {xs: 2, md: 3} }}>
         <Typography variant="h4" component="h1" gutterBottom sx={{ textAlign: 'center', mb: 0, fontWeight: 500 }}>
-        面包生产原料计算器
+        生产计划成本核算器
       </Typography>
         <Tooltip title="查看操作指南">
           <IconButton component={Link} to="/operation-guide#raw-material-calculator" size="small" sx={{ ml: 1, color: 'primary.main' }}>
@@ -546,6 +746,9 @@ const RawMaterialCalculator = () => {
 
       <Paper elevation={3} sx={{ p: { xs: 2, md: 3 }, mb: 4 }}>
         <Typography variant="h6" gutterBottom component="h2">1. 输入生产数量</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          输入各产品的生产数量，系统将自动计算原料成本、生产成本和利润分析。可调节原料需求系数以预留生产余量。
+        </Typography>
         <Grid container spacing={2} alignItems="flex-start">
           {breadTypes.map((bread) => (
             <Grid item xs={12} sm={6} md={4} lg={3} key={bread.id}>
@@ -553,6 +756,87 @@ const RawMaterialCalculator = () => {
             </Grid>
           ))}
         </Grid>
+        
+        {/* 原料需求系数调节 */}
+        <Box sx={{ mt: 3, mb: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+          <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 500 }}>
+            原料需求系数调节
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            设置原料需求的安全系数，建议1.05-1.10倍以预留生产余量
+          </Typography>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} sm={6} md={4}>
+              <TextField
+                label="原料需求系数"
+                type="number"
+                value={materialMultiplier}
+                onChange={(e) => {
+                  const value = parseFloat(e.target.value);
+                  if (!isNaN(value) && value >= 0.5 && value <= 2.0) {
+                    setMaterialMultiplier(value);
+                    setCostAnalysis(null);
+                    setShowResults(false);
+                  }
+                }}
+                inputProps={{ 
+                  min: "0.5", 
+                  max: "2.0", 
+                  step: "0.01" 
+                }}
+                size="small"
+                fullWidth
+                helperText="范围: 0.5 - 2.0"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={8}>
+              <Stack direction="row" spacing={1} flexWrap="wrap">
+                <Chip 
+                  label="1.00 (标准)" 
+                  variant={materialMultiplier === 1.00 ? "filled" : "outlined"}
+                  onClick={() => {
+                    setMaterialMultiplier(1.00);
+                    setCostAnalysis(null);
+                    setShowResults(false);
+                  }}
+                  size="small"
+                />
+                <Chip 
+                  label="1.05 (推荐)" 
+                  variant={materialMultiplier === 1.05 ? "filled" : "outlined"}
+                  onClick={() => {
+                    setMaterialMultiplier(1.05);
+                    setCostAnalysis(null);
+                    setShowResults(false);
+                  }}
+                  size="small"
+                  color="primary"
+                />
+                <Chip 
+                  label="1.10 (保守)" 
+                  variant={materialMultiplier === 1.10 ? "filled" : "outlined"}
+                  onClick={() => {
+                    setMaterialMultiplier(1.10);
+                    setCostAnalysis(null);
+                    setShowResults(false);
+                  }}
+                  size="small"
+                />
+                <Chip 
+                  label="1.15 (高余量)" 
+                  variant={materialMultiplier === 1.15 ? "filled" : "outlined"}
+                  onClick={() => {
+                    setMaterialMultiplier(1.15);
+                    setCostAnalysis(null);
+                    setShowResults(false);
+                  }}
+                  size="small"
+                />
+              </Stack>
+            </Grid>
+          </Grid>
+        </Box>
+
         <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           <Button 
             variant="contained" 
@@ -561,7 +845,7 @@ const RawMaterialCalculator = () => {
             disabled={isCalculating || loading || Object.values(quantities).every(q => !q || q === 0)}
             sx={{ minWidth: 180, height: '56px' }}
           >
-            {isCalculating ? <CircularProgress size={24} color="inherit" /> : '计算总原料'}
+            {isCalculating ? <CircularProgress size={24} color="inherit" /> : '计算成本与原料'}
           </Button>
           <Button 
             variant="outlined" 
@@ -597,9 +881,21 @@ const RawMaterialCalculator = () => {
         </Box>
       </Paper>
 
+      {/* 成本核算分析 */}
+      {showResults && costAnalysis && (
+        <CostAnalysisCard costAnalysis={costAnalysis} />
+      )}
+
       <Paper elevation={3} sx={{ p: { xs: 2, md: 3 }, mb: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6" component="h2">2. 原料需求汇总 (按基础单位计算)</Typography>
+          <Box>
+            <Typography variant="h6" component="h2">{showResults && costAnalysis ? '3' : '2'}. 原料需求汇总 (按基础单位计算)</Typography>
+            {showResults && materialMultiplier !== 1.0 && (
+              <Typography variant="body2" color="primary.main" sx={{ fontWeight: 500 }}>
+                已应用 {materialMultiplier}x 安全系数
+              </Typography>
+            )}
+          </Box>
           <Button
             variant="contained"
               color="secondary" 
@@ -615,7 +911,14 @@ const RawMaterialCalculator = () => {
             <TableHead>
                     <TableRow>
                 <TableCell sx={{ fontWeight: 'bold', minWidth: 170 }}>原料名称</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 'bold' }}>总需求量</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                  总需求量
+                  {materialMultiplier !== 1.0 && (
+                    <Typography variant="caption" display="block" color="primary.main">
+                      (×{materialMultiplier})
+                    </Typography>
+                  )}
+                </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 'bold', minWidth: 150 }}>当前库存</TableCell>
                 <TableCell align="right" sx={{ fontWeight: 'bold' }}>单位</TableCell>
                 <TableCell align="right" sx={{ fontWeight: 'bold', color: 'primary.main', minWidth: 150 }}>需采购量</TableCell>

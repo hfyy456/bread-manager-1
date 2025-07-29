@@ -29,11 +29,18 @@ export const DataProvider = ({ children }) => {
     setLoading(true);
     setError(null);
     try {
+      const currentStoreId = localStorage.getItem('currentStoreId');
       const results = await Promise.allSettled([
         fetch('/api/bread-types/list', { method: 'POST' }),
         fetch('/api/filling-recipes/list', { method: 'POST' }),
         fetch('/api/dough-recipes/list', { method: 'POST' }),
-        fetch('/api/ingredients/list', { method: 'POST' })
+        fetch('/api/ingredients/list', { 
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-current-store-id': currentStoreId
+          }
+        })
       ]);
 
       const successfulResults = [];

@@ -35,6 +35,13 @@ const transferRequestSchema = new mongoose.Schema({
     notes: {
         type: String,
         trim: true,
+    },
+    approvedBy: {
+        type: String,
+        trim: true,
+    },
+    approvedAt: {
+        type: Date,
     }
 }, { timestamps: true });
 

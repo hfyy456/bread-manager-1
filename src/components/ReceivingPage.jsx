@@ -36,7 +36,10 @@ const ReceivingPage = () => {
                 setLoadingIngredients(true);
                 const response = await fetch('/api/ingredients/list', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'x-current-store-id': currentStore?._id || localStorage.getItem('currentStoreId')
+                    },
                     body: JSON.stringify({}),
                 });
                 const result = await response.json();

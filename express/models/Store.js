@@ -11,6 +11,16 @@ const storeSchema = new mongoose.Schema({
     type: String,
     trim: true 
   },
+  warehouseManagers: {
+    type: [String],
+    default: [],
+    validate: {
+      validator: function(arr) {
+        return arr.every(name => typeof name === 'string' && name.trim().length > 0);
+      },
+      message: '库管姓名不能为空'
+    }
+  },
   // 可以在此添加更多门店相关信息，例如联系电话、营业时间等
 }, { timestamps: true });
 

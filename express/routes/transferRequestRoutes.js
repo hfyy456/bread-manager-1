@@ -28,4 +28,9 @@ router.put('/:id/status', authMiddleware, transferRequestController.updateReques
 // @access  Private (should be restricted to admins)
 router.post('/bulk-approve', authMiddleware, transferRequestController.bulkApproveRequests);
 
+// @route   POST /api/transfer-requests/:id/mobile-approve
+// @desc    Mobile approve transfer request (for warehouse managers)
+// @access  Private
+router.post('/:id/mobile-approve', authMiddleware, transferRequestController.mobileApproveRequest);
+
 module.exports = router; 

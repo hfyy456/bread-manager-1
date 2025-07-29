@@ -10,7 +10,9 @@ import HistoryIcon from '@mui/icons-material/History';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import SearchOffIcon from '@mui/icons-material/SearchOff';
-import { Badge } from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
+import { Badge, InputAdornment } from '@mui/material';
 import { POSTNAME } from '../config/constants';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
@@ -140,6 +142,7 @@ const ShopView = ({
 }) => {
     const [filteredIngredients, setFilteredIngredients] = useState([]);
     const [activeFilter, setActiveFilter] = useState('all');
+    const [searchText, setSearchText] = useState('');
 
     useEffect(() => {
         setFilteredIngredients(ingredients);
@@ -147,15 +150,25 @@ const ShopView = ({
     }, [ingredients]);
 
     useEffect(() => {
-        if (activeFilter === 'all') {
-            setFilteredIngredients(ingredients);
-        } else {
-            const filtered = ingredients.filter(item => 
+        let filtered = ingredients;
+        
+        // 按岗位筛选
+        if (activeFilter !== 'all') {
+            filtered = filtered.filter(item => 
                 item.ingredient.post?.includes(Number(activeFilter))
             );
-            setFilteredIngredients(filtered);
         }
-    }, [activeFilter, ingredients]);
+        
+        // 按名称搜索
+        if (searchText.trim()) {
+            filtered = filtered.filter(item => 
+                item.ingredient.name.toLowerCase().includes(searchText.toLowerCase().trim()) ||
+                (item.ingredient.specs && item.ingredient.specs.toLowerCase().includes(searchText.toLowerCase().trim()))
+            );
+        }
+        
+        setFilteredIngredients(filtered);
+    }, [activeFilter, ingredients, searchText]);
     
     const handleIncrement = (item) => {
         const existingCartItem = cartItems.find(cartItem => cartItem.ingredientId === item.ingredient._id);
@@ -192,6 +205,35 @@ const ShopView = ({
                 申领中心
             </Typography>
             <Paper sx={{ p: 1.5, mb: 2, position: 'sticky', top: 0, zIndex: 1, backgroundColor: 'background.paper' }}>
+                {/* 搜索框 */}
+                <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="搜索原料名称或规格..."
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
+                    sx={{ mb: 2 }}
+                    InputProps={{
+                        startAdornment: (
+                            <InputAdornment position="start">
+                                <SearchIcon color="action" />
+                            </InputAdornment>
+                        ),
+                        endAdornment: searchText && (
+                            <InputAdornment position="end">
+                                <IconButton
+                                    size="small"
+                                    onClick={() => setSearchText('')}
+                                    edge="end"
+                                >
+                                    <ClearIcon />
+                                </IconButton>
+                            </InputAdornment>
+                        ),
+                    }}
+                />
+                
+                {/* 岗位筛选 */}
                 <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>按岗位筛选</Typography>
                 <Box sx={{ position: 'relative' }}>
                     <Box sx={{
@@ -277,11 +319,17 @@ const ShopView = ({
                     <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', mt: 4 }}>
                         <SearchOffIcon sx={{ fontSize: 48, color: 'text.secondary' }} />
                         <Typography variant="h6" color="text.secondary" sx={{ mt: 1 }}>
-                            {activeFilter === 'all' 
-                                ? '暂无可用物料' 
-                                : '当前筛选下没有物料'}
+                            {searchText.trim() 
+                                ? '未找到匹配的物料' 
+                                : activeFilter === 'all' 
+                                    ? '暂无可用物料' 
+                                    : '当前筛选下没有物料'}
                         </Typography>
-                        {activeFilter !== 'all' && (
+                        {searchText.trim() ? (
+                            <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
+                                尝试修改搜索关键词或清空搜索条件。
+                            </Typography>
+                        ) : activeFilter !== 'all' && (
                             <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
                                 尝试选择其他岗位或“全部”。
                             </Typography>
@@ -472,7 +520,10 @@ const CartView = ({ user, cartItems, onUpdateCart, storeId, refetchData }) => {
     );
 };
 
-const HistoryView = ({ requests, loading, error }) => {
+const HistoryView = ({ requests, loading, error, user, storeId }) => {
+    const [showAllRequests, setShowAllRequests] = useState(false);
+    const [allRequests, setAllRequests] = useState([]);
+    const [loadingAll, setLoadingAll] = useState(false);
     const getStatusChipColor = (status) => {
         switch (status) {
             case 'completed': return 'success';
@@ -489,23 +540,64 @@ const HistoryView = ({ requests, loading, error }) => {
         rejected: '已拒绝',
         completed: '已完成',
     };
+
+    const fetchAllRequests = async () => {
+        if (!storeId) return;
+        
+        setLoadingAll(true);
+        try {
+            const response = await fetch('/api/transfer-requests', { 
+                headers: { 'x-current-store-id': storeId } 
+            });
+            if (!response.ok) throw new Error('获取所有申请记录失败');
+            const data = await response.json();
+            setAllRequests(data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+        } catch (err) {
+            console.error('获取所有申请记录失败:', err);
+        } finally {
+            setLoadingAll(false);
+        }
+    };
+
+    const handleToggleView = () => {
+        if (!showAllRequests) {
+            fetchAllRequests();
+        }
+        setShowAllRequests(!showAllRequests);
+    };
+
+    const displayRequests = showAllRequests ? allRequests : requests;
+    const isLoading = showAllRequests ? loadingAll : loading;
     
     return (
         <Box>
             <Typography variant="h5" component="h1" gutterBottom sx={{ fontWeight: 'bold', textAlign: 'center', my: 2 }}>
-                我的申请记录
+                {showAllRequests ? '所有申请记录' : '我的申请记录'}
             </Typography>
-            {loading && <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}><CircularProgress /></Box>}
+            
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+                <Button
+                    variant={showAllRequests ? 'outlined' : 'contained'}
+                    onClick={handleToggleView}
+                    size="small"
+                >
+                    {showAllRequests ? '只看我的申请' : '查看所有申请'}
+                </Button>
+            </Box>
+            
+            {isLoading && <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}><CircularProgress /></Box>}
             {error && <Alert severity="error">{error}</Alert>}
 
-            {!loading && !error && (
-                requests.length === 0 ? (
+            {!isLoading && !error && (
+                displayRequests.length === 0 ? (
                      <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', mt: 4 }}>
                          <HistoryIcon sx={{ fontSize: 48, color: 'text.secondary' }} />
-                         <Typography variant="h6" color="text.secondary" sx={{mt: 1}}>暂无历史申请记录</Typography>
+                         <Typography variant="h6" color="text.secondary" sx={{mt: 1}}>
+                             {showAllRequests ? '暂无申请记录' : '暂无我的申请记录'}
+                         </Typography>
                     </Paper>
                 ) : (
-                    requests.map(req => (
+                    displayRequests.map(req => (
                         <Card 
                             key={req._id} 
                             sx={{ 
@@ -523,9 +615,14 @@ const HistoryView = ({ requests, loading, error }) => {
                                         <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
                                            申请单 #{req._id.slice(-6)}
                                         </Typography>
-                                    <Typography variant="caption" color="text.secondary" display="block">
+                                        {showAllRequests && (
+                                            <Typography variant="body2" color="primary" sx={{ fontWeight: 'medium' }}>
+                                                申请人: {req.requestedBy || '未知'}
+                                            </Typography>
+                                        )}
+                                        <Typography variant="caption" color="text.secondary" display="block">
                                             {new Date(req.createdAt).toLocaleString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                    </Typography>
+                                        </Typography>
                                     </Box>
                                     <Chip label={STATUS_MAP[req.status] || req.status} color={getStatusChipColor(req.status)} size="small" sx={{ mt: 0.5 }}/>
                                 </Box>
@@ -608,7 +705,12 @@ const MobileRequestPage = () => {
             const stockData = await stockResponse.json();
             const requestsData = await requestsResponse.json();
             
-            setHistoryRequests(requestsData.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+            // 过滤出当前用户的申请记录
+            const userRequests = requestsData.filter(req => 
+                req.requestedBy === user?.name
+            );
+            
+            setHistoryRequests(userRequests.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
 
             const pendingQuantities = {};
             requestsData
@@ -676,11 +778,11 @@ const MobileRequestPage = () => {
             case 'cart':
                 return <CartView user={user} cartItems={cart} onUpdateCart={handleUpdateCart} storeId={storeId} refetchData={fetchData} />;
             case 'history':
-                return <HistoryView requests={historyRequests} loading={loading} error={error} />;
+                return <HistoryView requests={historyRequests} loading={loading} error={error} user={user} storeId={storeId} />;
             case 'inventory':
                 return <MobileInventoryCheck />;
             case 'all-requests':
-                return <AllRequestsView storeId={storeId} />;
+                return <AllRequestsView storeId={storeId} user={user} />;
             case 'shop':
             default:
                 return <ShopView 

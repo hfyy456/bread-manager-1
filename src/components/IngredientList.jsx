@@ -104,6 +104,7 @@ const IngredientList = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-current-store-id': localStorage.getItem('currentStoreId')
         },
         body: JSON.stringify({}),
       });
