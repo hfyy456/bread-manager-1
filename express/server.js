@@ -18,6 +18,8 @@ const transferRequestRoutes = require('./routes/transferRequestRoutes'); // For 
 const feishuRoutes = require('./routes/feishuRoutes'); // For Feishu integration
 
 const authMiddleware = require('./middleware/authMiddleware'); // 引入模拟认证中间件
+const { performanceMiddleware, startPerformanceReporting } = require('./middleware/performanceMiddleware'); // 性能监控
+const logger = require('./utils/logger'); // 日志工具
 
 const app = express();
 const port = process.env.PORT || 10099;
@@ -27,6 +29,9 @@ connectDB();
 
 // --- 中间件 ---
 app.use(express.json()); // 解析 JSON 请求体
+
+// 性能监控中间件
+app.use(performanceMiddleware);
 
 // 全局应用模拟认证中间件。所有API请求都将带有一个模拟的 req.user 对象
 app.use('/api', authMiddleware);
@@ -98,4 +103,16 @@ app.listen(port, () => {
   console.log(`Express 服务器正在监听端口 ${port}`);
   console.log(`React 应用应该可以通过 http://localhost:${port} 访问`);
   console.log(`提供的静态文件目录: ${reactBuildDir}`);
+  
+  // 启动性能监控报告
+  if (process.env.NODE_ENV === 'production') {
+    startPerformanceReporting(30); // 每30分钟生成一次性能报告
+    logger.info('Performance monitoring started');
+  }
+  
+  logger.info('Server started successfully', {
+    port,
+    environment: process.env.NODE_ENV || 'development',
+    buildDir: reactBuildDir
+  });
 }); 

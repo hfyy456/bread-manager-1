@@ -1,29 +1,54 @@
 const StoreInventory = require('../models/StoreInventory');
 const Ingredient = require('../models/Ingredient');
+const { monitorDbQuery } = require('../middleware/performanceMiddleware');
+const logger = require('../utils/logger');
 
 // Get all ingredients with their main warehouse stock for the current store
 const getWarehouseStock = async (req, res) => {
+    const startTime = Date.now();
+    
     try {
         const storeId = req.header('x-current-store-id');
         if (!storeId) {
-            return res.status(400).json({ message: 'Store ID is required in headers' });
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Store ID is required in headers' 
+            });
         }
         
-        const allIngredients = await Ingredient.find({}).sort({ name: 1 }).lean();
-        const storeInventories = await StoreInventory.find({ storeId }).lean();
+        // 并行查询优化
+        const [allIngredients, storeInventories] = await Promise.all([
+            monitorDbQuery('find', 'ingredients', () => 
+                Ingredient.find({})
+                    .select('name unit price specs _id') // 只选择需要的字段
+                    .sort({ name: 1 })
+                    .lean()
+            ),
+            monitorDbQuery('find', 'storeInventories', () =>
+                StoreInventory.find({ storeId })
+                    .select('ingredientId mainWarehouseStock _id') // 只选择需要的字段
+                    .lean()
+            )
+        ]);
 
-        const inventoryMap = storeInventories.reduce((map, item) => {
-            if (item.ingredientId) {
-                map[item.ingredientId.toString()] = item;
-            }
-            return map;
-        }, {});
+        // 使用Map优化查找性能
+        const inventoryMap = new Map(
+            storeInventories.map(item => [
+                item.ingredientId?.toString(),
+                item
+            ]).filter(([key]) => key) // 过滤掉无效的ingredientId
+        );
 
+        // 批量计算，减少循环中的重复操作
+        let grandTotal = 0;
         const items = allIngredients.map(ingredient => {
-            const inventoryItem = inventoryMap[ingredient._id.toString()];
+            const inventoryItem = inventoryMap.get(ingredient._id.toString());
             const mainStockQuantity = inventoryItem?.mainWarehouseStock?.quantity || 0;
             const price = ingredient.price || 0;
             const totalPrice = mainStockQuantity * price;
+            
+            // 累加总价
+            grandTotal += totalPrice;
 
             return {
                 ingredient: ingredient,
@@ -36,13 +61,38 @@ const getWarehouseStock = async (req, res) => {
             };
         });
 
-        const grandTotal = items.reduce((sum, item) => sum + parseFloat(item.totalPrice), 0);
+        const duration = Date.now() - startTime;
+        
+        // 记录性能日志
+        logger.performance('Warehouse Stock Fetch', duration, {
+            storeId,
+            ingredientCount: allIngredients.length,
+            inventoryCount: storeInventories.length
+        });
 
-        res.json({ success: true, items, grandTotal: grandTotal.toFixed(2) });
+        res.json({ 
+            success: true, 
+            items, 
+            grandTotal: grandTotal.toFixed(2),
+            meta: {
+                totalItems: items.length,
+                timestamp: new Date().toISOString(),
+                duration: `${duration}ms`
+            }
+        });
 
     } catch (error) {
-        console.error('Error fetching warehouse stock:', error);
-        res.status(500).json({ success: false, message: 'Server error while fetching stock' });
+        const duration = Date.now() - startTime;
+        logger.error('Error fetching warehouse stock', error, {
+            storeId: req.header('x-current-store-id'),
+            duration: `${duration}ms`
+        });
+        
+        res.status(500).json({ 
+            success: false, 
+            message: 'Server error while fetching stock',
+            timestamp: new Date().toISOString()
+        });
     }
 };
 

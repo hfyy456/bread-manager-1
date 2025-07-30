@@ -1,137 +1,143 @@
+const mongoose = require('mongoose');
+const connectDB = require('../express/config/db');
+
 /**
- * 主仓库存查询优化 - 数据库索引脚本
- * 运行此脚本来创建优化主仓库存查询的数据库索引
+ * 优化仓库相关的数据库索引
+ * 提高查询性能
  */
 
-const mongoose = require('mongoose');
-require('dotenv').config();
-
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/bread-manager';
-
-async function createOptimizedIndexes() {
+const optimizeIndexes = async () => {
   try {
-    console.log('连接到数据库...');
-    await mongoose.connect(MONGODB_URI);
+    console.log('🚀 开始优化数据库索引...');
+    
+    // 连接数据库
+    await connectDB();
     
     const db = mongoose.connection.db;
     
-    console.log('创建主仓库存优化索引...');
+    // 1. 优化 Ingredient 集合索引
+    console.log('📦 优化 Ingredient 集合索引...');
+    const ingredientCollection = db.collection('ingredients');
     
-    // 1. 为 StoreInventory 集合创建复合索引
-    await db.collection('storeinventories').createIndex(
-      { 
-        storeId: 1, 
-        ingredientId: 1,
-        'mainWarehouseStock.quantity': 1 
-      },
-      { 
-        name: 'warehouse_stock_optimization',
-        background: true 
-      }
+    // 创建复合索引用于排序和查询
+    await ingredientCollection.createIndex({ name: 1 }, { background: true });
+    await ingredientCollection.createIndex({ price: 1 }, { background: true });
+    await ingredientCollection.createIndex({ name: 1, price: 1 }, { background: true });
+    
+    console.log('✅ Ingredient 索引优化完成');
+    
+    // 2. 优化 StoreInventory 集合索引
+    console.log('🏪 优化 StoreInventory 集合索引...');
+    const storeInventoryCollection = db.collection('storeinventories');
+    
+    // 创建复合索引用于快速查找门店库存
+    await storeInventoryCollection.createIndex(
+      { storeId: 1, ingredientId: 1 }, 
+      { unique: true, background: true }
     );
-    console.log('✓ 创建 StoreInventory 复合索引');
+    await storeInventoryCollection.createIndex({ storeId: 1 }, { background: true });
+    await storeInventoryCollection.createIndex({ ingredientId: 1 }, { background: true });
     
-    // 2. 为 Ingredient 集合创建常用字段索引
-    await db.collection('ingredients').createIndex(
-      { name: 1, createdAt: -1 },
-      { 
-        name: 'ingredient_name_created',
-        background: true 
-      }
+    // 为主仓库存数量创建索引（用于库存不足检查）
+    await storeInventoryCollection.createIndex(
+      { 'mainWarehouseStock.quantity': 1 }, 
+      { background: true }
     );
-    console.log('✓ 创建 Ingredient 名称和创建时间索引');
     
-    // 3. 为主仓库存数量创建稀疏索引（只索引有库存的记录）
-    await db.collection('storeinventories').createIndex(
-      { 'mainWarehouseStock.quantity': -1 },
-      { 
-        name: 'warehouse_quantity_desc',
-        sparse: true,  // 稀疏索引，只索引非空值
-        background: true 
-      }
+    console.log('✅ StoreInventory 索引优化完成');
+    
+    // 3. 优化 TransferRequest 集合索引
+    console.log('📋 优化 TransferRequest 集合索引...');
+    const transferRequestCollection = db.collection('transferrequests');
+    
+    // 创建复合索引用于查询申请记录
+    await transferRequestCollection.createIndex({ storeId: 1 }, { background: true });
+    await transferRequestCollection.createIndex({ status: 1 }, { background: true });
+    await transferRequestCollection.createIndex({ createdAt: -1 }, { background: true });
+    await transferRequestCollection.createIndex(
+      { storeId: 1, status: 1, createdAt: -1 }, 
+      { background: true }
     );
-    console.log('✓ 创建主仓库存数量稀疏索引');
-    
-    // 4. 为门店ID创建索引（如果不存在）
-    await db.collection('storeinventories').createIndex(
-      { storeId: 1 },
-      { 
-        name: 'store_id_index',
-        background: true 
-      }
+    await transferRequestCollection.createIndex(
+      { requestedBy: 1, createdAt: -1 }, 
+      { background: true }
     );
-    console.log('✓ 创建门店ID索引');
     
-    // 显示所有索引
-    console.log('\n当前 StoreInventory 集合的索引:');
-    const storeInventoryIndexes = await db.collection('storeinventories').indexes();
-    storeInventoryIndexes.forEach(index => {
-      console.log(`- ${index.name}: ${JSON.stringify(index.key)}`);
-    });
+    console.log('✅ TransferRequest 索引优化完成');
     
-    console.log('\n当前 Ingredient 集合的索引:');
-    const ingredientIndexes = await db.collection('ingredients').indexes();
-    ingredientIndexes.forEach(index => {
-      console.log(`- ${index.name}: ${JSON.stringify(index.key)}`);
-    });
+    // 4. 优化 Store 集合索引
+    console.log('🏢 优化 Store 集合索引...');
+    const storeCollection = db.collection('stores');
     
-    console.log('\n✅ 主仓库存查询优化索引创建完成！');
+    await storeCollection.createIndex({ name: 1 }, { background: true });
+    await storeCollection.createIndex({ warehouseManagers: 1 }, { background: true });
     
-    // 测试查询性能
-    console.log('\n测试查询性能...');
-    const testStoreId = '507f1f77bcf86cd799439011'; // 示例门店ID
+    console.log('✅ Store 索引优化完成');
     
-    const start = Date.now();
-    const result = await db.collection('ingredients').aggregate([
-      {
-        $lookup: {
-          from: 'storeinventories',
-          let: { ingredientId: '$_id' },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $and: [
-                    { $eq: ['$ingredientId', '$$ingredientId'] },
-                    { $eq: ['$storeId', testStoreId] },
-                    { $gt: ['$mainWarehouseStock.quantity', 0] }
-                  ]
-                }
-              }
-            }
-          ],
-          as: 'storeInventory'
-        }
-      },
-      {
-        $match: {
-          'storeInventory.0': { $exists: true }
-        }
-      },
-      {
-        $limit: 10
-      }
-    ]).toArray();
+    // 5. 显示所有索引信息
+    console.log('\n📊 当前索引状态:');
     
-    const duration = Date.now() - start;
-    console.log(`查询耗时: ${duration}ms, 结果数量: ${result.length}`);
+    const collections = ['ingredients', 'storeinventories', 'transferrequests', 'stores'];
+    
+    for (const collectionName of collections) {
+      console.log(`\n${collectionName}:`);
+      const collection = db.collection(collectionName);
+      const indexes = await collection.indexes();
+      
+      indexes.forEach(index => {
+        console.log(`  - ${JSON.stringify(index.key)} ${index.unique ? '(unique)' : ''}`);
+      });
+    }
+    
+    // 6. 分析查询性能
+    console.log('\n🔍 分析查询性能...');
+    
+    // 测试仓库库存查询性能
+    const testStoreId = new mongoose.Types.ObjectId();
+    
+    console.log('测试仓库库存查询...');
+    const warehouseQueryStart = Date.now();
+    
+    await ingredientCollection.find({}).sort({ name: 1 }).limit(1).toArray();
+    await storeInventoryCollection.find({ storeId: testStoreId }).limit(1).toArray();
+    
+    const warehouseQueryTime = Date.now() - warehouseQueryStart;
+    console.log(`仓库查询耗时: ${warehouseQueryTime}ms`);
+    
+    // 测试申请记录查询性能
+    console.log('测试申请记录查询...');
+    const requestQueryStart = Date.now();
+    
+    await transferRequestCollection.find({ storeId: testStoreId })
+      .sort({ createdAt: -1 })
+      .limit(1)
+      .toArray();
+    
+    const requestQueryTime = Date.now() - requestQueryStart;
+    console.log(`申请记录查询耗时: ${requestQueryTime}ms`);
+    
+    console.log('\n🎉 数据库索引优化完成！');
+    
+    // 提供性能建议
+    console.log('\n💡 性能优化建议:');
+    console.log('1. 定期运行此脚本以保持索引最新');
+    console.log('2. 监控慢查询日志');
+    console.log('3. 考虑使用数据库连接池');
+    console.log('4. 在生产环境中启用查询缓存');
     
   } catch (error) {
-    console.error('创建索引时出错:', error);
+    console.error('❌ 索引优化失败:', error);
+    process.exit(1);
   } finally {
-    await mongoose.disconnect();
-    console.log('数据库连接已关闭');
+    await mongoose.connection.close();
+    console.log('📝 数据库连接已关闭');
+    process.exit(0);
   }
-}
+};
 
-// 运行脚本
+// 运行优化
 if (require.main === module) {
-  createOptimizedIndexes()
-    .then(() => process.exit(0))
-    .catch(error => {
-      console.error('脚本执行失败:', error);
-      process.exit(1);
-    });
+  optimizeIndexes();
 }
 
-module.exports = { createOptimizedIndexes };
+module.exports = optimizeIndexes;

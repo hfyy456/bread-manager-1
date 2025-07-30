@@ -1,7 +1,6 @@
 const TransferRequest = require("../models/TransferRequest");
 const StoreInventory = require("../models/StoreInventory");
 const Store = require("../models/Store");
-const mongoose = require("mongoose");
 
 // Helper function to check if user is a warehouse manager
 const isWarehouseManager = async (storeId, userName) => {

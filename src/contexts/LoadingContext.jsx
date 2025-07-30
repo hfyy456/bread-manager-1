@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { Backdrop, CircularProgress, Typography, Box } from '@mui/material';
+import { Backdrop, CircularProgress, Typography } from '@mui/material';
 
 const LoadingContext = createContext();
 

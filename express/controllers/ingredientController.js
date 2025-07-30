@@ -196,44 +196,81 @@ const deleteIngredient = async (req, res) => {
   }
 };
 
-// @desc    获取当前总库存价值
+// @desc    获取当前总库存价值 (包含仓库+岗位)
 // @route   GET /api/ingredients/current-total-value
 // @access  Public
 const getCurrentTotalInventoryValue = async (req, res) => {
   try {
+    const storeId = req.header('x-current-store-id') || req.user?.currentStoreId;
+    
+    if (!storeId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: '请求头中缺少门店ID，无法计算库存价值' 
+      });
+    }
+
+    // 获取所有原料基础信息
     const ingredients = await Ingredient.find({}).lean();
+    
+    // 获取当前门店的库存信息
+    const storeInventories = await StoreInventory.find({ storeId }).lean();
+    
+    // 创建库存映射
+    const inventoryMap = new Map(
+      storeInventories.map(inv => [inv.ingredientId.toString(), inv])
+    );
+
     let totalValue = 0;
+    let mainWarehouseValue = 0;
+    let postStockValue = 0;
 
     ingredients.forEach(ingredient => {
-      let ingredientTotalStockInPurchaseUnit = 0;
-
-      // Check if stockByPost exists and is an object with keys
-      if (ingredient.stockByPost && typeof ingredient.stockByPost === 'object' && Object.keys(ingredient.stockByPost).length > 0) {
-        // Iterate over the values of the stockByPost object
-        Object.values(ingredient.stockByPost).forEach(stockEntry => {
-          // stockEntry is { quantity, unit, lastUpdated }
-          // We assume stockEntry.quantity is in ingredient.unit (purchase unit)
-          ingredientTotalStockInPurchaseUnit += (parseFloat(stockEntry.quantity) || 0);
-        });
-      }
-
-      const price = parseFloat(ingredient.price);
-
-      if (isNaN(price)) {
-        console.warn(`计算库存价值时跳过原料 '${ingredient.name}' (ID: ${ingredient._id})，原因：价格无效 (${ingredient.price}).`);
-        return; // Skip this ingredient if price is invalid
-      }
+      const price = parseFloat(ingredient.price) || 0;
       
-      if (ingredientTotalStockInPurchaseUnit > 0 && !isNaN(price)) {
-         totalValue += ingredientTotalStockInPurchaseUnit * price;
+      if (price <= 0) {
+        console.warn(`计算库存价值时跳过原料 '${ingredient.name}' (ID: ${ingredient._id})，原因：价格无效 (${ingredient.price}).`);
+        return;
+      }
+
+      const inventory = inventoryMap.get(ingredient._id.toString());
+      
+      if (inventory) {
+        // 计算主仓库存价值
+        const mainWarehouseStock = inventory.mainWarehouseStock?.quantity || 0;
+        const mainValue = mainWarehouseStock * price;
+        mainWarehouseValue += mainValue;
+        
+        // 计算岗位库存价值
+        let postStockTotal = 0;
+        if (inventory.stockByPost && typeof inventory.stockByPost === 'object') {
+          Object.values(inventory.stockByPost).forEach(stockEntry => {
+            postStockTotal += parseFloat(stockEntry.quantity) || 0;
+          });
+        }
+        const postValue = postStockTotal * price;
+        postStockValue += postValue;
+        
+        totalValue += mainValue + postValue;
       }
     });
 
-    res.json({ success: true, totalValue: parseFloat(totalValue.toFixed(2)) });
+    res.json({ 
+      success: true, 
+      totalValue: parseFloat(totalValue.toFixed(2)),
+      breakdown: {
+        mainWarehouseValue: parseFloat(mainWarehouseValue.toFixed(2)),
+        postStockValue: parseFloat(postStockValue.toFixed(2)),
+        totalValue: parseFloat(totalValue.toFixed(2))
+      }
+    });
 
   } catch (err) {
     console.error('获取总库存价值错误:', err.message);
-    res.status(500).json({ success: false, message: '服务器错误，无法获取总库存价值: ' + err.message });
+    res.status(500).json({ 
+      success: false, 
+      message: '服务器错误，无法获取总库存价值: ' + err.message 
+    });
   }
 };
 

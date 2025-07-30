@@ -24,26 +24,16 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { startOfDay, endOfDay, format } from "date-fns";
 import HistoryIcon from "@mui/icons-material/History";
-
-const STATUS_MAP = {
-  pending: "待处理",
-  approved: "已批准",
-  rejected: "已拒绝",
-  completed: "已完成",
-};
+import {
+  STATUS_MAP,
+  STATUS_COLORS,
+  API_ENDPOINTS,
+  SUCCESS_MESSAGES,
+  ERROR_MESSAGES,
+} from "../constants";
 
 const getStatusChipColor = (status) => {
-  switch (status) {
-    case "completed":
-      return "success";
-    case "approved":
-      return "info";
-    case "rejected":
-      return "error";
-    case "pending":
-    default:
-      return "warning";
-  }
+  return STATUS_COLORS[status] || "warning";
 };
 
 const AllRequestsView = ({ storeId, user }) => {
@@ -59,7 +49,6 @@ const AllRequestsView = ({ storeId, user }) => {
 
   const fetchAllRequests = useCallback(async () => {
     if (!storeId) return;
-
     setLoading(true);
     setError("");
     try {
@@ -110,15 +99,15 @@ const AllRequestsView = ({ storeId, user }) => {
     checkWarehouseManager();
   }, [storeId, user]);
 
-  // 根据名字过滤申请记录
+  // 根据名字过滤申请记录 - 优化搜索性能
   const filteredRequests = useMemo(() => {
-    if (!nameFilter.trim()) {
+    const trimmedFilter = nameFilter.trim().toLowerCase();
+    if (!trimmedFilter) {
       return requests;
     }
     return requests.filter(
       (req) =>
-        req.requestedBy &&
-        req.requestedBy.toLowerCase().includes(nameFilter.toLowerCase().trim())
+        req.requestedBy && req.requestedBy.toLowerCase().includes(trimmedFilter)
     );
   }, [requests, nameFilter]);
 

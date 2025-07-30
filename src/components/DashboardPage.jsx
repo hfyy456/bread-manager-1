@@ -187,13 +187,21 @@ const DashboardPage = () => {
             };
         }
 
-        // 1. Calculate Total Inventory Value
+        // 1. Calculate Total Inventory Value (仓库 + 岗位)
         let totalInventoryValue = 0;
         ingredientsMap.forEach(ing => {
+            const price = ing.price || 0;
+            
+            // 计算岗位库存价值
             if (ing.stockByPost) {
                 Object.values(ing.stockByPost).forEach(stock => {
-                    totalInventoryValue += (stock.quantity || 0) * (ing.price || 0);
+                    totalInventoryValue += (stock.quantity || 0) * price;
                 });
+            }
+            
+            // 计算主仓库存价值
+            if (ing.mainWarehouseStock) {
+                totalInventoryValue += (ing.mainWarehouseStock.quantity || 0) * price;
             }
         });
 
@@ -506,7 +514,7 @@ const DashboardPage = () => {
                     <Grid container spacing={3}>
                             {renderSummaryCard("总出品价值", processedData.summary.totalProductionValue)}
                             {renderSummaryCard("总成品报废价值", processedData.summary.totalFinishedWasteValue, 'error')}
-                            {renderSummaryCard("当前总库存价值", processedData.inventoryValue)}
+                            {renderSummaryCard("库存总价值(仓库+岗位)", processedData.inventoryValue)}
                             
                             <Grid item xs={12}>
                                 <Paper elevation={2} sx={{ p: 2, height: 350 }}>

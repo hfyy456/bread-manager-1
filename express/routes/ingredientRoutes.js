@@ -9,6 +9,11 @@ const {
   getCurrentTotalInventoryValue
 } = require('../controllers/ingredientController');
 
+const {
+  getStoreInventoryValue,
+  getInventoryValueTrend
+} = require('../controllers/inventoryValueController');
+
 // @route   POST /api/ingredients/list
 // @desc    获取所有原料
 router.post('/list', getAllIngredients);
@@ -30,7 +35,15 @@ router.post('/update', updateIngredient);
 router.post('/delete', deleteIngredient);
 
 // @route   GET /api/ingredients/current-total-value
-// @desc    获取当前总库存价值
+// @desc    获取当前总库存价值 (兼容旧版本)
 router.get('/current-total-value', getCurrentTotalInventoryValue);
+
+// @route   GET /api/ingredients/inventory-value
+// @desc    获取门店库存价值详细统计 (仓库+岗位)
+router.get('/inventory-value', getStoreInventoryValue);
+
+// @route   GET /api/ingredients/inventory-value-trend
+// @desc    获取库存价值趋势数据
+router.get('/inventory-value-trend', getInventoryValueTrend);
 
 module.exports = router; 
