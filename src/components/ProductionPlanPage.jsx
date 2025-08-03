@@ -3,7 +3,7 @@ import {
   Container, Typography, Paper, Grid, Box, Button, TextField, 
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Select, MenuItem, FormControl, InputLabel, Chip, Alert,
-  IconButton, Tooltip, Card, CardContent, Divider
+  IconButton, Tooltip, Card, CardContent, Divider, Dialog, DialogTitle, DialogContent
 } from '@mui/material';
 import {
   Add as AddIcon, Delete as DeleteIcon, Save as SaveIcon,
@@ -18,6 +18,7 @@ import { zhCN } from 'date-fns/locale';
 import { format, getDay } from 'date-fns';
 import { DataContext } from './DataContext';
 import { useSnackbar } from './SnackbarProvider';
+import { generateAggregatedRawMaterials } from '../utils/calculator';
 
 // 天气选项
 const WEATHER_OPTIONS = [
@@ -37,7 +38,7 @@ const TIME_SLOTS = Array.from({ length: 11 }, (_, i) => {
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
 const ProductionPlanPage = () => {
-  const { breadTypes, loading, ingredientsMap } = useContext(DataContext);
+  const { breadTypes, loading, ingredientsMap, ingredients, doughRecipesMap, fillingRecipesMap } = useContext(DataContext);
   const { showSnackbar } = useSnackbar();
 
   // 基础状态
@@ -56,6 +57,10 @@ const ProductionPlanPage = () => {
     customerCount: 0,      // 客单数
     customerPrice: 0       // 客单价
   });
+  
+  // 原料计算器状态
+  const [showRawMaterialsCalculator, setShowRawMaterialsCalculator] = useState(false);
+  const [rawMaterialsData, setRawMaterialsData] = useState([]);
 
   // 计算周几
   const weekday = useMemo(() => {
@@ -123,6 +128,84 @@ const ProductionPlanPage = () => {
       // 包材成本 = 单个面包需要的包材数量 × 面包总数量 × 包材单价
       return total + (pkg.quantity * item.totalQuantity * unitPrice);
     }, 0);
+  };
+
+  // 计算原料需求
+  const calculateRawMaterials = () => {
+    if (!productionItems.length || !breadTypes.length) {
+      showSnackbar('请先添加生产项目', 'warning');
+      return;
+    }
+
+    try {
+      const aggregatedMaterials = {};
+      
+      productionItems.forEach(item => {
+        if (!item.breadId || item.totalQuantity === 0) return;
+        
+        const breadType = breadTypes.find(bread => bread._id === item.breadId);
+        if (!breadType) return;
+        
+        // 使用现有的原料计算函数
+        const materials = generateAggregatedRawMaterials(
+          breadType, 
+          breadTypes, 
+          doughRecipesMap, 
+          fillingRecipesMap, 
+          ingredients, 
+          item.totalQuantity
+        );
+        
+        // 聚合所有面包的原料需求
+        materials.forEach(material => {
+          if (aggregatedMaterials[material.id]) {
+            aggregatedMaterials[material.id].quantity += material.quantity;
+          } else {
+            aggregatedMaterials[material.id] = { ...material };
+          }
+        });
+      });
+      
+      const rawMaterialsList = Object.values(aggregatedMaterials)
+        .filter(material => material.quantity > 0)
+        .sort((a, b) => a.name.localeCompare(b.name));
+      
+      setRawMaterialsData(rawMaterialsList);
+      setShowRawMaterialsCalculator(true);
+      showSnackbar(`计算完成，共需要 ${rawMaterialsList.length} 种原料`, 'success');
+    } catch (error) {
+      console.error('原料计算失败:', error);
+      showSnackbar('原料计算失败，请检查数据', 'error');
+    }
+  };
+
+  // 导出原料清单
+  const exportRawMaterials = () => {
+    if (!rawMaterialsData.length) {
+      showSnackbar('没有原料数据可导出', 'warning');
+      return;
+    }
+
+    const dateStr = format(selectedDate, 'yyyy-MM-dd');
+    const csvContent = [
+      ['原料名称', '需求数量', '单位', '规格', '采购单价', '预估成本'].join(','),
+      ...rawMaterialsData.map(material => [
+        material.name,
+        material.quantity.toFixed(2),
+        material.unit,
+        material.specs || '',
+        material.price ? (material.price / (ingredientsMap?.get(material.id)?.norms || 1)).toFixed(4) : '',
+        material.price ? ((material.quantity * material.price) / (ingredientsMap?.get(material.id)?.norms || 1)).toFixed(2) : ''
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `原料清单_${dateStr}.csv`;
+    link.click();
+    
+    showSnackbar('原料清单导出成功', 'success');
   };
 
   // 计算预估生产金额（预估排产报废 + 预估品尝报废 + 客单数 × 客单价）
@@ -413,6 +496,18 @@ const ProductionPlanPage = () => {
                 
                 <Grid item xs={12} md={1.5}>
                   <Button
+                    variant="outlined"
+                    color="info"
+                    onClick={calculateRawMaterials}
+                    disabled={productionItems.length === 0}
+                    fullWidth
+                  >
+                    原料计算
+                  </Button>
+                </Grid>
+                
+                <Grid item xs={12} md={1.2}>
+                  <Button
                     variant="contained"
                     color="success"
                     startIcon={<SaveIcon />}
@@ -424,7 +519,7 @@ const ProductionPlanPage = () => {
                   </Button>
                 </Grid>
                 
-                <Grid item xs={12} md={1.5}>
+                <Grid item xs={12} md={1.3}>
                   <Button
                     variant={isLocked ? "contained" : "outlined"}
                     color={isLocked ? "error" : "warning"}
