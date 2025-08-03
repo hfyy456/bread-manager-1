@@ -9,7 +9,6 @@ import { useSnackbar } from './SnackbarProvider.jsx';
 import { useStore } from './StoreContext.jsx'; // 1. 引入 useStore
 import StockBreakdown from './StockBreakdown.jsx';
 import InventoryStats from './InventoryStats.jsx';
-import InventoryDebugger from './InventoryDebugger.jsx';
 
 // Helper functions for sorting
 function descendingComparator(a, b, orderBy) {
@@ -430,10 +429,18 @@ const IngredientsPage = () => {
 
   // 导出Excel功能
   const handleExportExcel = async () => {
+    if (!currentStore) {
+      showSnackbar('请先选择门店', 'warning');
+      return;
+    }
+
     setDownloading(true);
     try {
       const response = await fetch('/api/inventory/export-realtime', {
         method: 'GET',
+        headers: {
+          'x-current-store-id': currentStore._id,
+        },
       });
       if (!response.ok) {
         throw new Error('导出失败');
@@ -509,12 +516,7 @@ const IngredientsPage = () => {
         <InventoryStats ingredients={processedIngredients} />
       </Box>
 
-      {/* 开发环境调试组件 */}
-      {process.env.NODE_ENV === 'development' && (
-        <Box sx={{ mb: 3 }}>
-          <InventoryDebugger />
-        </Box>
-      )}
+
 
 
 

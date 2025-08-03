@@ -38,7 +38,8 @@ const WarehouseBulkActions = ({
   onSelectionChange,
   onBulkUpdate,
   editStock = {},
-  loading = false
+  loading = false,
+  currentStore = null
 }) => {
   const [bulkEditDialog, setBulkEditDialog] = useState(false);
   const [bulkOperation, setBulkOperation] = useState('set'); // 'set', 'add', 'subtract', 'multiply'
@@ -147,11 +148,19 @@ const WarehouseBulkActions = ({
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `warehouse_stock_${new Date().toISOString().split('T')[0]}.csv`;
+    
+    // 生成包含门店名称的文件名
+    const storeName = currentStore?.name ? 
+      currentStore.name.replace(/[<>:"/\\|?*]/g, '_') : 
+      '未知门店';
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `${storeName}_仓库库存_${timestamp}.csv`;
+    
+    link.download = filename;
     link.click();
     
     setExportDialog(false);
-  }, [selectionStats.items, filteredStock]);
+  }, [selectionStats.items, filteredStock, currentStore]);
 
   // 计算库存价值
   const calculateTotalValue = useCallback(() => {

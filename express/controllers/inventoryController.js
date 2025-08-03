@@ -1,6 +1,7 @@
 const Ingredient = require("../models/Ingredient");
 const StoreInventory = require('../models/StoreInventory'); // 新增
 const InventorySnapshot = require("../models/InventorySnapshot");
+const Store = require('../models/Store');
 const { format, getYear, getWeek, startOfWeek } = require('date-fns');
 const POSTNAME = {
   1: "搅拌",
@@ -15,6 +16,21 @@ const POSTNAME = {
   10: "收货入库",
 };
 const XLSX = require("xlsx");
+
+// 辅助函数：获取门店名称用于文件名
+const getStoreNameForFilename = async (storeId) => {
+  try {
+    const store = await Store.findById(storeId).select('name').lean();
+    if (store && store.name) {
+      // 清理门店名称，移除特殊字符以适合文件名
+      return store.name.replace(/[<>:"/\\|?*]/g, '_');
+    }
+  } catch (error) {
+    console.warn('获取门店名称失败，使用默认名称:', error.message);
+  }
+  return '未知门店';
+};
+
 // @desc    提交指定岗位的物料盘点数据
 // @route   POST /api/inventory/submit
 // @access  Private (需要权限验证，例如确认是组长)
@@ -313,16 +329,31 @@ const getInventoryState = async (req, res) => {
   }
 };
 
-// @desc    导出最新库存快照为Excel
+// @desc    导出最新库存快照为Excel (支持门店级别)
 // @route   GET /api/inventory/export
 // @access  Private
 const exportInventoryExcel = async (req, res) => {
   try {
-    // 获取最新快照
-    const snapshot = await InventorySnapshot.findOne({}).sort({ createdAt: -1 });
-    if (!snapshot) {
-      return res.status(404).json({ success: false, message: "没有库存快照可导出" });
+    const { currentStoreId } = req.user;
+    
+    if (!currentStoreId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "未指定当前操作的门店" 
+      });
     }
+
+    // 获取当前门店的最新快照
+    const snapshot = await InventorySnapshot.findOne({ storeId: currentStoreId })
+      .sort({ createdAt: -1 });
+      
+    if (!snapshot) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "当前门店没有库存快照可导出" 
+      });
+    }
+
     // 获取所有相关原料信息
     const ingredientIds = snapshot.ingredients.map((item) => item.ingredientId);
     const ingredientsData = await Ingredient.find({ _id: { $in: ingredientIds } });
@@ -332,162 +363,305 @@ const exportInventoryExcel = async (req, res) => {
     const rows = [];
     // 表头
     rows.push([
-      "原料名称", "单位", "规格", "岗位", "数量", "盘点单位", "最后更新时间"
+      "原料名称", "单位", "规格", "采购单价(元)", "岗位", "岗位名称", 
+      "数量", "盘点单位", "单项价值(元)", "最后更新时间"
     ]);
+
+    let totalSnapshotValue = 0;
+
     for (const item of snapshot.ingredients) {
       const ingredient = ingredientsMap.get(item.ingredientId.toString());
       const name = ingredient ? ingredient.name : "未知原料";
       const unit = ingredient ? ingredient.unit : "-";
       const specs = ingredient ? ingredient.specs : "-";
-      if (item.stockByPost) {
-        for (const [post, stock] of item.stockByPost.entries()) {
+      const price = ingredient ? (ingredient.price || 0) : 0;
+      
+      if (item.stockByPost && typeof item.stockByPost === 'object') {
+        // 处理Map或Object类型的stockByPost
+        const stockEntries = item.stockByPost instanceof Map 
+          ? Array.from(item.stockByPost.entries())
+          : Object.entries(item.stockByPost);
+          
+        for (const [postId, stock] of stockEntries) {
+          const postName = POSTNAME[postId] || `岗位${postId}`;
+          const quantity = stock.quantity || 0;
+          const itemValue = quantity * price;
+          totalSnapshotValue += itemValue;
+          
           rows.push([
             name,
             unit,
             specs,
-            post,
-            stock.quantity,
-            stock.unit,
-            stock.lastUpdated ? format(stock.lastUpdated, "yyyy-MM-dd HH:mm:ss") : "-"
+            price.toFixed(2),
+            postId,
+            postName,
+            quantity.toFixed(2),
+            stock.unit || unit,
+            itemValue.toFixed(2),
+            stock.lastUpdated ? format(new Date(stock.lastUpdated), "yyyy-MM-dd HH:mm:ss") : "-"
           ]);
         }
       } else {
-        rows.push([name, unit, specs, "-", "-", "-", "-"]);
+        // 没有库存数据的情况
+        rows.push([name, unit, specs, price.toFixed(2), "-", "-", "0.00", "-", "0.00", "-"]);
       }
     }
+
+    // 添加总价值汇总行
+    rows.push([
+      "【快照总价值】", "", "", "", "", "", "", "", totalSnapshotValue.toFixed(2), ""
+    ]);
+
     // 创建工作表和工作簿
     const ws = XLSX.utils.aoa_to_sheet(rows);
+    
+    // 设置列宽
+    const colWidths = [
+      { wch: 20 }, // 原料名称
+      { wch: 10 }, // 单位
+      { wch: 15 }, // 规格
+      { wch: 12 }, // 采购单价
+      { wch: 8 },  // 岗位
+      { wch: 12 }, // 岗位名称
+      { wch: 10 }, // 数量
+      { wch: 10 }, // 盘点单位
+      { wch: 12 }, // 单项价值
+      { wch: 20 }  // 最后更新时间
+    ];
+    ws['!cols'] = colWidths;
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "库存快照");
+    
     // 写入buffer
     const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    
+    // 获取门店名称用于文件名
+    const storeName = await getStoreNameForFilename(currentStoreId);
+
     // 设置响应头
-    res.setHeader("Content-Disposition", `attachment; filename=inventory_snapshot_${format(snapshot.createdAt, "yyyyMMdd_HHmmss")}.xlsx`);
+    const timestamp = format(snapshot.createdAt, "yyyyMMdd_HHmmss");
+    const filename = `${storeName}_库存快照_${timestamp}.xlsx`;
+    
+    res.setHeader("Content-Disposition", `attachment; filename=${encodeURIComponent(filename)}`);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.send(buf);
+    
   } catch (error) {
     console.error("导出库存快照为Excel失败:", error);
-    res.status(500).json({ success: false, message: "服务器错误，导出失败" });
+    res.status(500).json({ 
+      success: false, 
+      message: "服务器错误，导出失败: " + error.message 
+    });
   }
 };
 
-// @desc    导出实时库存为Excel
+// @desc    导出实时库存为Excel (支持门店级别)
 // @route   GET /api/inventory/export-realtime
 // @access  Private
 const exportInventoryRealtimeExcel = async (req, res) => {
   try {
-    // 使用流式处理避免内存过大
-    const batchSize = 100;  // 每批处理数量
+    const { currentStoreId } = req.user;
     
-    // 表头初始化
-    const header = ["原料名称", "采购单位", "规格", "总库存"];
-    const rows = [header];
-    
-    // 获取所有原料并按批次处理
-    let batchCount = 0;
-    let totalStocks = {};
-    
-    while (true) {
-      const ingredients = await Ingredient.find({})
-        .skip(batchCount * batchSize)
-        .limit(batchSize)
-        .lean();
-        
-      if (ingredients.length === 0) break;
-      
-      // 首次循环时确定所有岗位
-      if (batchCount === 0) {
-        const allPosts = new Set();
-        for (const ing of ingredients) {
-          if (ing.stockByPost && typeof ing.stockByPost === 'object') {
-            // 使用Object.keys代替Map.keys
-            for (const post of Object.keys(ing.stockByPost)) {
-              allPosts.add(post);
-            }
-          }
-        }
-        // 排序后的岗位列表
-        const sortedPosts = Array.from(allPosts).sort((a, b) => a - b);
-        // 完成表头
-        header.push(...sortedPosts.map(p => `岗位${p}库存`));
-        // 初始化总库存统计
-        for (const post of sortedPosts) {
-          totalStocks[post] = 0;
-        }
-        
-        // 添加总库存统计
-        for (const ing of ingredients) {
-          if (ing.stockByPost && typeof ing.stockByPost === 'object') {
-            // 使用Object.entries同时获取键和值
-            for (const [post, stock] of Object.entries(ing.stockByPost)) {
-              if (!totalStocks[post]) {
-                totalStocks[post] = 0;
-              }
-              totalStocks[post] += stock.quantity || 0;
-            }
-          }
-        }
-      }
-      
-      // 处理当前批次的数据
-      for (const ing of ingredients) {
-        let total = 0;
-        const postStocks = [];
-        
-        // 收集所有岗位的库存数据
-        for (const post of Object.keys(totalStocks)) {
-          let qty = 0;
-          if (ing.stockByPost && typeof ing.stockByPost === 'object' && ing.stockByPost.hasOwnProperty(post)) {
-            qty = ing.stockByPost[post].quantity || 0;
-          }
-          postStocks.push(qty);
-          total += qty;
-        }
-        
-        // 添加该原料到表格
-        rows.push([
-          ing.name,
-          ing.unit,
-          ing.specs || '',
-          total,
-          ...postStocks
-        ]);
-      }
-      
-      batchCount++;
-    }
-    
-    // 添加总库存行
-    if (Object.keys(totalStocks).length > 0) {
-      const totalRow = ["总库存", "", "", ""];
-      for (const post of Object.keys(totalStocks)) {
-        totalRow.push(totalStocks[post] || 0);
-      }
-      rows.unshift(totalRow);  // 将总库存行放在第二行
-    }
-    
-    // 添加总库存行
-    if (Object.keys(totalStocks).length > 0) {
-      const totalRow = ["总库存", "", "", ""];
-      for (const post of Object.keys(totalStocks)) {
-        totalRow.push(totalStocks[post] || 0);
-      }
-      rows.unshift(totalRow);  // 将总库存行放在第二行
+    if (!currentStoreId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "未指定当前操作的门店" 
+      });
     }
 
-    // 创建工作表和工作簿
+    // 获取所有原料基础信息
+    const allIngredients = await Ingredient.find({})
+      .select('name unit specs price _id')
+      .lean();
+
+    // 获取当前门店的库存数据
+    const storeInventories = await StoreInventory.find({ storeId: currentStoreId })
+      .select('ingredientId stockByPost mainWarehouseStock')
+      .lean();
+
+    // 创建库存映射
+    const inventoryMap = new Map(
+      storeInventories.map(inv => [inv.ingredientId.toString(), inv])
+    );
+
+    // 收集所有岗位信息
+    const allPosts = new Set();
+    storeInventories.forEach(inv => {
+      if (inv.stockByPost && typeof inv.stockByPost === 'object') {
+        Object.keys(inv.stockByPost).forEach(post => allPosts.add(post));
+      }
+    });
+
+    const sortedPosts = Array.from(allPosts).sort((a, b) => parseInt(a) - parseInt(b));
+
+    // 构建表头
+    const header = [
+      "原料名称", 
+      "采购单位", 
+      "规格",
+      "采购单价(元)",
+      "主仓库存",
+      "主仓价值(元)",
+      "岗位库存小计",
+      "岗位价值(元)",
+      "总库存",
+      "总价值(元)"
+    ];
+    
+    // 添加各岗位列
+    sortedPosts.forEach(postId => {
+      const postName = POSTNAME[postId] || `岗位${postId}`;
+      header.push(`${postName}库存`);
+      header.push(`${postName}价值(元)`);
+    });
+
+    const rows = [header];
+
+    // 统计数据
+    let totalMainWarehouse = 0;
+    let totalMainValue = 0;
+    let totalPostStock = 0;
+    let totalPostValue = 0;
+    let totalOverall = 0;
+    let totalOverallValue = 0;
+    const postTotals = {};
+    const postValueTotals = {};
+    sortedPosts.forEach(post => {
+      postTotals[post] = 0;
+      postValueTotals[post] = 0;
+    });
+
+    // 处理每个原料
+    allIngredients.forEach(ingredient => {
+      const inventory = inventoryMap.get(ingredient._id.toString());
+      const price = ingredient.price || 0;
+      
+      // 主仓库存
+      const mainStock = inventory?.mainWarehouseStock?.quantity || 0;
+      const mainValue = mainStock * price;
+      totalMainWarehouse += mainStock;
+      totalMainValue += mainValue;
+
+      // 岗位库存
+      let postStockSubtotal = 0;
+      let postValueSubtotal = 0;
+      const postStocks = [];
+      const postValues = [];
+      
+      sortedPosts.forEach(postId => {
+        let qty = 0;
+        if (inventory?.stockByPost && inventory.stockByPost[postId]) {
+          qty = inventory.stockByPost[postId].quantity || 0;
+        }
+        const value = qty * price;
+        
+        postStocks.push(qty);
+        postValues.push(value);
+        postStockSubtotal += qty;
+        postValueSubtotal += value;
+        postTotals[postId] += qty;
+        postValueTotals[postId] += value;
+      });
+
+      totalPostStock += postStockSubtotal;
+      totalPostValue += postValueSubtotal;
+      const itemTotal = mainStock + postStockSubtotal;
+      const itemTotalValue = mainValue + postValueSubtotal;
+      totalOverall += itemTotal;
+      totalOverallValue += itemTotalValue;
+
+      // 添加数据行
+      const dataRow = [
+        ingredient.name,
+        ingredient.unit || '',
+        ingredient.specs || '',
+        price.toFixed(2),
+        mainStock.toFixed(2),
+        mainValue.toFixed(2),
+        postStockSubtotal.toFixed(2),
+        postValueSubtotal.toFixed(2),
+        itemTotal.toFixed(2),
+        itemTotalValue.toFixed(2)
+      ];
+      
+      // 添加各岗位的库存和价值
+      for (let i = 0; i < sortedPosts.length; i++) {
+        dataRow.push(postStocks[i].toFixed(2));
+        dataRow.push(postValues[i].toFixed(2));
+      }
+      
+      rows.push(dataRow);
+    });
+
+    // 添加总计行
+    const totalRow = [
+      "【总计】",
+      "",
+      "",
+      "", // 单价列留空
+      totalMainWarehouse.toFixed(2),
+      totalMainValue.toFixed(2),
+      totalPostStock.toFixed(2),
+      totalPostValue.toFixed(2),
+      totalOverall.toFixed(2),
+      totalOverallValue.toFixed(2)
+    ];
+    
+    // 添加各岗位的总计
+    sortedPosts.forEach(post => {
+      totalRow.push(postTotals[post].toFixed(2));
+      totalRow.push(postValueTotals[post].toFixed(2));
+    });
+    
+    rows.push(totalRow);
+
+    // 创建工作表
     const ws = XLSX.utils.aoa_to_sheet(rows);
+    
+    // 设置列宽
+    const colWidths = [
+      { wch: 20 }, // 原料名称
+      { wch: 10 }, // 采购单位
+      { wch: 15 }, // 规格
+      { wch: 12 }, // 采购单价
+      { wch: 12 }, // 主仓库存
+      { wch: 12 }, // 主仓价值
+      { wch: 12 }, // 岗位库存小计
+      { wch: 12 }, // 岗位价值小计
+      { wch: 12 }, // 总库存
+      { wch: 12 }, // 总价值
+      ...sortedPosts.flatMap(() => [
+        { wch: 12 }, // 岗位库存
+        { wch: 12 }  // 岗位价值
+      ])
+    ];
+    ws['!cols'] = colWidths;
+
+    // 创建工作簿
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "实时库存");
+    
+    // 生成Excel文件
     const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 
+    // 获取门店名称用于文件名
+    const storeName = await getStoreNameForFilename(currentStoreId);
+
     // 设置响应头
-    res.setHeader("Content-Disposition", `attachment; filename=realtime_inventory_${moment().format("YYYYMMDD_HHmmss")}.xlsx`);
+    const timestamp = format(new Date(), "yyyyMMdd_HHmmss");
+    const filename = `${storeName}_实时库存_${timestamp}.xlsx`;
+    
+    res.setHeader("Content-Disposition", `attachment; filename=${encodeURIComponent(filename)}`);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.send(buf);
+
   } catch (error) {
     console.error("导出实时库存为Excel失败:", error);
-    res.status(500).json({ success: false, message: "服务器错误，导出失败" });
+    res.status(500).json({ 
+      success: false, 
+      message: "服务器错误，导出失败: " + error.message 
+    });
   }
 };
 

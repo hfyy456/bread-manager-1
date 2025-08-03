@@ -579,6 +579,7 @@ const OptimizedWarehousePage = () => {
           onBulkUpdate={handleBulkUpdate}
           editStock={editStock}
           loading={loading || bulkUpdateLoading}
+          currentStore={currentStore}
         />
 
         {/* 统计信息 */}
