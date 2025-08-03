@@ -21,3 +21,5 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+express/logs/performance-2025-08-03.log
+express/logs/api-2025-08-03.log
