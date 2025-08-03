@@ -16,6 +16,7 @@ const storeRoutes = require('./routes/storeRoutes'); // 新增门店路由
 const warehouseRoutes = require('./routes/warehouseRoutes'); // 1. 引入仓库路由
 const transferRequestRoutes = require('./routes/transferRequestRoutes'); // For mobile requests
 const feishuRoutes = require('./routes/feishuRoutes'); // For Feishu integration
+const productionPlanRoutes = require('./routes/productionPlanRoutes'); // 引入生产计划路由
 
 const authMiddleware = require('./middleware/authMiddleware'); // 引入模拟认证中间件
 const { performanceMiddleware, startPerformanceReporting } = require('./middleware/performanceMiddleware'); // 性能监控
@@ -54,6 +55,7 @@ app.use('/api/dough-recipes', authMiddleware, doughRecipeRoutes);
 app.use('/api/ingredients', ingredientsCompareRoutes); // 新增对比路由
 app.use('/api/warehouse', authMiddleware, warehouseRoutes); // 2. 注册仓库路由
 app.use('/api/transfer-requests', transferRequestRoutes); // Register the new route
+app.use('/api/production-plans', authMiddleware, productionPlanRoutes); // 注册生产计划路由
 app.use('/api/feishu', feishuRoutes);
 // 您可以在这里添加其他路由模块，例如:
 // const userRoutes = require('./routes/userRoutes');

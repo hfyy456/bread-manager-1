@@ -32,6 +32,12 @@ const navConfig = [
     ]
   },
   {
+    title: '生产管理',
+    children: [
+      { title: '生产计划', path: '/production-plan' },
+    ]
+  },
+  {
     title: '数据中心',
     children: [
   { title: '原料计算器', path: '/raw-material-calculator' },

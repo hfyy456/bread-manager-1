@@ -12,6 +12,12 @@ const decorationSchema = new mongoose.Schema({
   unit: { type: String, required: true },
 }, { _id: false });
 
+const packagingSchema = new mongoose.Schema({
+  ingredientId: { type: String, required: true },
+  quantity: { type: Number, required: true },
+  unit: { type: String, required: true },
+}, { _id: false });
+
 const breadTypeSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -43,6 +49,7 @@ const breadTypeSchema = new mongoose.Schema({
   },
   fillings: [fillingSchema],
   decorations: [decorationSchema],
+  packaging: [packagingSchema],
 }, { timestamps: true });
 
 const BreadType = mongoose.model('BreadType', breadTypeSchema);

@@ -21,6 +21,7 @@ import ReceivingPage from './components/ReceivingPage';
 import WarehousePage from './components/WarehousePage';
 import ApprovalPage from './components/ApprovalPage';
 import WarehouseStockTest from './components/WarehouseStockTest';
+import ProductionPlanPage from './components/ProductionPlanPage';
 import { useStore } from './components/StoreContext.jsx';
 import StoreSelectionPage from './components/StoreSelectionPage.jsx';
 
@@ -97,6 +98,7 @@ function App() {
                   <Route path="/warehouse" element={<WarehousePage />} />
                   <Route path="/approvals" element={<ApprovalPage />} />
                   <Route path="/warehouse-test" element={<WarehouseStockTest />} />
+                  <Route path="/production-plan" element={<ProductionPlanPage />} />
                     <Route path="/bread-type-editor" element={<BreadTypeEditor />} />
                     <Route path="/bread-type-editor/:id" element={<BreadTypeEditor />} />
                 </Routes>

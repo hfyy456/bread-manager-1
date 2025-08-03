@@ -3,6 +3,8 @@ import {
     Container, Box, Paper, BottomNavigation, BottomNavigationAction,
     Typography, List, ListItem, ListItemText, CircularProgress, Alert,
     Button, TextField, Chip, Grid, Card, CardContent, CardActions, IconButton,
+    Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
+    Snackbar, Collapse,
 } from '@mui/material';
 import ShoppingBasketIcon from '@mui/icons-material/ShoppingBasket';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
@@ -18,9 +20,100 @@ import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import ArticleIcon from '@mui/icons-material/Article';
+import WarningIcon from '@mui/icons-material/Warning';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import MobileInventoryCheck from './MobileInventoryCheck';
 import AllRequestsView from './AllRequestsView';
 import StoreSelectorView from './StoreSelectorView'; // 导入门店选择器
+
+// 未批准库存提示组件
+const PendingRequestsAlert = ({ 
+    pendingRequests, 
+    onBulkApprove, 
+    bulkApproving, 
+    expanded, 
+    onToggleExpand,
+    user 
+}) => {
+    if (pendingRequests.length === 0) return null;
+
+    const totalPendingItems = pendingRequests.reduce((sum, req) => sum + req.items.length, 0);
+    
+    return (
+        <Alert 
+            severity="warning" 
+            sx={{ 
+                mb: 2, 
+                '& .MuiAlert-message': { width: '100%' }
+            }}
+            icon={<WarningIcon />}
+            action={
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                    <Button
+                        color="inherit"
+                        size="small"
+                        onClick={onBulkApprove}
+                        disabled={bulkApproving}
+                        startIcon={bulkApproving ? <CircularProgress size={16} /> : <CheckCircleIcon />}
+                    >
+                        {bulkApproving ? '批准中...' : '一键批准'}
+                    </Button>
+                    <IconButton
+                        size="small"
+                        onClick={onToggleExpand}
+                        color="inherit"
+                    >
+                        {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                    </IconButton>
+                </Box>
+            }
+        >
+            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                ⚠️ 有 {pendingRequests.length} 个申请待批准，影响 {totalPendingItems} 个物料的库存显示
+            </Typography>
+            
+            <Collapse in={expanded}>
+                <Box sx={{ mt: 2 }}>
+                    <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
+                        <strong>未批准申请的影响：</strong>
+                        <br />• 占用虚拟库存，影响其他人申请
+                        <br />• 库存显示不准确，可能导致缺货
+                        <br />• 延误生产计划和配送安排
+                    </Typography>
+                    
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                        待批准申请详情：
+                    </Typography>
+                    
+                    {pendingRequests.slice(0, 3).map(req => (
+                        <Box key={req._id} sx={{ 
+                            mb: 1, 
+                            p: 1, 
+                            bgcolor: 'rgba(255, 152, 0, 0.1)', 
+                            borderRadius: 1,
+                            fontSize: '0.875rem'
+                        }}>
+                            <Typography variant="caption" display="block">
+                                申请单 #{req._id.slice(-6)} - {req.requestedBy || '未知用户'}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                {req.items.length} 个物料 | {new Date(req.createdAt).toLocaleDateString()}
+                            </Typography>
+                        </Box>
+                    ))}
+                    
+                    {pendingRequests.length > 3 && (
+                        <Typography variant="caption" color="text.secondary">
+                            还有 {pendingRequests.length - 3} 个申请...
+                        </Typography>
+                    )}
+                </Box>
+            </Collapse>
+        </Alert>
+    );
+};
 
 // Custom hook to manage user authentication AND environment check
 const useUser = () => {
@@ -384,7 +477,7 @@ const CartView = ({ user, cartItems, onUpdateCart, storeId, refetchData }) => {
             // Calculate virtual stock just for validation
             const pendingQuantities = {};
             requestsData
-                .filter(req => req.status === 'pending' || req.status === 'approved')
+                .filter(req => req.status === 'pending')
                 .forEach(req => {
                     req.items.forEach(item => {
                         pendingQuantities[item.ingredientId] = (pendingQuantities[item.ingredientId] || 0) + item.quantity;
@@ -657,6 +750,13 @@ const MobileRequestPage = () => {
     const [loading, setLoading] = useState(true);
     const [ingredientsWithVirtualStock, setIngredientsWithVirtualStock] = useState([]);
     const [historyRequests, setHistoryRequests] = useState([]);
+    const [pendingRequests, setPendingRequests] = useState([]);
+    const [showPendingAlert, setShowPendingAlert] = useState(false);
+    const [expandPendingDetails, setExpandPendingDetails] = useState(false);
+    const [bulkApproving, setBulkApproving] = useState(false);
+    const [snackbarOpen, setSnackbarOpen] = useState(false);
+    const [snackbarMessage, setSnackbarMessage] = useState('');
+    const [snackbarSeverity, setSnackbarSeverity] = useState('info');
     const { user, loading: userLoading, error: userError, isFeishuEnv, checkingEnv } = useUser();
 
     useEffect(() => {
@@ -712,9 +812,14 @@ const MobileRequestPage = () => {
             
             setHistoryRequests(userRequests.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
 
+            // 获取待批准的申请
+            const pendingRequestsData = requestsData.filter(req => req.status === 'pending');
+            setPendingRequests(pendingRequestsData);
+            setShowPendingAlert(pendingRequestsData.length > 0);
+
             const pendingQuantities = {};
             requestsData
-                .filter(req => req.status === 'pending' || req.status === 'approved')
+                .filter(req => req.status === 'pending')
                 .forEach(req => {
                     req.items.forEach(item => {
                         pendingQuantities[item.ingredientId] = (pendingQuantities[item.ingredientId] || 0) + item.quantity;
@@ -768,6 +873,51 @@ const MobileRequestPage = () => {
 
     const handleViewChange = (event, newValue) => {
         setSelectedView(newValue);
+    };
+
+    // 显示Snackbar消息
+    const showSnackbar = (message, severity = 'info') => {
+        setSnackbarMessage(message);
+        setSnackbarSeverity(severity);
+        setSnackbarOpen(true);
+    };
+
+    // 一键批准所有待批准申请
+    const handleBulkApprove = async () => {
+        if (pendingRequests.length === 0) {
+            showSnackbar('没有待批准的申请', 'info');
+            return;
+        }
+
+        setBulkApproving(true);
+        try {
+            const requestIds = pendingRequests.map(req => req._id);
+            const response = await fetch('/api/transfer-requests/bulk-approve', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-current-store-id': storeId,
+                },
+                body: JSON.stringify({ requestIds }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || '批准申请失败');
+            }
+
+            const result = await response.json();
+            showSnackbar(result.message || '批准成功！', 'success');
+            
+            // 重新获取数据以更新界面
+            fetchData();
+            
+        } catch (error) {
+            console.error('批准申请失败:', error);
+            showSnackbar(`批准失败: ${error.message}`, 'error');
+        } finally {
+            setBulkApproving(false);
+        }
     };
 
     const renderView = () => {
@@ -842,6 +992,19 @@ const MobileRequestPage = () => {
                         欢迎, {user?.name || '用户'}
                     </Typography>
                 </Box>
+                
+                {/* 未批准库存提示 */}
+                {showPendingAlert && (
+                    <PendingRequestsAlert
+                        pendingRequests={pendingRequests}
+                        onBulkApprove={handleBulkApprove}
+                        bulkApproving={bulkApproving}
+                        expanded={expandPendingDetails}
+                        onToggleExpand={() => setExpandPendingDetails(!expandPendingDetails)}
+                        user={user}
+                    />
+                )}
+                
                 {renderView()}
             </Container>
             <Paper sx={{ position: 'fixed', bottom: 0, left: 0, right: 0 }} elevation={3}>
@@ -865,6 +1028,22 @@ const MobileRequestPage = () => {
                     <BottomNavigationAction label="库存盘点" value="inventory" icon={<InventoryIcon />} />
                 </BottomNavigation>
             </Paper>
+            
+            {/* Snackbar for notifications */}
+            <Snackbar
+                open={snackbarOpen}
+                autoHideDuration={6000}
+                onClose={() => setSnackbarOpen(false)}
+                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+            >
+                <Alert
+                    onClose={() => setSnackbarOpen(false)}
+                    severity={snackbarSeverity}
+                    sx={{ width: '100%' }}
+                >
+                    {snackbarMessage}
+                </Alert>
+            </Snackbar>
         </Box>
     );
 };
