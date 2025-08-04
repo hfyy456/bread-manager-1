@@ -174,14 +174,14 @@ export const calculateFillingCost = (fillingRecipeId, fillingRecipesMap, ingredi
 
   let subFillingsBatchCost = 0;
   recipe.subFillings?.forEach((sfUsage) => {
-    const sfRecipe = fillingRecipesMap.get((sfUsage.subFillingId || '').trim());
+    const sfRecipe = fillingRecipesMap.get((sfUsage.id || '').trim());
     const recipeYield = sfRecipe ? Number(sfRecipe.yield) : 0;
     if (!sfRecipe || recipeYield <= 0) {
       return;
     }
 
     // Recursive call for sub-filling
-    const sfBatchCalc = calculateFillingCost(sfUsage.subFillingId, fillingRecipesMap, ingredientsMap);
+    const sfBatchCalc = calculateFillingCost(sfUsage.id, fillingRecipesMap, ingredientsMap);
     if (sfBatchCalc && typeof sfBatchCalc.cost === 'number') {
       const costOfSfPerGram = sfBatchCalc.cost / recipeYield;
     const sfQuantity = Number(sfUsage.quantity);
@@ -347,14 +347,14 @@ export const generateAggregatedRawMaterials = (productionPlan, breadTypes, dough
 
     // Collect from sub-fillings
     fillingRecipe.subFillings?.forEach(sfUsage => {
-      const sfRecipe = findFillingRecipeById(sfUsage.subFillingId, fillingRecipesMap);
+      const sfRecipe = findFillingRecipeById(sfUsage.id, fillingRecipesMap);
       if (!sfRecipe || sfRecipe.yield <= 0) {
-        console.warn(`[generateAggregatedRawMaterials.collectFilling] Sub-filling \"${sfUsage.subFillingId}\" in \"${fillingRecipe.name}\" not found or has invalid yield. Skipping.`);
+        console.warn(`[generateAggregatedRawMaterials.collectFilling] Sub-filling \"${sfUsage.id}\" in \"${fillingRecipe.name}\" not found or has invalid yield. Skipping.`);
         return;
       }
       const newScaleFactor = (sfUsage.quantity / sfRecipe.yield) * scaleFactorToProduct;
-      console.log(`[generateAggregatedRawMaterials.collectFilling] Sub-filling \"${sfUsage.subFillingId}\" in \"${fillingRecipe.name}\": Used Qty=${sfUsage.quantity}, Yield=${sfRecipe.yield}, New Scale Factor=${newScaleFactor}`);
-      collectIngredientsFromFillingRecursive(sfUsage.subFillingId, newScaleFactor);
+      console.log(`[generateAggregatedRawMaterials.collectFilling] Sub-filling \"${sfUsage.id}\" in \"${fillingRecipe.name}\": Used Qty=${sfUsage.quantity}, Yield=${sfRecipe.yield}, New Scale Factor=${newScaleFactor}`);
+      collectIngredientsFromFillingRecursive(sfUsage.id, newScaleFactor);
     });
   };
 

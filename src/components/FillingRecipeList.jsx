@@ -13,9 +13,10 @@ import {
   DialogContentText,
   DialogTitle,
   Button,
+  Fab,
 } from "@mui/material";
 import { Link } from 'react-router-dom';
-import { InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
+import { InfoOutlined as InfoOutlinedIcon, Add as AddIcon } from '@mui/icons-material';
 import { DataContext } from './DataContext.jsx';
 import { calculateFillingCost } from "../utils/calculator";
 import RecipeCard from './RecipeCard.jsx';
@@ -39,6 +40,10 @@ const FillingRecipeList = () => {
 
   const handleEdit = (recipe) => {
     setDialogState({ open: true, recipeData: recipe });
+  };
+
+  const handleCreate = () => {
+    setDialogState({ open: true, recipeData: null });
   };
 
   const handleDelete = (id) => {
@@ -65,7 +70,7 @@ const FillingRecipeList = () => {
     }
   };
 
-  const handleSaveSuccess = async (savedRecipe) => {
+  const handleSaveSuccess = async () => {
     showSnackbar('配方保存成功', 'success');
     await refreshData();
     handleCloseDialog();
@@ -114,10 +119,10 @@ const FillingRecipeList = () => {
           });
 
           const subRecipesList = recipe.subFillings?.map((sub, index) => {
-            const subFillInfo = fillingRecipesMap.get((sub.subFillingId || '').trim());
+            const subFillInfo = fillingRecipesMap.get((sub.id || '').trim());
             return (
-              <Typography key={`${sub.subFillingId}-${index}`} variant="body2" sx={{ fontFamily: "Inter, sans-serif", color: subFillInfo ? 'inherit' : 'red' }}>
-                - {subFillInfo?.name || `未知子馅料 (ID: ${sub.subFillingId})`}: {sub.quantity}{sub.unit || 'g'}
+              <Typography key={`${sub.id}-${index}`} variant="body2" sx={{ fontFamily: "Inter, sans-serif", color: subFillInfo ? 'inherit' : 'red' }}>
+                - {subFillInfo?.name || sub.name || `未知子馅料 (ID: ${sub.id})`}: {sub.quantity}{sub.unit || 'g'}
               </Typography>
             );
           });
@@ -165,6 +170,20 @@ const FillingRecipeList = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Floating Action Button for creating new recipe */}
+      <Fab
+        color="primary"
+        aria-label="add"
+        onClick={handleCreate}
+        sx={{
+          position: 'fixed',
+          bottom: 16,
+          right: 16,
+        }}
+      >
+        <AddIcon />
+      </Fab>
     </Container>
   );
 };
