@@ -16,11 +16,11 @@ import {
 } from "@mui/material";
 import { Link } from 'react-router-dom';
 import { InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
-import { DataContext } from './DataContext.jsx';
-import { calculateDoughCost } from "../utils/calculator";
-import RecipeCard from './RecipeCard.jsx';
-import RecipeCreateDialog from './RecipeCreateDialog.jsx';
-import { useSnackbar } from './SnackbarProvider.jsx';
+import { DataContext } from '@components/DataContext.jsx';
+import { calculateDoughCost } from '@utils/calculator';
+import RecipeCard from '@components/RecipeCard.jsx';
+import RecipeCreateDialog from '@components/RecipeCreateDialog.jsx';
+import { useSnackbar } from '@components/SnackbarProvider.jsx';
 
 const formatNumberDisplay = (num, decimals = 2, fallback = 'N/A') => {
   const parsedNum = parseFloat(num);

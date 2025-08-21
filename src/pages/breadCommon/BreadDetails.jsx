@@ -2,12 +2,12 @@ import React, { useEffect, useState, useContext } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Container, Typography, CircularProgress, Paper, Button, Box, Tooltip, IconButton } from '@mui/material';
 import { InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
-import { DataContext } from './DataContext.jsx';
-import { getBreadCostBreakdown, generateAggregatedRawMaterials } from '../utils/calculator';
-import DoughInfo from './DoughInfo';
-import FillingInfo from './FillingInfo';
-import DecorationInfo from './DecorationInfo';
-import AggregatedMaterials from './AggregatedMaterials';
+import { DataContext } from '@components/DataContext.jsx';
+import { getBreadCostBreakdown, generateAggregatedRawMaterials } from '@utils/calculator';
+import DoughInfo from './components/DoughInfo';
+import FillingInfo from './components/FillingInfo';
+import DecorationInfo from './components/DecorationInfo';
+import AggregatedMaterials from './components/AggregatedMaterials';
 
 const BreadDetails = () => {
   const { id } = useParams();

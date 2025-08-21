@@ -12,9 +12,9 @@ import {
   ViewModule as ViewModuleIcon, ViewList as ViewListIcon, Search as SearchIcon,
   Clear as ClearIcon, Sort as SortIcon
 } from '@mui/icons-material';
-import { DataContext } from './DataContext.jsx';
-import { getBreadCostBreakdown } from '../utils/calculator';
-import { useSnackbar } from './SnackbarProvider.jsx';
+import { DataContext } from '@components/DataContext.jsx';
+import { getBreadCostBreakdown } from '@utils/calculator';
+import { useSnackbar } from '@components/SnackbarProvider.jsx';
 
 const BreadList = () => {
   const { 

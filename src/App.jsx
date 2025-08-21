@@ -1,33 +1,29 @@
 import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
-import BreadList from './components/BreadList';
-import DoughRecipeList from './components/DoughRecipeList';
-import FillingRecipeList from './components/FillingRecipeList';
-import BreadDetails from './components/BreadDetails';
-import Navbar from './components/Navbar';
-import IngredientList from './components/IngredientList';
-import RawMaterialCalculator from './components/RawMaterialCalculator';
-import InventoryCheckPage from './components/InventoryCheckPage';
-import OperationGuidePage from './components/OperationGuidePage';
-import ProductionWastePage from './components/ProductionWastePage';
-import DailyReportPreviewPage from './components/DailyReportPreviewPage';
-import DashboardPage from './components/DashboardPage';
-import { DataProvider } from "./components/DataContext.jsx";
-import BreadTypeEditor from './components/BreadTypeEditor';
-import { SnackbarProvider } from './components/SnackbarProvider.jsx';
-import { LoadingProvider } from './contexts/LoadingContext.jsx';
-import ReceivingPage from './components/ReceivingPage';
-import WarehousePage from './components/WarehousePage';
-import ApprovalPage from './components/ApprovalPage';
-import WarehouseStockTest from './components/WarehouseStockTest';
-import ProductionPlanPage from './components/ProductionPlanPage';
-import { useStore } from './components/StoreContext.jsx';
-import StoreSelectionPage from './components/StoreSelectionPage.jsx';
+import BreadList from '@pages/breadCommon/BreadList';
+import DoughRecipeList from '@pages/breadCommon/DoughRecipeList';
+import FillingRecipeList from '@pages/breadCommon/FillingRecipeList';
+import BreadDetails from '@pages/breadCommon/BreadDetails';
+import Navbar from '@components/Navbar';
+import IngredientList from '@pages/inventory/IngredientList';
+import RawMaterialCalculator from '@pages/breadCommon/RawMaterialCalculator';
+// Pages now imported from pages directory above
+import { DataProvider } from "@components/DataContext.jsx";
+import BreadTypeEditor from '@components/BreadTypeEditor';
+import { SnackbarProvider } from '@components/SnackbarProvider.jsx';
+import { LoadingProvider } from '@contexts/LoadingContext.jsx';
+import WarehouseStockTest from '@components/WarehouseStockTest';
+import { useStore } from '@components/StoreContext.jsx';
+// Import pages from new structure
+import { DashboardPage } from '@pages/dashboard';
+import { InventoryCheckPage, IngredientsPage } from '@pages/inventory';
+import { WarehousePage, ReceivingPage } from '@pages/warehouse';
+import { ProductionPlanPage, ProductionWastePage, DailyReportPreviewPage } from '@pages/production';
+import { ApprovalPage, OperationGuidePage, StoreSelectionPage } from '@pages/admin';
 
 // Lazy load components
-const IngredientsPage = lazy(() => import('./components/IngredientsPage'));
-const ReceiveStock = lazy(() => import('./components/ReceiveStock'));
+const ReceiveStock = lazy(() => import('@components/ReceiveStock'));
 
 // 创建主题
 const theme = createTheme({
@@ -113,4 +109,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;

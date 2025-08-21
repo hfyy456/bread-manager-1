@@ -18,8 +18,8 @@ import {
 } from "@mui/material";
 import { ExpandMore, ExpandLess, InfoOutlined as InfoOutlinedIcon } from "@mui/icons-material";
 import { Link } from 'react-router-dom';
-import { DataContext } from './DataContext.jsx';
-import { adjustCost } from "../utils/calculator";
+import { DataContext } from '@components/DataContext.jsx';
+import { adjustCost } from "@utils/calculator";
 
 const DoughInfo = ({ doughId, doughWeight, costBreakdown }) => {
   const { doughRecipesMap, ingredientsMap, loading } = useContext(DataContext);

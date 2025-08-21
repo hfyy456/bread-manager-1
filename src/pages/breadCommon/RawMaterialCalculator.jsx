@@ -3,8 +3,8 @@ import { Container, Typography, TextField, Button, Table, TableBody, TableCell, 
 import { Replay as ReplayIcon, Clear as ClearIcon, FileUpload as FileUploadIcon, Download, InfoOutlined as InfoOutlinedIcon, CheckCircle as CheckCircleIcon, Cancel as CancelIcon } from '@mui/icons-material';
 import * as XLSX from 'xlsx';
 import { Link } from 'react-router-dom';
-import { generateAggregatedRawMaterials, adjustCost, findIngredientById, getBreadCostBreakdown } from '../utils/calculator';
-import { DataContext } from './DataContext.jsx';
+import { generateAggregatedRawMaterials, adjustCost, findIngredientById, getBreadCostBreakdown } from '@utils/calculator';
+import { DataContext } from '@components/DataContext.jsx';
 
 const Alert = React.forwardRef(function Alert(props, ref) {
   return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
@@ -1016,4 +1016,4 @@ const RawMaterialCalculator = () => {
   );
 };
 
-export default RawMaterialCalculator; 
+export default RawMaterialCalculator;

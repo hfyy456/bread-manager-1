@@ -14,8 +14,8 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { Link } from 'react-router-dom';
 import { InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
-import { DataContext } from './DataContext';
-import { POSTNAME } from '../config/constants';
+import { DataContext } from '@components/DataContext';
+import { POSTNAME } from '@/config/constants';
 
 // const categories = ['基础材料', '发酵剂', '调味料', '油脂', '液体', '辅料', '馅料材料']; // Not used currently
 

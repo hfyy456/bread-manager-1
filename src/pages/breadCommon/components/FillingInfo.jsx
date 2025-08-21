@@ -2,7 +2,7 @@ import React, { useState, useContext, useMemo } from 'react';
 import { Card, CardContent, Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography, Tooltip, IconButton, Collapse } from '@mui/material';
 import { ExpandMore, ExpandLess, InfoOutlined as InfoOutlinedIcon } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
-import { DataContext } from './DataContext.jsx';
+import { DataContext } from '@components/DataContext.jsx';
 
 const FillingInfo = ({ fillings, costBreakdown }) => {
   const { fillingRecipesMap, ingredientsMap, loading } = useContext(DataContext);
@@ -108,4 +108,4 @@ const FillingInfo = ({ fillings, costBreakdown }) => {
   );
 };
 
-export default FillingInfo; 
+export default FillingInfo;

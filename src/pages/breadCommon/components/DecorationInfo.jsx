@@ -1,6 +1,6 @@
 import React, { useContext } from 'react';
 import { Card, CardContent, Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography } from '@mui/material';
-import { DataContext } from './DataContext.jsx';
+import { DataContext } from '@components/DataContext.jsx';
 
 const DecorationInfo = ({ decorations, costBreakdown }) => {
   const { ingredientsMap } = useContext(DataContext);
