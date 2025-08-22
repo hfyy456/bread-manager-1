@@ -17,6 +17,8 @@ const warehouseRoutes = require('./routes/warehouseRoutes'); // 1. 引入仓库�
 const transferRequestRoutes = require('./routes/transferRequestRoutes'); // For mobile requests
 const feishuRoutes = require('./routes/feishuRoutes'); // For Feishu integration
 const productionPlanRoutes = require('./routes/productionPlanRoutes'); // 引入生产计划路由
+const storeProductRoutes = require('./routes/storeProduct'); // 引入产品上下架路由
+const productionLossRoutes = require('./routes/productionLossRoutes'); // 引入生产报损路由
 
 const authMiddleware = require('./middleware/authMiddleware'); // 引入模拟认证中间件
 const { performanceMiddleware, startPerformanceReporting } = require('./middleware/performanceMiddleware'); // 性能监控
@@ -38,7 +40,7 @@ app.use(performanceMiddleware);
 app.use('/api', authMiddleware);
 
 // React应用的构建输出目录 (位于项目根目录下的 build 文件夹)
-const reactBuildDir = path.resolve(__dirname, '..', 'build');
+const reactBuildDir = path.resolve(__dirname, '..', 'dist');
 const indexPath = path.join(reactBuildDir, 'index.html');
 
 // --- API 路由 ---
@@ -56,6 +58,8 @@ app.use('/api/ingredients', ingredientsCompareRoutes); // 新增对比路由
 app.use('/api/warehouse', authMiddleware, warehouseRoutes); // 2. 注册仓库路由
 app.use('/api/transfer-requests', transferRequestRoutes); // Register the new route
 app.use('/api/production-plans', authMiddleware, productionPlanRoutes); // 注册生产计划路由
+app.use('/api/store-products', storeProductRoutes); // 注册产品上下架路由
+app.use('/api/production-loss', productionLossRoutes); // 注册生产报损路由
 app.use('/api/feishu', feishuRoutes);
 // 您可以在这里添加其他路由模块，例如:
 // const userRoutes = require('./routes/userRoutes');
@@ -79,7 +83,23 @@ if (fs.existsSync(indexPath)) {
     console.warn('警告: 在 build 目录中未找到 mobile.html。');
   }
 
-  // 对于所有其他GET请求，都返回React应用的index.html
+  // --- Mobile home entry point handler ---
+  const mobileHomePath = path.join(reactBuildDir, 'mobile-home.html');
+  if (fs.existsSync(mobileHomePath)) {
+    // Handle /mobileHome and /mobileHome/* routes
+    app.get('/mobileHome*', (req, res) => {
+      res.sendFile(mobileHomePath);
+    });
+    console.log('移动端首页入口 mobile-home.html 已找到并配置 /mobileHome 路由。');
+  } else {
+    console.warn('警告: 在 build 目录中未找到 mobile-home.html。');
+  }
+
+
+
+
+
+  // 对于所有其他GET请求，都返回React应用的相应HTML文件
   // 这对于处理React Router的客户端路由至关重要
   app.get(/.*/, (req, res) => {
     // 确保请求不是针对API的，以避免覆盖API路由 (尽管express.static通常会先处理)
@@ -87,8 +107,25 @@ if (fs.existsSync(indexPath)) {
       // 如果API路由没有匹配到，则返回404
       return res.status(404).json({ message: 'API 终结点未找到' });
     }
+    
+    // 根据请求路径返回相应的HTML文件
+    if (req.originalUrl.startsWith('/mobile-home.html')) {
+      const mobileHomePath = path.join(reactBuildDir, 'mobile-home.html');
+      if (fs.existsSync(mobileHomePath)) {
+        return res.sendFile(mobileHomePath);
+      }
+    }
+    
+    // Handle /mobileHome routes (already handled above, but kept for fallback)
+    if (req.originalUrl.startsWith('/mobileHome')) {
+      const mobileHomePath = path.join(reactBuildDir, 'mobile-home.html');
+      if (fs.existsSync(mobileHomePath)) {
+        return res.sendFile(mobileHomePath);
+      }
+    }
+    
     res.sendFile(indexPath);
-  });
+   });
 } else {
   console.warn('警告：React 构建目录 ' + reactBuildDir + ' 或 ' + indexPath + ' 未找到。');
   console.warn('Express 服务器将仅提供 API 服务。如果您需要提供前端文件，请先运行 npm run build。');
@@ -117,4 +154,4 @@ app.listen(port, () => {
     environment: process.env.NODE_ENV || 'development',
     buildDir: reactBuildDir
   });
-}); 
+});

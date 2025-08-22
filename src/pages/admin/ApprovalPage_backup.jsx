@@ -154,7 +154,7 @@ const ApprovalPage = () => {
     return (
         <Container maxWidth="lg" sx={{ mt: 4 }}>
             <Typography variant="h4" gutterBottom>
-                调拨申请审批
+                要货申请审批
             </Typography>
 
             <Paper sx={{ p: 2, mb: 3 }}>

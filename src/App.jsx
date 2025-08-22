@@ -21,6 +21,7 @@ import { InventoryCheckPage, IngredientsPage } from '@pages/inventory';
 import { WarehousePage, ReceivingPage } from '@pages/warehouse';
 import { ProductionPlanPage, ProductionWastePage, DailyReportPreviewPage } from '@pages/production';
 import { ApprovalPage, OperationGuidePage, StoreSelectionPage } from '@pages/admin';
+import ProductManagement from '@pages/ProductManagement';
 
 // Lazy load components
 const ReceiveStock = lazy(() => import('@components/ReceiveStock'));
@@ -95,6 +96,7 @@ function App() {
                   <Route path="/approvals" element={<ApprovalPage />} />
                   <Route path="/warehouse-test" element={<WarehouseStockTest />} />
                   <Route path="/production-plan" element={<ProductionPlanPage />} />
+                  <Route path="/product-management" element={<ProductManagement />} />
                     <Route path="/bread-type-editor" element={<BreadTypeEditor />} />
                     <Route path="/bread-type-editor/:id" element={<BreadTypeEditor />} />
                 </Routes>

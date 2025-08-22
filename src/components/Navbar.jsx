@@ -27,7 +27,7 @@ const navConfig = [
       { title: '库存盘点', path: '/inventory-check' },
       { title: '收货入库', path: '/receiving' },
       { title: '大仓库存管理', path: '/warehouse' }, // 添加大仓管理页面入口
-      { title: '调拨审批', path: '/approvals' },
+      { title: '要货审批', path: '/approvals' },
       { title: '生产报损登记', path: '/production-waste-report' },
     ]
   },
@@ -35,6 +35,7 @@ const navConfig = [
     title: '生产管理',
     children: [
       { title: '生产计划', path: '/production-plan' },
+      { title: '产品上下架', path: '/product-management' },
     ]
   },
   {

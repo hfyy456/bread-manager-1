@@ -16,6 +16,7 @@
     "date-fns-tz": "^3.2.0",
     "dotenv": "^16.5.0",
     "express": "^4.19.2",
+    "http-proxy-middleware": "^3.0.5",
     "mongoose": "^8.15.1",
     "multer": "^2.0.1",
     "needle": "^3.3.1",
@@ -32,6 +33,11 @@
   "scripts": {
     "start": "vite",
     "build": "vite build",
+    "build:main": "node scripts/build-apps.js main",
+    "build:mobile": "node scripts/build-apps.js mobile",
+    "build:mobile-home": "node scripts/build-apps.js mobileHome",
+    "build:all": "node scripts/build-apps.js --all",
+    "build:clean": "node scripts/build-apps.js --clean --all",
     "test": "react-scripts test",
     "serve": "node express/server.js",
     "import:ingredients": "node scripts/importIngredients.js",
@@ -60,7 +66,10 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^4.5.1",
     "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
     "nodemon": "^3.1.10",
+    "rimraf": "^5.0.10",
+    "terser": "^5.43.1",
     "vite": "^6.3.5"
   }
 }

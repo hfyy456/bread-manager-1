@@ -40,7 +40,7 @@ exports.createRequest = async (req, res) => {
 
     res
       .status(201)
-      .json({ message: "调拨申请已成功提交！", request: newRequest });
+      .json({ message: "要货申请已成功提交！", request: newRequest });
   } catch (error) {
     console.error("Error creating transfer request:", error);
     if (error.name === "ValidationError") {
@@ -48,7 +48,7 @@ exports.createRequest = async (req, res) => {
         .status(400)
         .json({ message: "数据验证失败", details: error.errors });
     }
-    res.status(500).json({ message: "创建调拨申请失败。" });
+    res.status(500).json({ message: "创建要货申请失败。" });
   }
 };
 
@@ -116,7 +116,7 @@ exports.getAllRequests = async (req, res) => {
     res.json(requests);
   } catch (error) {
     console.error("Error fetching all transfer requests:", error);
-    res.status(500).json({ message: "获取所有调拨申请失败。" });
+    res.status(500).json({ message: "获取所有要货申请失败。" });
   }
 };
 

@@ -30,7 +30,7 @@ import {
   API_ENDPOINTS,
   SUCCESS_MESSAGES,
   ERROR_MESSAGES,
-} from "../constants";
+} from "../../../constants";
 
 const getStatusChipColor = (status) => {
   return STATUS_COLORS[status] || "warning";

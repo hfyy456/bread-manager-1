@@ -100,12 +100,12 @@ const getWarehouseStock = async (req, res) => {
 const transferStock = async (req, res) => {
     const storeId = req.currentStoreId;
     if (!storeId) {
-        return res.status(400).json({ message: '请求头中缺少门店ID (x-current-store-id)，无法进行调拨。' });
+        return res.status(400).json({ message: '请求头中缺少门店ID (x-current-store-id)，无法进行要货。' });
     }
     const { ingredientId, quantity, targetPostId } = req.body;
 
     if (!ingredientId || !quantity || !targetPostId) {
-        return res.status(400).json({ message: '缺少必要的调拨信息' });
+        return res.status(400).json({ message: '缺少必要的要货信息' });
     }
 
     try {
@@ -132,10 +132,10 @@ const transferStock = async (req, res) => {
 
         await storeInventory.save();
         const updatedItem = await StoreInventory.findById(storeInventory._id).populate('ingredientId');
-        res.json({ message: '调拨成功', data: updatedItem });
+        res.json({ message: '要货成功', data: updatedItem });
     } catch (error) {
         console.error('Error transferring stock:', error);
-        res.status(500).json({ message: '调拨库存失败' });
+        res.status(500).json({ message: '要货库存失败' });
     }
 };
 

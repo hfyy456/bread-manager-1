@@ -24,9 +24,9 @@ import WarningIcon from '@mui/icons-material/Warning';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import MobileInventoryCheck from './MobileInventoryCheck';
-import AllRequestsView from './AllRequestsView';
-import StoreSelectorView from './StoreSelectorView'; // 导入门店选择器
+import MobileInventoryCheck from '../pages/mobile/MobileInventoryCheck';
+import AllRequestsView from '../pages/mobile/components/AllRequestsView';
+import StoreSelectorView from '../pages/mobile/components/StoreSelectorView'; // 导入门店选择器
 
 // 未批准库存提示组件
 const PendingRequestsAlert = ({ 
@@ -1048,4 +1048,4 @@ const MobileRequestPage = () => {
     );
 };
 
-export default MobileRequestPage; 
+export default MobileRequestPage;

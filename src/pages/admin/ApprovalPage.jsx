@@ -6,6 +6,7 @@ import {
     FormControl, InputLabel, Select, MenuItem, TextField, Grid,
 } from '@mui/material';
 import { useSnackbar } from '@components/SnackbarProvider';
+import { useStore } from '@components/StoreContext';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 
 const STATUS_MAP = {
@@ -27,6 +28,7 @@ const ApprovalPage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const { showSnackbar } = useSnackbar();
+    const { currentStore, loading: storeLoading } = useStore(); // 获取当前门店信息
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
     const [selectedRequest, setSelectedRequest] = useState(null);
     const [actionType, setActionType] = useState(''); // 'approve' or 'reject'
@@ -40,6 +42,9 @@ const ApprovalPage = () => {
 
 
     const fetchRequests = useCallback(async () => {
+        // 如果还没有当前门店信息，则不执行获取
+        if (!currentStore) return;
+        
         setLoading(true);
         setError('');
         try {
@@ -54,7 +59,12 @@ const ApprovalPage = () => {
                 query.append('endDate', endDate);
             }
             
-            const response = await fetch(`/api/transfer-requests/all?${query.toString()}`);
+            // 使用门店特定的接口，而不是获取所有门店的数据
+            const response = await fetch(`/api/transfer-requests?${query.toString()}`, {
+                headers: {
+                    'x-current-store-id': currentStore._id
+                }
+            });
             if (!response.ok) {
                 throw new Error('获取审批列表失败');
             }
@@ -65,7 +75,7 @@ const ApprovalPage = () => {
         } finally {
             setLoading(false);
         }
-    }, [statusFilter, startDate, endDate]);
+    }, [statusFilter, startDate, endDate, currentStore]);
 
     const totalAmount = useMemo(() => {
         return requests.reduce((acc, req) => {
@@ -78,8 +88,11 @@ const ApprovalPage = () => {
     }, [requests]);
 
     useEffect(() => {
-        fetchRequests();
-    }, [fetchRequests]);
+        // 只有在当前门店加载完毕后才获取数据
+        if (currentStore) {
+            fetchRequests();
+        }
+    }, [fetchRequests, currentStore]);
 
     const handleOpenConfirmDialog = (request, action) => {
         setSelectedRequest(request);
@@ -154,7 +167,7 @@ const ApprovalPage = () => {
     return (
         <Container maxWidth="lg" sx={{ mt: 4 }}>
             <Typography variant="h4" gutterBottom>
-                调拨申请审批
+                要货申请审批{currentStore && ` - ${currentStore.name}`}
             </Typography>
 
             <Paper sx={{ p: 2, mb: 3 }}>
@@ -214,10 +227,13 @@ const ApprovalPage = () => {
                 </Grid>
             </Paper>
 
-            {loading && <CircularProgress />}
+            {(loading || storeLoading) && <CircularProgress />}
             {error && <Alert severity="error">{error}</Alert>}
+            {!storeLoading && !currentStore && (
+                <Alert severity="warning">请先选择门店</Alert>
+            )}
 
-            {!loading && !error && requests.length > 0 ? (
+            {!loading && !storeLoading && !error && currentStore && requests.length > 0 ? (
                 <TableContainer component={Paper}>
                     <Table>
                         <TableHead>
@@ -260,7 +276,7 @@ const ApprovalPage = () => {
                     </Table>
                 </TableContainer>
             ) : (
-                 !loading && <Paper sx={{p:3, textAlign:'center'}}>没有找到符合条件的申请。</Paper>
+                 !loading && !storeLoading && currentStore && <Paper sx={{p:3, textAlign:'center'}}>没有找到符合条件的申请。</Paper>
             )}
 
             <Dialog

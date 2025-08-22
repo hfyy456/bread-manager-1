@@ -160,7 +160,7 @@ const useUser = () => {
                 window.h5sdk.ready(() => {
                     console.log("- h5sdk is ready. Calling tt.requestAccess.");
                     console.log(`- Passing appId to tt.requestAccess: ${appId}`); // Log the appId being passed
-                   // window.h5sdk.biz.navigation.setTitle({ title: '大仓调拨申请' });
+                   // window.h5sdk.biz.navigation.setTitle({ title: '大仓要货申请' });
 
                     const authTimeout = setTimeout(() => {
                         console.error("[Feishu Auth Hook Error] tt.requestAccess timed out after 5 seconds.");
@@ -532,7 +532,7 @@ const CartView = ({ user, cartItems, onUpdateCart, storeId, refetchData }) => {
                 throw new Error(errData.message || '提交申请失败');
             }
             
-            setSuccessMessage('您的调拨申请已成功提交！');
+            setSuccessMessage('您的要货申请已成功提交！');
             onUpdateCart([]);
             if (refetchData) refetchData();
 
