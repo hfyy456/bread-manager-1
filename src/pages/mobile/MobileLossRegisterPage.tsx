@@ -23,6 +23,8 @@ import {
   Grid,
   Divider,
 } from '@mui/material';
+import QuantityInput from '../../components/QuantityInput';
+import { useFeishuAuth } from '../../hooks/useFeishuAuth';
 import {
   ArrowBack as ArrowBackIcon,
   Delete as DeleteIcon,
@@ -80,6 +82,9 @@ const MobileLossRegisterPage: React.FC = () => {
   // 报损项目相关状态
   const [lossItems, setLossItems] = useState<LossItem[]>([]);
   const [submitting, setSubmitting] = useState<boolean>(false);
+  
+  // 飞书认证
+  const { user, loading: userLoading, error: userError, isFeishuEnv, checkingEnv } = useFeishuAuth();
 
   /**
    * 报损类型配置
@@ -301,6 +306,7 @@ const MobileLossRegisterPage: React.FC = () => {
         })),
         totalQuantity: validLossItems.reduce((sum, item) => sum + item.quantity, 0),
         totalValue: validLossItems.reduce((sum, item) => sum + item.totalValue, 0),
+        operatedBy: user?.name || '未知用户',
       };
 
       const response = await fetch('/api/production-loss/register', {
@@ -319,12 +325,13 @@ const MobileLossRegisterPage: React.FC = () => {
       const result = await response.json();
       if (result.success) {
         setSuccess('报损记录提交成功！');
-        setLossItems([]);
         
-        // 3秒后返回上一页
+        // 立即跳转到生产报损页面，不显示空数据
         setTimeout(() => {
-          window.history.back();
-        }, 3000);
+          const params = new URLSearchParams();
+          if (storeId) params.set('store', storeId);
+          window.location.href = `/mobileHome/production-loss?${params.toString()}`;
+        }, 1500);
       } else {
         throw new Error(result.message || '提交报损记录失败');
       }
@@ -348,6 +355,57 @@ const MobileLossRegisterPage: React.FC = () => {
    */
   const totalQuantity = lossItems.reduce((sum, item) => sum + item.quantity, 0);
   const totalValue = lossItems.reduce((sum, item) => sum + item.totalValue, 0);
+
+  // 飞书环境检测
+  if (checkingEnv) {
+    return (
+      <Container maxWidth="sm" sx={{ py: 4, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
+        <Box textAlign="center">
+          <CircularProgress sx={{ mb: 2 }} />
+          <Typography>检测飞书环境中...</Typography>
+        </Box>
+      </Container>
+    );
+  }
+
+  // 非飞书环境提示
+  if (!isFeishuEnv) {
+    return (
+      <Container maxWidth="sm" sx={{ py: 4 }}>
+        <Alert severity="info" sx={{ mb: 2 }}>
+          <Typography variant="h6" gutterBottom>
+            请在飞书客户端中打开
+          </Typography>
+          <Typography variant="body2">
+            此页面需要飞书应用环境支持，请复制链接并在飞书中访问。
+          </Typography>
+        </Alert>
+      </Container>
+    );
+  }
+
+  // 用户认证加载中
+  if (userLoading) {
+    return (
+      <Container maxWidth="sm" sx={{ py: 4, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
+        <Box textAlign="center">
+          <CircularProgress sx={{ mb: 2 }} />
+          <Typography>获取用户信息中...</Typography>
+        </Box>
+      </Container>
+    );
+  }
+
+  // 用户认证错误
+  if (userError) {
+    return (
+      <Container maxWidth="sm" sx={{ py: 4 }}>
+        <Alert severity="error">
+          {userError}
+        </Alert>
+      </Container>
+    );
+  }
 
   if (!storeId) {
     return (
@@ -460,21 +518,13 @@ const MobileLossRegisterPage: React.FC = () => {
                             单价: ¥{item.unitPrice.toFixed(2)}/{item.unit}
                           </Typography>
                           <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Button
+                            <QuantityInput
+                              value={item.quantity}
+                              onChange={(value) => handleUpdateQuantity(item.productId, value)}
+                              min={0}
+                              max={999}
                               size="small"
-                              onClick={() => handleUpdateQuantity(item.productId, item.quantity - 1)}
-                            >
-                              -
-                            </Button>
-                            <Typography variant="body2" sx={{ minWidth: '40px', textAlign: 'center' }}>
-                              {item.quantity}
-                            </Typography>
-                            <Button
-                              size="small"
-                              onClick={() => handleUpdateQuantity(item.productId, item.quantity + 1)}
-                            >
-                              +
-                            </Button>
+                            />
                             <Typography variant="body2" sx={{ ml: 2 }}>
                               小计: ¥{item.totalValue.toFixed(2)}
                             </Typography>

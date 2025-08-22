@@ -24,15 +24,11 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  ListItemSecondaryAction,
+
   Tabs,
   Tab,
 } from '@mui/material';
+
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -46,11 +42,7 @@ import {
   TrendingUp as TrendingUpIcon,
   Warning as WarningIcon,
   Refresh as RefreshIcon,
-  Save as SaveIcon,
-  Add as AddIcon,
-  Remove as RemoveIcon,
-  Search as SearchIcon,
-  Edit as EditIcon,
+
   LocalShipping as LocalShippingIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
@@ -95,21 +87,7 @@ interface LossRecord {
   createdAt: string;
 }
 
-interface BreadType {
-  _id: string;
-  name: string;
-  price: number;
-  category: string;
-}
 
-interface LossItem {
-  breadId: string;
-  breadName: string;
-  quantity: number;
-  unitPrice: number;
-  totalValue: number;
-  reason?: string;
-}
 
 type LossType = 'production' | 'tasting' | 'closing' | 'other' | 'shipment' | 'all';
 
@@ -123,15 +101,7 @@ const MobileProductionLossPage: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [dailyRecords, setDailyRecords] = useState<{[key: string]: LossRecord | null}>({});
   
-  // 报损登记对话框相关状态
-  const [showRegisterDialog, setShowRegisterDialog] = useState<boolean>(false);
-  const [breadTypes, setBreadTypes] = useState<BreadType[]>([]);
-  const [lossItems, setLossItems] = useState<LossItem[]>([]);
-  const [registerLossType, setRegisterLossType] = useState<'production' | 'tasting' | 'closing' | 'other' | 'shipment'>('production');
-  const [showBreadSelector, setShowBreadSelector] = useState<boolean>(false);
-  const [searchTerm, setSearchTerm] = useState<string>('');
-  const [globalReason, setGlobalReason] = useState<string>('');
-  const [registerLoading, setRegisterLoading] = useState<boolean>(false);
+
 
   /**
    * 报损类型配置
@@ -265,34 +235,7 @@ const MobileProductionLossPage: React.FC = () => {
     }
   }, [storeId, selectedType, getDateRange]);
 
-  /**
-   * 获取门店上架产品列表
-   */
-  const fetchBreadTypes = useCallback(async () => {
-    if (!storeId) return;
 
-    try {
-      const response = await fetch('/api/production-loss/products', {
-        headers: {
-          'x-current-store-id': storeId,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('获取门店产品失败');
-      }
-
-      const result = await response.json();
-      if (result.success) {
-        setBreadTypes(result.data || []);
-      } else {
-        throw new Error(result.message || '获取门店产品失败');
-      }
-    } catch (err) {
-      console.error('获取门店产品失败:', err);
-      setError(err instanceof Error ? err.message : '获取门店产品失败');
-    }
-  }, [storeId]);
 
   /**
    * 获取或创建指定日期的报损记录
@@ -370,7 +313,6 @@ const MobileProductionLossPage: React.FC = () => {
         await Promise.all([
           fetchLossStats(),
           fetchLossRecords(),
-          fetchBreadTypes(),
           loadDailyRecords(),
         ]);
       } catch (err) {
@@ -381,7 +323,7 @@ const MobileProductionLossPage: React.FC = () => {
     };
 
     initData();
-  }, [storeId, fetchLossStats, fetchLossRecords, fetchBreadTypes, loadDailyRecords]);
+  }, [storeId, fetchLossStats, fetchLossRecords, loadDailyRecords]);
 
   /**
    * 当日期改变时，重新加载该日期的报损记录
@@ -392,14 +334,7 @@ const MobileProductionLossPage: React.FC = () => {
     }
   }, [selectedDate, loadDailyRecords, storeId]);
 
-  /**
-   * 当打开报损登记对话框时获取面包类型
-   */
-  useEffect(() => {
-    if (showRegisterDialog && storeId && breadTypes.length === 0) {
-      fetchBreadTypes();
-    }
-  }, [showRegisterDialog, storeId, breadTypes.length, fetchBreadTypes]);
+
 
   /**
    * 刷新数据
@@ -412,118 +347,13 @@ const MobileProductionLossPage: React.FC = () => {
     ]);
   };
 
-  /**
-   * 添加报损项目
-   */
-  const handleAddLossItem = (bread: BreadType) => {
-    const existingItem = lossItems.find(item => item.breadId === bread._id);
-    
-    if (existingItem) {
-      // 如果已存在，增加数量
-      setLossItems(prev => prev.map(item => 
-        item.breadId === bread._id 
-          ? { ...item, quantity: item.quantity + 1, totalValue: (item.quantity + 1) * item.unitPrice }
-          : item
-      ));
-    } else {
-      // 添加新项目
-      const newItem: LossItem = {
-        breadId: bread._id,
-        breadName: bread.name,
-        quantity: 1,
-        unitPrice: bread.price,
-        totalValue: bread.price,
-        reason: '',
-      };
-      setLossItems(prev => [...prev, newItem]);
-    }
-    
-    setShowBreadSelector(false);
-  };
 
-  /**
-   * 更新报损项目数量
-   */
-  const handleUpdateQuantity = (breadId: string, quantity: number) => {
-    if (quantity <= 0) {
-      setLossItems(prev => prev.filter(item => item.breadId !== breadId));
-    } else {
-      setLossItems(prev => prev.map(item => 
-        item.breadId === breadId 
-          ? { ...item, quantity, totalValue: quantity * item.unitPrice }
-          : item
-      ));
-    }
-  };
 
-  /**
-   * 更新报损原因
-   */
-  const handleUpdateReason = (breadId: string, reason: string) => {
-    setLossItems(prev => prev.map(item => 
-      item.breadId === breadId 
-        ? { ...item, reason }
-        : item
-    ));
-  };
 
-  /**
-   * 提交报损记录
-   */
-  const handleSubmitLoss = async () => {
-    if (lossItems.length === 0) {
-      setError('请至少添加一个报损项目');
-      return;
-    }
 
-    setRegisterLoading(true);
-    setError('');
 
-    try {
-      // 使用选定的日期而不是当前时间
-      const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
-      const submitData = {
-        type: registerLossType,
-        date: selectedDateStr,
-        items: lossItems.map(item => ({
-          ...item,
-          reason: item.reason || globalReason || '无',
-        })),
-        totalQuantity: lossItems.reduce((sum, item) => sum + item.quantity, 0),
-        totalValue: lossItems.reduce((sum, item) => sum + item.totalValue, 0),
-      };
 
-      const response = await fetch('/api/production-loss/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-current-store-id': storeId!,
-        },
-        body: JSON.stringify(submitData),
-      });
 
-      if (!response.ok) {
-        throw new Error('提交报损记录失败');
-      }
-
-      const result = await response.json();
-      if (result.success) {
-        setLossItems([]);
-        setGlobalReason('');
-        setShowRegisterDialog(false);
-        
-        // 刷新数据
-        handleRefresh();
-      } else {
-        throw new Error(result.message || '提交报损记录失败');
-      }
-    } catch (err) {
-      console.error('提交报损记录失败:', err);
-      setError(err instanceof Error ? err.message : '提交报损记录失败');
-    } finally {
-      setRegisterLoading(false);
-    }
-  };
 
   /**
    * 返回首页
@@ -546,19 +376,7 @@ const MobileProductionLossPage: React.FC = () => {
     return typeMap[type];
   };
 
-  /**
-   * 过滤后的面包类型
-   */
-  const filteredBreadTypes = breadTypes.filter(bread => 
-    bread.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    bread.category.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
-  /**
-   * 计算报损项目总计
-   */
-  const totalQuantity = lossItems.reduce((sum, item) => sum + item.quantity, 0);
-  const totalValue = lossItems.reduce((sum, item) => sum + item.totalValue, 0);
 
   /**
    * 处理报损类型选择
@@ -589,40 +407,7 @@ const MobileProductionLossPage: React.FC = () => {
     window.location.href = `/mobileHome/loss-register?${params.toString()}`;
   };
 
-  /**
-   * 在当前页面打开报损登记对话框并加载现有记录
-   */
-  const handleOpenRegisterDialog = async (type: LossType) => {
-    if (type === 'all') return;
-    
-    setRegisterLossType(type);
-    setShowRegisterDialog(true);
-    
-    // 加载现有记录
-    const dateStr = format(selectedDate, 'yyyy-MM-dd');
-    try {
-      const existingRecord = await fetchLossRecordByDate(dateStr, type);
-      
-      if (existingRecord && existingRecord.items && existingRecord.items.length > 0) {
-        // 将现有记录转换为lossItems格式
-        const existingItems = existingRecord.items.map((item: any) => ({
-          breadId: item.productId || item.breadId,
-          breadName: item.productName || item.breadName,
-          quantity: item.quantity || 0,
-          unitPrice: item.unitPrice || 0,
-          totalValue: item.totalValue || 0,
-          reason: item.reason || '',
-        }));
-        setLossItems(existingItems);
-      } else {
-        // 如果没有现有记录，清空列表
-        setLossItems([]);
-      }
-    } catch (err) {
-      console.error('加载现有报损记录失败:', err);
-      setLossItems([]);
-    }
-  };
+
 
 
 
@@ -704,7 +489,29 @@ const MobileProductionLossPage: React.FC = () => {
             快速操作
           </Typography>
           <Grid container spacing={1}>
-            {lossTypes.map((type) => (
+            {/* 出货记录 - 占据第一行整行 */}
+            {lossTypes.filter(type => type.key === 'shipment').map((type) => (
+              <Grid item xs={12} key={`quick-${type.key}`}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={type.icon}
+                  sx={{ 
+                    borderColor: type.color, 
+                    color: type.color,
+                    '&:hover': {
+                      borderColor: type.color,
+                      bgcolor: `${type.color}10`,
+                    },
+                  }}
+                  onClick={() => handleNavigateToRegister(type.key)}
+                >
+                  {type.label}
+                </Button>
+              </Grid>
+            ))}
+            {/* 其他操作 - 2x2布局 */}
+            {lossTypes.filter(type => type.key !== 'shipment').map((type) => (
               <Grid item xs={6} key={`quick-${type.key}`}>
                 <Button
                   fullWidth
@@ -854,36 +661,44 @@ const MobileProductionLossPage: React.FC = () => {
                     </ListItemIcon>
                     <ListItemText
                       primary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="subtitle2">
-                            {record.breadName}
-                          </Typography>
-                          <Chip 
-                            label={getLossTypeLabel(record.type)} 
-                            size="small"
-                            sx={{ 
-                              bgcolor: getLossTypeColor(record.type), 
-                              color: 'white',
-                              fontSize: '0.7rem',
-                            }}
-                          />
-                        </Box>
-                      }
-                      secondary={
-                        <Box>
-                          <Typography variant="body2" color="text.secondary">
-                            数量: {record.quantity} | 金额: ¥{record.totalValue.toFixed(2)}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {format(new Date(record.date), 'MM-dd HH:mm', { locale: zhCN })}
-                          </Typography>
-                          {record.reason && (
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                              原因: {record.reason}
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 0 }}>
+                            <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }}>
+                              {record.breadName}
                             </Typography>
-                          )}
+                            <Chip 
+                              label={getLossTypeLabel(record.type)} 
+                              size="small"
+                              sx={{ 
+                                bgcolor: getLossTypeColor(record.type), 
+                                color: 'white',
+                                fontSize: '0.65rem',
+                                height: '20px',
+                                minWidth: 'auto'
+                              }}
+                            />
+                          </Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                              ¥{record.totalValue.toFixed(2)}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                              {format(new Date(record.date), 'MM-dd HH:mm', { locale: zhCN })}
+                            </Typography>
+                          </Box>
                         </Box>
                       }
+                      secondary={record.reason ? (
+                        <Typography variant="caption" color="text.secondary" sx={{ 
+                          whiteSpace: 'nowrap', 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis',
+                          fontSize: '0.7rem',
+                          mt: 0.5
+                        }}>
+                          原因: {record.reason}
+                        </Typography>
+                      ) : null}
                     />
                   </ListItem>
                   {index < records.length - 1 && <Divider />}
@@ -902,168 +717,7 @@ const MobileProductionLossPage: React.FC = () => {
 
       </Container>
 
-      {/* 报损登记对话框 */}
-      <Dialog
-        open={showRegisterDialog}
-        onClose={() => setShowRegisterDialog(false)}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>
-          报损登记 - {getLossTypeLabel(registerLossType)}
-        </DialogTitle>
-        <DialogContent>
-          {/* 报损类型选择 */}
-          <FormControl fullWidth sx={{ mb: 2 }}>
-            <InputLabel>报损类型</InputLabel>
-            <Select
-              value={registerLossType}
-              label="报损类型"
-              onChange={(e) => setRegisterLossType(e.target.value as 'production' | 'tasting' | 'closing' | 'other' | 'shipment')}
-            >
-              {lossTypes.map((type) => (
-                <MenuItem key={type.key} value={type.key}>
-                  {type.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
 
-          {/* 全局报损原因 */}
-          <TextField
-            fullWidth
-            label="报损原因（可选）"
-            value={globalReason}
-            onChange={(e) => setGlobalReason(e.target.value)}
-            sx={{ mb: 2 }}
-            placeholder="输入报损原因，将应用到所有项目"
-          />
-
-          {/* 已添加的报损项目 */}
-          {lossItems.length > 0 && (
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                报损项目列表
-              </Typography>
-              <List>
-                {lossItems.map((item) => (
-                  <ListItem key={item.breadId}>
-                    <ListItemText
-                      primary={item.breadName}
-                      secondary={`单价: ¥${item.unitPrice} | 小计: ¥${item.totalValue.toFixed(2)}`}
-                    />
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleUpdateQuantity(item.breadId, item.quantity - 1)}
-                      >
-                        <RemoveIcon />
-                      </IconButton>
-                      <Typography sx={{ minWidth: 20, textAlign: 'center' }}>
-                        {item.quantity}
-                      </Typography>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleUpdateQuantity(item.breadId, item.quantity + 1)}
-                      >
-                        <AddIcon />
-                      </IconButton>
-                    </Box>
-                  </ListItem>
-                ))}
-              </List>
-              <Box sx={{ p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
-                <Typography variant="subtitle2">
-                  总计: {lossItems.reduce((sum, item) => sum + item.quantity, 0)} 个 | 
-                  ¥{lossItems.reduce((sum, item) => sum + item.totalValue, 0).toFixed(2)}
-                </Typography>
-              </Box>
-            </Box>
-          )}
-
-          {/* 添加面包按钮 */}
-          <Button
-            fullWidth
-            variant="outlined"
-            startIcon={<AddIcon />}
-            onClick={() => setShowBreadSelector(true)}
-            sx={{ mb: 2 }}
-          >
-            添加面包
-          </Button>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowRegisterDialog(false)}>
-            取消
-          </Button>
-          <Button
-            onClick={handleSubmitLoss}
-            variant="contained"
-            disabled={lossItems.length === 0 || registerLoading}
-            startIcon={registerLoading ? <CircularProgress size={16} /> : <SaveIcon />}
-          >
-            {registerLoading ? '提交中...' : '提交报损'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* 面包选择对话框 */}
-      <Dialog
-        open={showBreadSelector}
-        onClose={() => setShowBreadSelector(false)}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>
-          选择面包
-        </DialogTitle>
-        <DialogContent>
-          <TextField
-            fullWidth
-            placeholder="搜索面包..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-            }}
-            sx={{ mb: 2 }}
-          />
-          <List>
-             {filteredBreadTypes.map((bread) => (
-               <ListItem
-                 key={bread._id}
-                 button
-                 onClick={() => handleAddLossItem(bread)}
-               >
-                 <ListItemText
-                   primary={bread.name}
-                   secondary={`${bread.category} | ¥${bread.price}`}
-                 />
-                 <ListItemSecondaryAction>
-                   <IconButton
-                     edge="end"
-                     onClick={() => handleAddLossItem(bread)}
-                   >
-                     <AddIcon />
-                   </IconButton>
-                 </ListItemSecondaryAction>
-               </ListItem>
-             ))}
-             {filteredBreadTypes.length === 0 && (
-               <Box sx={{ p: 2, textAlign: 'center' }}>
-                 <Typography color="text.secondary">
-                   {searchTerm ? '未找到匹配的面包类型' : '暂无面包类型数据'}
-                 </Typography>
-               </Box>
-             )}
-           </List>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowBreadSelector(false)}>
-            关闭
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 };

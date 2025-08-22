@@ -2,7 +2,7 @@
  * @Author: Sirius 540363975@qq.com
  * @Date: 2025-08-22 23:53:53
  * @LastEditors: Sirius 540363975@qq.com
- * @LastEditTime: 2025-08-23 01:50:26
+ * @LastEditTime: 2025-08-23 04:15:03
  */
 import React from 'react';
 import ReactDOM from 'react-dom/client';
@@ -10,6 +10,8 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import MobileHomePage from './pages/mobile/MobileHomePage';
 import MobileProductionLossPage from './pages/mobile/MobileProductionLossPage';
 import MobileLossRegisterPage from './pages/mobile/MobileLossRegisterPage';
+import MobileExpenseStatsPage from './pages/mobile/MobileExpenseStatsPage';
+import MobileExpenseRegisterPage from './pages/mobile/MobileExpenseRegisterPage';
 import './App.css';
 
 /**
@@ -79,6 +81,8 @@ const MobileHomeApp = () => {
           <Route path="/mobileHome" element={<MobileHomePage />} />
           <Route path="/mobileHome/production-loss" element={<MobileProductionLossPage />} />
           <Route path="/mobileHome/loss-register" element={<MobileLossRegisterPage />} />
+          <Route path="/mobileHome/expense-stats" element={<MobileExpenseStatsPage />} />
+          <Route path="/mobileHome/expense-register" element={<MobileExpenseRegisterPage />} />
         </Routes>
       </div>
     </Router>

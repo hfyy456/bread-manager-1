@@ -289,31 +289,12 @@ productionLossSchema.statics.createOrUpdate = async function(storeId, date, type
   });
   
   if (existingRecord) {
-    // 合并报损项目
-    const mergedItems = [...existingRecord.items];
-    
-    for (const newItem of data.items) {
-      const existingItemIndex = mergedItems.findIndex(
-        item => item.productId === newItem.productId
-      );
-      
-      if (existingItemIndex >= 0) {
-        // 如果产品已存在，累加数量和总价值
-        mergedItems[existingItemIndex].quantity += newItem.quantity;
-        mergedItems[existingItemIndex].totalValue += newItem.totalValue;
-        // 更新原因（如果新提交的有原因）
-        if (newItem.reason && newItem.reason !== '无') {
-          mergedItems[existingItemIndex].reason = newItem.reason;
-        }
-      } else {
-        // 如果是新产品，直接添加
-        mergedItems.push(newItem);
-      }
-    }
+    // 直接覆盖报损项目，不进行累加
+    const newItems = data.items;
     
     // 重新计算总计
-    const totalQuantity = mergedItems.reduce((sum, item) => sum + item.quantity, 0);
-    const totalValue = mergedItems.reduce((sum, item) => sum + item.totalValue, 0);
+    const totalQuantity = newItems.reduce((sum, item) => sum + item.quantity, 0);
+    const totalValue = newItems.reduce((sum, item) => sum + item.totalValue, 0);
     
     // 更新记录
     const result = await this.findOneAndUpdate(
@@ -326,7 +307,7 @@ productionLossSchema.statics.createOrUpdate = async function(storeId, date, type
         type 
       },
       {
-        items: mergedItems,
+        items: newItems,
         totalQuantity,
         totalValue,
         operatedBy: data.operatedBy,

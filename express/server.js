@@ -19,6 +19,7 @@ const feishuRoutes = require('./routes/feishuRoutes'); // For Feishu integration
 const productionPlanRoutes = require('./routes/productionPlanRoutes'); // 引入生产计划路由
 const storeProductRoutes = require('./routes/storeProduct'); // 引入产品上下架路由
 const productionLossRoutes = require('./routes/productionLossRoutes'); // 引入生产报损路由
+const expenseRoutes = require('./routes/expenseRoutes'); // 引入支出路由
 
 const authMiddleware = require('./middleware/authMiddleware'); // 引入模拟认证中间件
 const { performanceMiddleware, startPerformanceReporting } = require('./middleware/performanceMiddleware'); // 性能监控
@@ -60,6 +61,7 @@ app.use('/api/transfer-requests', transferRequestRoutes); // Register the new ro
 app.use('/api/production-plans', authMiddleware, productionPlanRoutes); // 注册生产计划路由
 app.use('/api/store-products', storeProductRoutes); // 注册产品上下架路由
 app.use('/api/production-loss', productionLossRoutes); // 注册生产报损路由
+app.use('/api/expense', expenseRoutes); // 注册支出路由
 app.use('/api/feishu', feishuRoutes);
 // 您可以在这里添加其他路由模块，例如:
 // const userRoutes = require('./routes/userRoutes');

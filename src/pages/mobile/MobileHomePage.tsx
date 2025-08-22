@@ -28,6 +28,7 @@ import {
   AccountCircle as AccountCircleIcon,
   Refresh as RefreshIcon,
   Settings as SettingsIcon,
+  MonetizationOn as MonetizationOnIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -264,6 +265,17 @@ const MobileHomePage: React.FC = () => {
       onClick: () => {
         // 在同一页面内显示申领中心组件
         alert('申领中心功能开发中...');
+      },
+    },
+    {
+      id: 'expense-stats',
+      title: '支出统计',
+      description: '查看门店支出和成本分析',
+      icon: <MonetizationOnIcon />,
+      color: '#d32f2f',
+      onClick: () => {
+        // 导航到支出统计页面
+        navigate('/mobileHome/expense-stats');
       },
     },
   ];
