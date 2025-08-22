@@ -38,12 +38,40 @@ const multiAppConfig = {
 };
 
 /**
+ * 自定义路由重写插件
+ * 处理多HTML入口点的路由重写
+ */
+const multiAppRoutingPlugin = () => {
+  return {
+    name: 'multi-app-routing',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const url = req.url;
+        
+        // 移动端首页路由重写
+        if (url.startsWith('/mobileHome')) {
+          req.url = '/mobile-home.html';
+        }
+        // 移动端申领路由重写
+        else if (url.startsWith('/mobile')) {
+          req.url = '/mobile.html';
+        }
+        // PC端路由保持默认
+        
+        next();
+      });
+    }
+  };
+};
+
+/**
  * Vite 多应用配置
  * 基于多应用入口配置生成完整的Vite配置
  */
 export default defineConfig({
   plugins: [
-    react()
+    react(),
+    multiAppRoutingPlugin()
   ],
   
   resolve: {
@@ -71,17 +99,6 @@ export default defineConfig({
         secure: false,
         rewrite: (path) => path.replace(/^\/api/, '/api')
       },
-    },
-    // 多应用路由重写规则
-    historyApiFallback: {
-      rewrites: [
-        // 移动端首页路由重写 - 优先级最高
-        { from: /^\/mobileHome/, to: '/mobile-home.html' },
-        // 移动端申领路由重写
-        { from: /^\/mobile/, to: '/mobile.html' },
-        // PC端路由重写 - 默认fallback
-        { from: /.*/, to: '/index.html' },
-      ],
     },
   },
   

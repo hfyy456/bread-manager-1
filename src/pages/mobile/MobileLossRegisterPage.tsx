@@ -17,26 +17,17 @@ import {
   ListItem,
   ListItemText,
   ListItemSecondaryAction,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Alert,
   CircularProgress,
   Chip,
   Grid,
-  Card,
-  CardContent,
-  Fab,
   Divider,
-  InputAdornment,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
-  Add as AddIcon,
   Delete as DeleteIcon,
-  Search as SearchIcon,
   Save as SaveIcon,
+  Info as InfoIcon,
 } from '@mui/icons-material';
 
 /**
@@ -66,7 +57,7 @@ interface Product {
 /**
  * 报损类型
  */
-type LossType = 'production' | 'tasting' | 'closing' | 'other';
+type LossType = 'production' | 'tasting' | 'closing' | 'other' | 'shipment';
 
 /**
  * 移动端报损登记页面
@@ -81,12 +72,10 @@ const MobileLossRegisterPage: React.FC = () => {
   
   // 产品相关状态
   const [products, setProducts] = useState<Product[]>([]);
-  const [showProductSelector, setShowProductSelector] = useState<boolean>(false);
-  const [searchTerm, setSearchTerm] = useState<string>('');
+
   
   // 报损项目相关状态
   const [lossItems, setLossItems] = useState<LossItem[]>([]);
-  const [globalReason, setGlobalReason] = useState<string>('');
   const [submitting, setSubmitting] = useState<boolean>(false);
 
   /**
@@ -97,6 +86,7 @@ const MobileLossRegisterPage: React.FC = () => {
     tasting: { label: '品尝报损', color: '#4caf50' },
     closing: { label: '打烊报损', color: '#2196f3' },
     other: { label: '其他报损', color: '#9c27b0' },
+    shipment: { label: '出货登记', color: '#795548' },
   };
 
   /**
@@ -140,7 +130,20 @@ const MobileLossRegisterPage: React.FC = () => {
 
       const result = await response.json();
       if (result.success) {
-        setProducts(result.data || []);
+        const productList = result.data || [];
+        setProducts(productList);
+        
+        // 初始化所有产品的报损项目，默认数量为0
+        const initialLossItems: LossItem[] = productList.map((product: Product) => ({
+          productId: product._id,
+          productName: product.name,
+          quantity: 0,
+          unit: product.unit || '个',
+          unitPrice: product.price || 0,
+          totalValue: 0,
+          reason: '',
+        }));
+        setLossItems(initialLossItems);
       } else {
         throw new Error(result.message || '获取产品列表失败');
       }
@@ -161,43 +164,23 @@ const MobileLossRegisterPage: React.FC = () => {
     }
   }, [storeId, fetchProducts]);
 
-  /**
-   * 过滤产品列表
-   */
-  const filteredProducts = products.filter(product =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+
 
   /**
-   * 添加报损项目
+   * 添加报损项目（增加数量）
    */
   const handleAddLossItem = (product: Product) => {
-    const existingItem = lossItems.find(item => item.productId === product._id);
-    
-    if (existingItem) {
-      // 如果已存在，增加数量
-      setLossItems(prev => prev.map(item =>
-        item.productId === product._id
-          ? {
-              ...item,
-              quantity: item.quantity + 1,
-              totalValue: (item.quantity + 1) * item.unitPrice,
-            }
-          : item
-      ));
-    } else {
-      // 添加新项目
-      const newItem: LossItem = {
-        productId: product._id,
-        productName: product.name,
-        quantity: 1,
-        unit: product.unit || '个',
-        unitPrice: product.price || 0,
-        totalValue: product.price || 0,
-        reason: globalReason || '',
-      };
-      setLossItems(prev => [...prev, newItem]);
-    }
+    // 所有产品都已经存在，只需要增加数量
+    setLossItems(prev => prev.map(item =>
+      item.productId === product._id
+        ? {
+            ...item,
+            quantity: item.quantity + 1,
+            totalValue: (item.quantity + 1) * item.unitPrice,
+            reason: item.reason || globalReason || '',
+          }
+        : item
+    ));
     
     setShowProductSelector(false);
     setSearchTerm('');
@@ -207,32 +190,21 @@ const MobileLossRegisterPage: React.FC = () => {
    * 更新报损项目数量
    */
   const handleUpdateQuantity = (productId: string, quantity: number) => {
-    if (quantity <= 0) {
-      handleRemoveLossItem(productId);
-      return;
-    }
+    // 确保数量不小于0
+    const validQuantity = Math.max(0, quantity);
     
     setLossItems(prev => prev.map(item =>
       item.productId === productId
         ? {
             ...item,
-            quantity,
-            totalValue: quantity * item.unitPrice,
+            quantity: validQuantity,
+            totalValue: validQuantity * item.unitPrice,
           }
         : item
     ));
   };
 
-  /**
-   * 更新报损原因
-   */
-  const handleUpdateReason = (productId: string, reason: string) => {
-    setLossItems(prev => prev.map(item =>
-      item.productId === productId
-        ? { ...item, reason }
-        : item
-    ));
-  };
+
 
   /**
    * 移除报损项目
@@ -245,8 +217,11 @@ const MobileLossRegisterPage: React.FC = () => {
    * 提交报损记录
    */
   const handleSubmitLoss = async () => {
-    if (lossItems.length === 0) {
-      setError('请至少添加一个报损项目');
+    // 过滤出数量大于0的报损项目
+    const validLossItems = lossItems.filter(item => item.quantity > 0);
+    
+    if (validLossItems.length === 0) {
+      setError('请至少添加一个报损项目（数量大于0）');
       return;
     }
 
@@ -258,17 +233,17 @@ const MobileLossRegisterPage: React.FC = () => {
       const submitData = {
         type: lossType,
         date: new Date().toISOString(),
-        items: lossItems.map(item => ({
+        items: validLossItems.map(item => ({
           productId: item.productId,
           productName: item.productName,
           quantity: item.quantity,
           unit: item.unit,
           unitPrice: item.unitPrice,
           totalValue: item.totalValue,
-          reason: item.reason || globalReason || '无',
+          reason: '无',
         })),
-        totalQuantity: lossItems.reduce((sum, item) => sum + item.quantity, 0),
-        totalValue: lossItems.reduce((sum, item) => sum + item.totalValue, 0),
+        totalQuantity: validLossItems.reduce((sum, item) => sum + item.quantity, 0),
+        totalValue: validLossItems.reduce((sum, item) => sum + item.totalValue, 0),
       };
 
       const response = await fetch('/api/production-loss/register', {
@@ -288,7 +263,6 @@ const MobileLossRegisterPage: React.FC = () => {
       if (result.success) {
         setSuccess('报损记录提交成功！');
         setLossItems([]);
-        setGlobalReason('');
         
         // 3秒后返回上一页
         setTimeout(() => {
@@ -388,35 +362,43 @@ const MobileLossRegisterPage: React.FC = () => {
           </FormControl>
         </Paper>
 
-        {/* 全局报损原因 */}
-        <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
-          <TextField
-            fullWidth
-            label="报损原因（可选）"
-            value={globalReason}
-            onChange={(e) => setGlobalReason(e.target.value)}
-            placeholder="输入报损原因，将应用到所有项目"
-            multiline
-            rows={2}
-          />
-        </Paper>
+
 
         {/* 报损项目列表 */}
-        {lossItems.length > 0 && (
-          <Paper elevation={2} sx={{ mb: 2 }}>
-            <Box sx={{ p: 2, borderBottom: '1px solid #e0e0e0' }}>
-              <Typography variant="h6">
-                报损项目列表 ({lossItems.length})
-              </Typography>
-            </Box>
-            <List>
-              {lossItems.map((item, index) => (
-                <React.Fragment key={item.productId}>
-                  <ListItem>
-                    <ListItemText
-                      primary={item.productName}
-                      secondary={
-                        <Box>
+        <Paper elevation={2} sx={{ mb: 2 }}>
+          <Box sx={{ p: 2, borderBottom: '1px solid #e0e0e0' }}>
+            <Typography variant="h6">
+              报损项目列表 ({lossItems.filter(item => item.quantity > 0).length}/{lossItems.length})
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              所有产品默认显示，未填写数量视为0
+            </Typography>
+          </Box>
+          <List>
+            {lossItems.map((item, index) => (
+              <React.Fragment key={item.productId}>
+                <ListItem sx={{ 
+                  backgroundColor: item.quantity > 0 ? 'rgba(25, 118, 210, 0.04)' : 'transparent',
+                  borderLeft: item.quantity > 0 ? '3px solid #1976d2' : 'none'
+                }}>
+                  <ListItemText
+                    primary={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="subtitle1">
+                          {item.productName}
+                        </Typography>
+                        {item.quantity > 0 && (
+                          <Chip 
+                            label={`${item.quantity}${item.unit}`} 
+                            size="small" 
+                            color="primary" 
+                            variant="outlined"
+                          />
+                        )}
+                      </Box>
+                    }
+                    secondary={
+                      <Box>
                           <Typography variant="body2" color="text.secondary">
                             单价: ¥{item.unitPrice.toFixed(2)}/{item.unit}
                           </Typography>
@@ -440,13 +422,7 @@ const MobileLossRegisterPage: React.FC = () => {
                               小计: ¥{item.totalValue.toFixed(2)}
                             </Typography>
                           </Box>
-                          <TextField
-                            size="small"
-                            placeholder="报损原因"
-                            value={item.reason}
-                            onChange={(e) => handleUpdateReason(item.productId, e.target.value)}
-                            sx={{ mt: 1, width: '100%' }}
-                          />
+
                         </Box>
                       }
                     />
@@ -481,111 +457,23 @@ const MobileLossRegisterPage: React.FC = () => {
               </Grid>
             </Box>
           </Paper>
-        )}
 
-        {/* 空状态 */}
-        {lossItems.length === 0 && (
-          <Paper elevation={2} sx={{ p: 4, textAlign: 'center', mb: 2 }}>
-            <Typography color="text.secondary" sx={{ mb: 2 }}>
-              暂无报损项目
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              点击右下角的 + 按钮添加报损项目
-            </Typography>
-          </Paper>
-        )}
+        {/* 操作提示 */}
+        <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
+          <Typography variant="subtitle2" color="primary" sx={{ mb: 1 }}>
+            操作提示
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            • 所有门店产品已默认显示，直接修改数量即可
+            <br />
+            • 数量为0的项目不会被提交
+            <br />
+            • 报损原因统一设置为"无"
+          </Typography>
+        </Paper>
       </Container>
 
-      {/* 添加产品按钮 */}
-      <Fab
-        color="primary"
-        sx={{
-          position: 'fixed',
-          bottom: 16,
-          right: 16,
-          bgcolor: lossTypeConfig[lossType].color,
-          '&:hover': {
-            bgcolor: lossTypeConfig[lossType].color,
-            opacity: 0.8,
-          },
-        }}
-        onClick={() => setShowProductSelector(true)}
-      >
-        <AddIcon />
-      </Fab>
 
-      {/* 产品选择对话框 */}
-      <Dialog
-        open={showProductSelector}
-        onClose={() => setShowProductSelector(false)}
-        fullWidth
-        maxWidth="sm"
-        PaperProps={{
-          sx: { height: '80vh' }
-        }}
-      >
-        <DialogTitle>
-          选择产品
-        </DialogTitle>
-        <DialogContent>
-          {/* 搜索框 */}
-          <TextField
-            fullWidth
-            placeholder="搜索产品名称"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            sx={{ mb: 2 }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-            }}
-          />
-
-          {/* 产品列表 */}
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-              <CircularProgress />
-            </Box>
-          ) : (
-            <List>
-              {filteredProducts.map((product) => (
-                <ListItem
-                  key={product._id}
-                  button
-                  onClick={() => handleAddLossItem(product)}
-                >
-                  <ListItemText
-                    primary={product.name}
-                    secondary={`¥${product.price?.toFixed(2) || '0.00'}/${product.unit || '个'}`}
-                  />
-                  {product.category && (
-                    <Chip
-                      label={product.category}
-                      size="small"
-                      variant="outlined"
-                    />
-                  )}
-                </ListItem>
-              ))}
-              {filteredProducts.length === 0 && (
-                <Box sx={{ py: 4, textAlign: 'center' }}>
-                  <Typography color="text.secondary">
-                    {searchTerm ? '未找到匹配的产品' : '暂无产品数据'}
-                  </Typography>
-                </Box>
-              )}
-            </List>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowProductSelector(false)}>
-            取消
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 };

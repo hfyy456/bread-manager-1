@@ -48,6 +48,7 @@ import {
   Remove as RemoveIcon,
   Search as SearchIcon,
   Edit as EditIcon,
+  LocalShipping as LocalShippingIcon,
 } from '@mui/icons-material';
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -62,13 +63,14 @@ interface LossStats {
   tastingLoss: number;
   closingLoss: number;
   otherLoss: number;
+  shipmentLoss: number;
   lossRate: number;
   totalValue: number;
 }
 
 interface LossRecord {
   _id: string;
-  type: 'production' | 'tasting' | 'closing' | 'other';
+  type: 'production' | 'tasting' | 'closing' | 'other' | 'shipment';
   date: string;
   items: Array<{
     breadId: string;
@@ -99,7 +101,7 @@ interface LossItem {
   reason?: string;
 }
 
-type LossType = 'production' | 'tasting' | 'closing' | 'other' | 'all';
+type LossType = 'production' | 'tasting' | 'closing' | 'other' | 'shipment' | 'all';
 type PeriodType = 'daily' | 'weekly' | 'monthly';
 
 const MobileProductionLossPage: React.FC = () => {
@@ -115,7 +117,7 @@ const MobileProductionLossPage: React.FC = () => {
   const [showRegisterDialog, setShowRegisterDialog] = useState<boolean>(false);
   const [breadTypes, setBreadTypes] = useState<BreadType[]>([]);
   const [lossItems, setLossItems] = useState<LossItem[]>([]);
-  const [registerLossType, setRegisterLossType] = useState<'production' | 'tasting' | 'closing' | 'other'>('production');
+  const [registerLossType, setRegisterLossType] = useState<'production' | 'tasting' | 'closing' | 'other' | 'shipment'>('production');
   const [showBreadSelector, setShowBreadSelector] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [globalReason, setGlobalReason] = useState<string>('');
@@ -152,6 +154,13 @@ const MobileProductionLossPage: React.FC = () => {
       description: '其他原因导致的报损',
       icon: <MoreHorizIcon />,
       color: '#9c27b0',
+    },
+    {
+      key: 'shipment' as LossType,
+      label: '出货登记',
+      description: '产品出货记录',
+      icon: <LocalShippingIcon />,
+      color: '#795548',
     },
   ];
 
@@ -461,12 +470,13 @@ const MobileProductionLossPage: React.FC = () => {
   /**
    * 获取报损类型标签
    */
-  const getLossTypeLabel = (type: 'production' | 'tasting' | 'closing' | 'other') => {
+  const getLossTypeLabel = (type: 'production' | 'tasting' | 'closing' | 'other' | 'shipment') => {
     const typeMap = {
       production: '生产报损',
       tasting: '品尝报损',
       closing: '打烊报损',
       other: '其他报损',
+      shipment: '出货登记',
     };
     return typeMap[type];
   };
@@ -652,7 +662,7 @@ const MobileProductionLossPage: React.FC = () => {
               </Grid>
               {selectedType === 'all' && (
                 <>
-                  <Grid item xs={3}>
+                  <Grid item xs={2.4}>
                     <Box textAlign="center">
                       <Typography variant="h6" sx={{ color: '#ff9800' }}>
                         {stats.productionLoss}
@@ -662,7 +672,7 @@ const MobileProductionLossPage: React.FC = () => {
                       </Typography>
                     </Box>
                   </Grid>
-                  <Grid item xs={3}>
+                  <Grid item xs={2.4}>
                     <Box textAlign="center">
                       <Typography variant="h6" sx={{ color: '#4caf50' }}>
                         {stats.tastingLoss}
@@ -672,7 +682,7 @@ const MobileProductionLossPage: React.FC = () => {
                       </Typography>
                     </Box>
                   </Grid>
-                  <Grid item xs={3}>
+                  <Grid item xs={2.4}>
                     <Box textAlign="center">
                       <Typography variant="h6" sx={{ color: '#2196f3' }}>
                         {stats.closingLoss}
@@ -682,13 +692,23 @@ const MobileProductionLossPage: React.FC = () => {
                       </Typography>
                     </Box>
                   </Grid>
-                  <Grid item xs={3}>
+                  <Grid item xs={2.4}>
                     <Box textAlign="center">
                       <Typography variant="h6" sx={{ color: '#9c27b0' }}>
                         {stats.otherLoss}
                       </Typography>
                       <Typography variant="caption">
                         其他报损
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={2.4}>
+                    <Box textAlign="center">
+                      <Typography variant="h6" sx={{ color: '#795548' }}>
+                        {stats.shipmentLoss}
+                      </Typography>
+                      <Typography variant="caption">
+                        出货登记
                       </Typography>
                     </Box>
                   </Grid>
@@ -822,7 +842,7 @@ const MobileProductionLossPage: React.FC = () => {
             <Select
               value={registerLossType}
               label="报损类型"
-              onChange={(e) => setRegisterLossType(e.target.value as 'production' | 'tasting' | 'closing' | 'other')}
+              onChange={(e) => setRegisterLossType(e.target.value as 'production' | 'tasting' | 'closing' | 'other' | 'shipment')}
             >
               {lossTypes.map((type) => (
                 <MenuItem key={type.key} value={type.key}>

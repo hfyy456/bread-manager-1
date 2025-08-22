@@ -16,10 +16,10 @@ const productionLossSchema = new mongoose.Schema({
     type: Date,
     required: [true, '报损日期是必填项'],
   },
-  // 报损类型：production(生产报损), tasting(品尝报损), closing(打烊报损), other(其他报损)
+  // 报损类型：production(生产报损), tasting(品尝报损), closing(打烊报损), other(其他报损), shipment(出货登记)
   type: {
     type: String,
-    enum: ['production', 'tasting', 'closing', 'other'],
+    enum: ['production', 'tasting', 'closing', 'other', 'shipment'],
     default: 'production',
     required: true,
   },
