@@ -115,10 +115,25 @@ productionLossSchema.index(
  * @returns {Promise<Object|null>} 报损记录
  */
 productionLossSchema.statics.getByDate = function(storeId, date, type = null) {
-  const query = { storeId, date: new Date(date) };
+  // 创建日期范围查询，解决时区问题
+  const startDate = new Date(date);
+  startDate.setHours(0, 0, 0, 0);
+  
+  const endDate = new Date(date);
+  endDate.setHours(23, 59, 59, 999);
+  
+  const query = { 
+    storeId, 
+    date: {
+      $gte: startDate,
+      $lte: endDate
+    }
+  };
+  
   if (type) {
     query.type = type;
   }
+  
   return this.findOne(query).sort({ createdAt: -1 });
 };
 
@@ -131,11 +146,15 @@ productionLossSchema.statics.getByDate = function(storeId, date, type = null) {
  * @returns {Promise<Array>} 统计结果
  */
 productionLossSchema.statics.getStats = function(storeId, startDate, endDate, type = null) {
+  // 处理日期时区问题，确保使用本地时间范围
+  const start = new Date(startDate + 'T00:00:00+08:00');
+  const end = new Date(endDate + 'T23:59:59+08:00');
+  
   const matchQuery = {
     storeId,
     date: {
-      $gte: new Date(startDate),
-      $lte: new Date(endDate)
+      $gte: start,
+      $lte: end
     }
   };
   
@@ -150,6 +169,7 @@ productionLossSchema.statics.getStats = function(storeId, startDate, endDate, ty
         _id: null,
         totalLoss: { $sum: '$totalQuantity' },
         totalValue: { $sum: '$totalValue' },
+        // 各类型数量统计
         productionLoss: {
           $sum: {
             $cond: [{ $eq: ['$type', 'production'] }, '$totalQuantity', 0]
@@ -170,6 +190,37 @@ productionLossSchema.statics.getStats = function(storeId, startDate, endDate, ty
             $cond: [{ $eq: ['$type', 'other'] }, '$totalQuantity', 0]
           }
         },
+        shipmentLoss: {
+          $sum: {
+            $cond: [{ $eq: ['$type', 'shipment'] }, '$totalQuantity', 0]
+          }
+        },
+        // 各类型金额统计
+        productionValue: {
+          $sum: {
+            $cond: [{ $eq: ['$type', 'production'] }, '$totalValue', 0]
+          }
+        },
+        tastingValue: {
+          $sum: {
+            $cond: [{ $eq: ['$type', 'tasting'] }, '$totalValue', 0]
+          }
+        },
+        closingValue: {
+          $sum: {
+            $cond: [{ $eq: ['$type', 'closing'] }, '$totalValue', 0]
+          }
+        },
+        otherValue: {
+          $sum: {
+            $cond: [{ $eq: ['$type', 'other'] }, '$totalValue', 0]
+          }
+        },
+        shipmentValue: {
+          $sum: {
+            $cond: [{ $eq: ['$type', 'shipment'] }, '$totalValue', 0]
+          }
+        },
         recordCount: { $sum: 1 }
       }
     },
@@ -182,11 +233,27 @@ productionLossSchema.statics.getStats = function(storeId, startDate, endDate, ty
         tastingLoss: 1,
         closingLoss: 1,
         otherLoss: 1,
+        shipmentLoss: 1,
+        productionValue: 1,
+        tastingValue: 1,
+        closingValue: 1,
+        otherValue: 1,
+        shipmentValue: 1,
         recordCount: 1,
+        // 计算报损金额（不包括出货）
+        totalLossValue: {
+          $add: ['$productionValue', '$tastingValue', '$closingValue', '$otherValue']
+        },
+        // 计算报损率：报损金额/出货金额
         lossRate: {
           $cond: [
-            { $gt: ['$totalLoss', 0] },
-            { $multiply: [{ $divide: ['$totalLoss', '$totalLoss'] }, 100] },
+            { $gt: ['$shipmentValue', 0] },
+            {
+              $divide: [
+                { $add: ['$productionValue', '$tastingValue', '$closingValue', '$otherValue'] },
+                '$shipmentValue'
+              ]
+            },
             0
           ]
         }
@@ -204,21 +271,94 @@ productionLossSchema.statics.getStats = function(storeId, startDate, endDate, ty
  * @returns {Promise<Object>} 操作结果
  */
 productionLossSchema.statics.createOrUpdate = async function(storeId, date, type, data) {
-  const result = await this.findOneAndUpdate(
-    { storeId, date: new Date(date), type },
-    {
-      ...data,
-      storeId,
-      date: new Date(date),
-      type
+  // 创建日期范围查询，解决时区问题
+  const startDate = new Date(date);
+  startDate.setHours(0, 0, 0, 0);
+  
+  const endDate = new Date(date);
+  endDate.setHours(23, 59, 59, 999);
+  
+  // 查找现有记录
+  const existingRecord = await this.findOne({ 
+    storeId, 
+    date: {
+      $gte: startDate,
+      $lte: endDate
     },
-    { 
-      upsert: true, 
-      new: true,
-      runValidators: true
+    type 
+  });
+  
+  if (existingRecord) {
+    // 合并报损项目
+    const mergedItems = [...existingRecord.items];
+    
+    for (const newItem of data.items) {
+      const existingItemIndex = mergedItems.findIndex(
+        item => item.productId === newItem.productId
+      );
+      
+      if (existingItemIndex >= 0) {
+        // 如果产品已存在，累加数量和总价值
+        mergedItems[existingItemIndex].quantity += newItem.quantity;
+        mergedItems[existingItemIndex].totalValue += newItem.totalValue;
+        // 更新原因（如果新提交的有原因）
+        if (newItem.reason && newItem.reason !== '无') {
+          mergedItems[existingItemIndex].reason = newItem.reason;
+        }
+      } else {
+        // 如果是新产品，直接添加
+        mergedItems.push(newItem);
+      }
     }
-  );
-  return result;
+    
+    // 重新计算总计
+    const totalQuantity = mergedItems.reduce((sum, item) => sum + item.quantity, 0);
+    const totalValue = mergedItems.reduce((sum, item) => sum + item.totalValue, 0);
+    
+    // 更新记录
+    const result = await this.findOneAndUpdate(
+      { 
+        storeId, 
+        date: {
+          $gte: startDate,
+          $lte: endDate
+        },
+        type 
+      },
+      {
+        items: mergedItems,
+        totalQuantity,
+        totalValue,
+        operatedBy: data.operatedBy,
+        notes: data.notes
+      },
+      { 
+        new: true,
+        runValidators: true
+      }
+    );
+    return result;
+  } else {
+    // 创建新记录 - 使用标准化的日期（当天00:00:00）
+    const normalizedDate = new Date(date);
+    normalizedDate.setHours(0, 0, 0, 0);
+    
+    const result = await this.findOneAndUpdate(
+      { storeId, date: normalizedDate, type },
+      {
+        ...data,
+        storeId,
+        date: normalizedDate,
+        type
+      },
+      { 
+        upsert: true, 
+        new: true,
+        runValidators: true
+      }
+    );
+    return result;
+  }
 };
 
 /**
@@ -239,9 +379,19 @@ productionLossSchema.statics.getRecords = function(storeId, options = {}) {
   const query = { storeId };
   
   if (startDate && endDate) {
+    // 将本地日期转换为UTC时间范围
+    const start = new Date(startDate);
+    // 本地日期的00:00:00对应UTC的前一天16:00:00（GMT+8时区）
+    const utcStart = new Date(start.getTime() - 8 * 60 * 60 * 1000);
+    
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+    // 本地日期的23:59:59对应UTC的当天15:59:59（GMT+8时区）
+    const utcEnd = new Date(end.getTime() - 8 * 60 * 60 * 1000);
+    
     query.date = {
-      $gte: new Date(startDate),
-      $lte: new Date(endDate)
+      $gte: utcStart,
+      $lte: utcEnd
     };
   }
   

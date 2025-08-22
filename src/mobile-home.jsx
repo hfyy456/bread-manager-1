@@ -1,3 +1,9 @@
+/*
+ * @Author: Sirius 540363975@qq.com
+ * @Date: 2025-08-22 23:53:53
+ * @LastEditors: Sirius 540363975@qq.com
+ * @LastEditTime: 2025-08-23 01:50:26
+ */
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';

@@ -24,7 +24,7 @@ const createOrUpdateProductionLoss = async (req, res) => {
     }
 
     // 验证报损类型
-    const validTypes = ['production', 'tasting', 'closing', 'other'];
+    const validTypes = ['production', 'tasting', 'closing', 'other', 'shipment'];
     if (!validTypes.includes(type)) {
       return ResponseHelper.error(res, '无效的报损类型', 400);
     }
@@ -150,6 +150,13 @@ const getProductionLossStats = async (req, res) => {
       tastingLoss: 0,
       closingLoss: 0,
       otherLoss: 0,
+      shipmentLoss: 0,
+      productionValue: 0,
+      tastingValue: 0,
+      closingValue: 0,
+      otherValue: 0,
+      shipmentValue: 0,
+      totalLossValue: 0,
       recordCount: 0,
       lossRate: 0
     };

@@ -69,10 +69,13 @@ const MobileLossRegisterPage: React.FC = () => {
   const [success, setSuccess] = useState<string>('');
   const [storeId, setStoreId] = useState<string | null>(null);
   const [lossType, setLossType] = useState<LossType>('production');
+  const [selectedDate, setSelectedDate] = useState<string>('');
   
   // 产品相关状态
   const [products, setProducts] = useState<Product[]>([]);
-
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [showProductSelector, setShowProductSelector] = useState<boolean>(false);
+  const [globalReason, setGlobalReason] = useState<string>('');
   
   // 报损项目相关状态
   const [lossItems, setLossItems] = useState<LossItem[]>([]);
@@ -86,7 +89,7 @@ const MobileLossRegisterPage: React.FC = () => {
     tasting: { label: '品尝报损', color: '#4caf50' },
     closing: { label: '打烊报损', color: '#2196f3' },
     other: { label: '其他报损', color: '#9c27b0' },
-    shipment: { label: '出货登记', color: '#795548' },
+    shipment: { label: '出货记录', color: '#795548' },
   };
 
   /**
@@ -96,6 +99,7 @@ const MobileLossRegisterPage: React.FC = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const urlStoreId = urlParams.get('store');
     const urlType = urlParams.get('type') as LossType;
+    const urlDate = urlParams.get('date');
     
     // 获取门店ID
     const lockedStoreId = sessionStorage.getItem('lockedStoreId');
@@ -105,10 +109,43 @@ const MobileLossRegisterPage: React.FC = () => {
     setStoreId(currentStoreId);
     
     // 设置报损类型
-    if (urlType && ['production', 'tasting', 'closing', 'other'].includes(urlType)) {
+    if (urlType && ['production', 'tasting', 'closing', 'other', 'shipment'].includes(urlType)) {
       setLossType(urlType);
     }
+    
+    // 设置选择的日期
+    if (urlDate) {
+      setSelectedDate(urlDate);
+    } else {
+      // 如果没有传入日期，使用当前日期
+      const today = new Date().toISOString().split('T')[0];
+      setSelectedDate(today);
+    }
   }, []);
+
+  /**
+   * 获取现有报损记录
+   */
+  const fetchExistingRecord = useCallback(async () => {
+    if (!storeId || !selectedDate || !lossType) return null;
+
+    try {
+      const response = await fetch(`/api/production-loss/by-date?storeId=${storeId}&date=${selectedDate}&type=${lossType}`);
+      
+      if (!response.ok) {
+        throw new Error('获取现有报损记录失败');
+      }
+
+      const result = await response.json();
+      if (result.success && result.data) {
+        return result.data;
+      }
+      return null;
+    } catch (err) {
+      console.error('获取现有报损记录失败:', err);
+      return null;
+    }
+  }, [storeId, selectedDate, lossType]);
 
   /**
    * 获取门店产品列表
@@ -143,7 +180,27 @@ const MobileLossRegisterPage: React.FC = () => {
           totalValue: 0,
           reason: '',
         }));
-        setLossItems(initialLossItems);
+        
+        // 尝试获取现有报损记录
+        const existingRecord = await fetchExistingRecord();
+        if (existingRecord && existingRecord.items && existingRecord.items.length > 0) {
+          // 将现有记录数据填充到对应产品中
+          const updatedLossItems = initialLossItems.map(item => {
+            const existingItem = existingRecord.items.find((existing: any) => existing.productId === item.productId);
+            if (existingItem) {
+              return {
+                ...item,
+                quantity: existingItem.quantity || 0,
+                totalValue: (existingItem.quantity || 0) * item.unitPrice,
+                reason: existingItem.reason || '',
+              };
+            }
+            return item;
+          });
+          setLossItems(updatedLossItems);
+        } else {
+          setLossItems(initialLossItems);
+        }
       } else {
         throw new Error(result.message || '获取产品列表失败');
       }
@@ -153,16 +210,16 @@ const MobileLossRegisterPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [storeId]);
+  }, [storeId, fetchExistingRecord]);
 
   /**
    * 初始化数据
    */
   useEffect(() => {
-    if (storeId) {
+    if (storeId && selectedDate && lossType) {
       fetchProducts();
     }
-  }, [storeId, fetchProducts]);
+  }, [storeId, selectedDate, lossType, fetchProducts, fetchExistingRecord]);
 
 
 
