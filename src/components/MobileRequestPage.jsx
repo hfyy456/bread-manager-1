@@ -144,15 +144,20 @@ const useUser = () => {
                 const userFromStorage = localStorage.getItem('user');
                 if (userFromStorage && userFromStorage !== "undefined") {
                     console.log("- Found user in localStorage. Skipping auth flow.");
-                    setUser(JSON.parse(userFromStorage));
+                    const userData = JSON.parse(userFromStorage);
+                    setUser(userData);
+                    // 恢复全局用户ID
+                    if (userData.feishuUserId) {
+                        window.feishuUserId = userData.feishuUserId;
+                    }
                     setLoading(false);
                     return;
                 }
                 console.log("- No user in localStorage.");
 
                 if (!appId) {
-                    console.error("[Feishu Auth Hook Error] appId is missing from URL.");
-                    setError('URL中缺少appId参数。');
+                    console.error("[Feishu Auth Hook] appId is required for authentication.");
+                    setError('缺少必要的认证参数，请从飞书应用中访问。');
                     setLoading(false);
                     return;
                 }
@@ -190,6 +195,11 @@ const useUser = () => {
                             .then(userData => {
                                 console.log("- Backend returned user data:", userData);
                                 localStorage.setItem('user', JSON.stringify(userData));
+                                // 设置全局用户ID用于API请求
+                                if (userData.feishuUserId) {
+                                    window.feishuUserId = userData.feishuUserId;
+                                    localStorage.setItem('feishuUserId', userData.feishuUserId);
+                                }
                                 setUser(userData);
                             })
                             .catch(err => {

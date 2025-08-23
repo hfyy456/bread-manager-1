@@ -7,6 +7,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { StoreProvider } from './components/StoreContext';
 import MobileHomePage from './pages/mobile/MobileHomePage';
 import MobileProductionLossPage from './pages/mobile/MobileProductionLossPage';
 import MobileLossRegisterPage from './pages/mobile/MobileLossRegisterPage';
@@ -47,6 +48,9 @@ window.fetch = function (url, options) {
   const defaultStoreId = localStorage.getItem('defaultStoreId');
 
   const storeId = lockedStoreId || defaultStoreId;
+  
+  // 获取用户认证信息
+  const feishuUserId = window.feishuUserId || localStorage.getItem('feishuUserId');
 
   const newOptions = { ...options };
   
@@ -59,6 +63,11 @@ window.fetch = function (url, options) {
     newOptions.headers['x-current-store-id'] = storeId;
   }
   
+  // 添加用户认证头
+  if (feishuUserId && !newOptions.headers['x-feishu-user-id']) {
+    newOptions.headers['x-feishu-user-id'] = feishuUserId;
+  }
+  
   return originalFetch(url, newOptions);
 };
 // ------------------------------------
@@ -69,23 +78,25 @@ window.fetch = function (url, options) {
  */
 const MobileHomeApp = () => {
   return (
-    <Router
-      future={{
-        v7_startTransition: true,
-        v7_relativeSplatPath: true,
-      }}
-    >
-      <div className="mobile-app">
-        <Routes>
-          <Route path="/" element={<MobileHomePage />} />
-          <Route path="/mobileHome" element={<MobileHomePage />} />
-          <Route path="/mobileHome/production-loss" element={<MobileProductionLossPage />} />
-          <Route path="/mobileHome/loss-register" element={<MobileLossRegisterPage />} />
-          <Route path="/mobileHome/expense-stats" element={<MobileExpenseStatsPage />} />
-          <Route path="/mobileHome/expense-register" element={<MobileExpenseRegisterPage />} />
-        </Routes>
-      </div>
-    </Router>
+    <StoreProvider>
+      <Router
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <div className="mobile-app">
+          <Routes>
+            <Route path="/" element={<MobileHomePage />} />
+            <Route path="/mobileHome" element={<MobileHomePage />} />
+            <Route path="/mobileHome/production-loss" element={<MobileProductionLossPage />} />
+            <Route path="/mobileHome/loss-register" element={<MobileLossRegisterPage />} />
+            <Route path="/mobileHome/expense-stats" element={<MobileExpenseStatsPage />} />
+            <Route path="/mobileHome/expense-register" element={<MobileExpenseRegisterPage />} />
+          </Routes>
+        </div>
+      </Router>
+    </StoreProvider>
   );
 };
 

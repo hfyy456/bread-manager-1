@@ -27,6 +27,11 @@ import {
   Tabs,
   Tab,
   Fab,
+  Checkbox,
+  Badge,
+  SpeedDial,
+  SpeedDialAction,
+  SpeedDialIcon,
 } from '@mui/material';
 
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -47,11 +52,15 @@ import {
   Build as BuildIcon,
   ShoppingCart as ShoppingCartIcon,
   Category as CategoryIcon,
+  CheckCircle as CheckCircleIcon,
+  SelectAll as SelectAllIcon,
+  Clear as ClearIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import { useFeishuAuth } from '../../hooks/useFeishuAuth';
+import { useStore } from '../../components/StoreContext';
 
 // 支出统计数据接口
 interface ExpenseStats {
@@ -77,9 +86,6 @@ interface ExpenseRecord {
   notes?: string;
   operatedBy: string;
   category?: string;
-  isApproved: boolean;
-  approvedBy?: string;
-  approvedAt?: string;
   reimbursementStatus: '已报销' | '未报销';
   reimbursedAt?: string;
   reimbursedBy?: string;
@@ -94,7 +100,9 @@ type ReimbursementStatus = '已报销' | '未报销' | 'all';
 
 const MobileExpenseStatsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, loading: authLoading, error: authError, isFeishuEnv } = useFeishuAuth();
+  const { user: authUser, loading: authLoading, error: authError, isFeishuEnv } = useFeishuAuth();
+  const [user, setUser] = useState<any>(null);
+  const { currentStore, loading: storeLoading } = useStore();
   
   // 状态管理
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -103,12 +111,14 @@ const MobileExpenseStatsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [storeInfo, setStoreInfo] = useState<any>(null);
   
   // 数据状态
   const [expenseStats, setExpenseStats] = useState<ExpenseStats | null>(null);
   const [expenseRecords, setExpenseRecords] = useState<ExpenseRecord[]>([]);
   const [dailyExpenses, setDailyExpenses] = useState<ExpenseRecord[]>([]);
+  const [updatingExpenseId, setUpdatingExpenseId] = useState<string | null>(null);
+  const [selectedExpenseIds, setSelectedExpenseIds] = useState<Set<string>>(new Set());
+  const [batchUpdating, setBatchUpdating] = useState(false);
 
   // 支出类型配置
   const expenseTypes = [
@@ -132,23 +142,28 @@ const MobileExpenseStatsPage: React.FC = () => {
     { value: '已报销', label: '已报销', color: '#4caf50' },
   ];
 
-  // 获取门店信息
-  const fetchStoreInfo = useCallback(async () => {
+
+
+  // 获取用户信息
+  const fetchUserInfo = useCallback(async () => {
+    if (!authUser?.userId) return;
+    
     try {
-      const response = await fetch('/api/stores/current', {
+      const response = await fetch('/api/users/me', {
         headers: {
           'Content-Type': 'application/json',
+          'x-feishu-user-id': authUser.userId,
         },
       });
       
       if (response.ok) {
-        const data = await response.json();
-        setStoreInfo(data.data);
+        const userData = await response.json();
+        setUser(userData);
       }
     } catch (error) {
-      console.error('获取门店信息失败:', error);
+      console.error('获取用户信息失败:', error);
     }
-  }, []);
+  }, [authUser]);
 
   // 获取支出统计数据
   const fetchExpenseStats = useCallback(async (startDate: Date, endDate: Date, type: ExpenseType, reimbursementStatus: ReimbursementStatus) => {
@@ -261,14 +276,215 @@ const MobileExpenseStatsPage: React.FC = () => {
     fetchDailyExpenses(selectedDate, selectedType, selectedReimbursementStatus);
   }, [selectedDate, selectedType, selectedReimbursementStatus, fetchExpenseStats, fetchExpenseRecords, fetchDailyExpenses]);
 
-  // 初始化数据
-  useEffect(() => {
-    fetchStoreInfo();
-  }, [fetchStoreInfo]);
+  /**
+   * 更新支出记录报销状态
+   * @param expenseId - 支出记录ID
+   * @param currentStatus - 当前报销状态
+   */
+  const handleUpdateReimbursementStatus = async (expenseId: string, currentStatus: '已报销' | '未报销') => {
+    // 只允许从"未报销"更改为"已报销"
+    if (currentStatus === '已报销') {
+      return;
+    }
 
+    if (!user?.name) {
+      setError('无法获取用户信息，请重新登录');
+      return;
+    }
+
+    try {
+      setUpdatingExpenseId(expenseId);
+      setError(null);
+
+      const response = await fetch(`/api/expense/${expenseId}/reimbursement`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reimbursementStatus: '已报销',
+          reimbursedBy: user.name,
+        }),
+      });
+
+      if (response.ok) {
+        // 更新本地状态
+        const updateExpenseStatus = (expenses: ExpenseRecord[]) => 
+          expenses.map(expense => 
+            expense._id === expenseId 
+              ? { 
+                  ...expense, 
+                  reimbursementStatus: '已报销' as const,
+                  reimbursedAt: new Date().toISOString(),
+                  reimbursedBy: user.name 
+                }
+              : expense
+          );
+
+        setExpenseRecords(prev => updateExpenseStatus(prev));
+        setDailyExpenses(prev => updateExpenseStatus(prev));
+        
+        // 刷新统计数据
+        await refreshData();
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || '更新报销状态失败');
+      }
+    } catch (error) {
+      console.error('更新报销状态失败:', error);
+      setError(error instanceof Error ? error.message : '更新报销状态失败，请重试');
+    } finally {
+       setUpdatingExpenseId(null);
+     }
+   };
+
+   /**
+    * 批量更新支出记录报销状态
+    * @param expenseIds - 支出记录ID列表
+    */
+   const handleBatchUpdateReimbursementStatus = async (expenseIds: string[]) => {
+     if (expenseIds.length === 0) {
+       setError('请选择要更新的支出记录');
+       return;
+     }
+
+     if (!user?.name) {
+       setError('无法获取用户信息，请重新登录');
+       return;
+     }
+
+     // 检查用户权限
+     if (user?.role !== 'admin') {
+       setError('权限不足，只有管理员可以执行批量报销操作');
+       return;
+     }
+
+     try {
+       setBatchUpdating(true);
+       setError(null);
+
+       const response = await fetch('/api/expense/batch/reimbursement', {
+         method: 'PUT',
+         headers: {
+           'Content-Type': 'application/json',
+         },
+         body: JSON.stringify({
+           expenseIds,
+           reimbursementStatus: '已报销',
+           reimbursedBy: user.name,
+         }),
+       });
+
+       if (response.ok) {
+         const result = await response.json();
+         
+         // 更新本地状态
+         const updateExpenseStatus = (expenses: ExpenseRecord[]) => 
+           expenses.map(expense => 
+             expenseIds.includes(expense._id)
+               ? { 
+                   ...expense, 
+                   reimbursementStatus: '已报销' as const,
+                   reimbursedAt: new Date().toISOString(),
+                   reimbursedBy: user.name 
+                 }
+               : expense
+           );
+
+         setExpenseRecords(prev => updateExpenseStatus(prev));
+         setDailyExpenses(prev => updateExpenseStatus(prev));
+         
+         // 清空选择
+         setSelectedExpenseIds(new Set());
+         
+         // 刷新统计数据
+         await refreshData();
+         
+         // 显示成功消息
+         setError(null);
+        } else {
+          const errorData = await response.json();
+          if (response.status === 403) {
+            setError('权限不足，只有管理员可以执行批量报销操作');
+          } else {
+            setError(errorData.message || '批量更新报销状态失败');
+          }
+        }
+     } catch (error) {
+       console.error('批量更新报销状态失败:', error);
+       setError(error instanceof Error ? error.message : '批量更新报销状态失败，请重试');
+     } finally {
+       setBatchUpdating(false);
+     }
+   };
+
+   /**
+    * 切换选择状态
+    * @param expenseId - 支出记录ID
+    */
+   const toggleSelection = (expenseId: string) => {
+     const newSelected = new Set(selectedExpenseIds);
+     if (newSelected.has(expenseId)) {
+       newSelected.delete(expenseId);
+     } else {
+       newSelected.add(expenseId);
+     }
+     setSelectedExpenseIds(newSelected);
+   };
+
+   /**
+    * 全选/取消全选
+    * @param expenses - 支出记录列表
+    */
+   const toggleSelectAll = (expenses: ExpenseRecord[]) => {
+     const unreimbursedExpenses = expenses.filter(expense => expense.reimbursementStatus === '未报销');
+     const unreimbursedIds = unreimbursedExpenses.map(expense => expense._id);
+     
+     if (unreimbursedIds.every(id => selectedExpenseIds.has(id))) {
+       // 如果全部已选中，则取消全选
+       const newSelected = new Set(selectedExpenseIds);
+       unreimbursedIds.forEach(id => newSelected.delete(id));
+       setSelectedExpenseIds(newSelected);
+     } else {
+       // 否则全选
+       const newSelected = new Set(selectedExpenseIds);
+       unreimbursedIds.forEach(id => newSelected.add(id));
+       setSelectedExpenseIds(newSelected);
+     }
+   };
+
+   /**
+    * 计算选中项目的总金额
+    */
+   const getSelectedTotalAmount = () => {
+     // 根据当前活跃的标签页选择正确的数据源，避免重复计算
+     const currentExpenses = activeTab === 0 ? dailyExpenses : expenseRecords;
+     return currentExpenses
+       .filter(expense => selectedExpenseIds.has(expense._id))
+       .reduce((sum, expense) => sum + expense.amount, 0);
+   };
+
+   /**
+    * 清空选择
+    */
+   const clearSelection = () => {
+     setSelectedExpenseIds(new Set());
+   };
+
+  // 获取用户信息
   useEffect(() => {
-    refreshData();
-  }, [refreshData]);
+    if (authUser?.userId) {
+      fetchUserInfo();
+    }
+  }, [fetchUserInfo]);
+
+  // 初始化数据 - 门店信息现在通过 StoreContext 获取
+  useEffect(() => {
+    // 只有在门店信息加载完成且存在时才获取数据
+    if (!storeLoading && currentStore) {
+      refreshData();
+    }
+  }, [refreshData, storeLoading, currentStore]);
 
   // 处理日期变化
   const handleDateChange = (newDate: Date | null) => {
@@ -302,31 +518,60 @@ const MobileExpenseStatsPage: React.FC = () => {
     return `¥${amount.toFixed(2)}`;
   };
 
+  /**
+   * 计算报销状态统计
+   * @param expenses - 支出记录列表
+   * @returns 报销状态统计数据
+   */
+  const calculateReimbursementStats = (expenses: ExpenseRecord[]) => {
+    const reimbursed = expenses.filter(expense => expense.reimbursementStatus === '已报销');
+    const unreimbursed = expenses.filter(expense => expense.reimbursementStatus === '未报销');
+    
+    return {
+      reimbursed: {
+        count: reimbursed.length,
+        amount: reimbursed.reduce((sum, expense) => sum + expense.amount, 0)
+      },
+      unreimbursed: {
+        count: unreimbursed.length,
+        amount: unreimbursed.reduce((sum, expense) => sum + expense.amount, 0)
+      }
+    };
+  };
+
   // 渲染统计卡片
   const renderStatsCards = () => {
     if (!expenseStats) return null;
 
+    // 获取当前显示的支出记录（根据当前选中的标签页）
+    const currentExpenses = activeTab === 0 ? dailyExpenses : expenseRecords;
+    const reimbursementStats = calculateReimbursementStats(currentExpenses);
+    
+    // 使用当前显示记录计算总支出，确保数据一致性
+    const totalAmount = reimbursementStats.reimbursed.amount + reimbursementStats.unreimbursed.amount;
+    const totalCount = reimbursementStats.reimbursed.count + reimbursementStats.unreimbursed.count;
+
     const cards = [
       {
         title: '总支出',
-        value: formatAmount(expenseStats.totalAmount),
-        subtitle: `共${expenseStats.totalExpenses}笔`,
+        value: formatAmount(totalAmount),
+        subtitle: `共${totalCount}笔`,
         color: '#1976d2',
         icon: <AccountBalanceIcon />,
       },
       {
-        title: '平均支出',
-        value: formatAmount(expenseStats.avgAmount),
-        subtitle: '每笔平均',
-        color: '#2e7d32',
-        icon: <TrendingUpIcon />,
+        title: '已报销',
+        value: formatAmount(reimbursementStats.reimbursed.amount),
+        subtitle: `${reimbursementStats.reimbursed.count}笔`,
+        color: '#4caf50',
+        icon: <CheckCircleIcon />,
       },
       {
-        title: '最大支出',
-        value: formatAmount(expenseStats.maxAmount),
-        subtitle: '单笔最高',
-        color: '#ed6c02',
-        icon: <WarningIcon />,
+        title: '未报销',
+        value: formatAmount(reimbursementStats.unreimbursed.amount),
+        subtitle: `${reimbursementStats.unreimbursed.count}笔`,
+        color: '#ff9800',
+        icon: <ScheduleIcon />,
       },
     ];
 
@@ -366,61 +611,151 @@ const MobileExpenseStatsPage: React.FC = () => {
       );
     }
 
+    const unreimbursedExpenses = expenses.filter(expense => expense.reimbursementStatus === '未报销');
+    const selectedCount = expenses.filter(expense => selectedExpenseIds.has(expense._id)).length;
+    const canSelectAll = unreimbursedExpenses.length > 0;
+    const isAllSelected = unreimbursedExpenses.length > 0 && unreimbursedExpenses.every(expense => selectedExpenseIds.has(expense._id));
+
     return (
       <Paper sx={{ mb: 2 }}>
-        <List>
+        {/* 批量操作工具栏 - 仅管理员可见 */}
+        {unreimbursedExpenses.length > 0 && user?.role === 'admin' && (
+          <Box sx={{ p: 2, borderBottom: '1px solid #e0e0e0', bgcolor: '#fafafa' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Checkbox
+                  checked={isAllSelected}
+                  indeterminate={selectedCount > 0 && !isAllSelected}
+                  onChange={() => toggleSelectAll(expenses)}
+                  disabled={!canSelectAll}
+                />
+                <Typography variant="body2" color="text.secondary">
+                  {selectedCount > 0 ? `已选择 ${selectedCount} 项` : '全选未报销项目'}
+                </Typography>
+                {selectedCount > 0 && (
+                  <Chip
+                    label={`总计: ¥${getSelectedTotalAmount().toFixed(2)}`}
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                  />
+                )}
+              </Box>
+              {selectedCount > 0 && (
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={clearSelection}
+                    startIcon={<ClearIcon />}
+                  >
+                    清空
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    color="success"
+                    onClick={() => handleBatchUpdateReimbursementStatus(Array.from(selectedExpenseIds))}
+                    disabled={batchUpdating}
+                    startIcon={<CheckCircleIcon />}
+                  >
+                    {batchUpdating ? '处理中...' : '批量报销'}
+                  </Button>
+                </Box>
+              )}
+            </Box>
+          </Box>
+        )}
+        
+        <List sx={{ py: 0 }}>
           {expenses.map((expense, index) => {
             const typeConfig = getTypeConfig(expense.type);
+            const canUpdateStatus = expense.reimbursementStatus === '未报销';
+            const isUpdating = updatingExpenseId === expense._id;
+            const isSelected = selectedExpenseIds.has(expense._id);
+            
             return (
               <React.Fragment key={expense._id}>
-                <ListItem>
-                  <ListItemIcon sx={{ color: typeConfig.color }}>
+                <ListItem 
+                  sx={{ 
+                    py: 1, 
+                    px: 2,
+                    opacity: isUpdating ? 0.7 : 1,
+                    bgcolor: isSelected ? 'rgba(25, 118, 210, 0.08)' : 'transparent'
+                  }}
+                >
+                  {/* 多选复选框 - 仅管理员可见 */}
+                  {canUpdateStatus && user?.role === 'admin' && (
+                    <Checkbox
+                      checked={isSelected}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        toggleSelection(expense._id);
+                      }}
+                      sx={{ mr: 1 }}
+                    />
+                  )}
+                  
+                  <ListItemIcon sx={{ color: typeConfig.color, minWidth: 36 }}>
                     {typeConfig.icon}
                   </ListItemIcon>
                   <ListItemText
+                    sx={{ my: 0, flex: 1 }}
                     primary={
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                          {expense.description}
-                        </Typography>
-                        <Typography variant="h6" sx={{ color: typeConfig.color, fontWeight: 'bold' }}>
-                          {formatAmount(expense.amount)}
-                        </Typography>
-                      </Box>
-                    }
-                    secondary={
-                      <Box>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
-                          <Chip
-                            label={typeConfig.label}
-                            size="small"
-                            sx={{ bgcolor: typeConfig.color, color: 'white', fontSize: '0.7rem' }}
-                          />
-                          <Typography variant="caption" color="text.secondary">
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
+                        <Box sx={{ flex: 1, mr: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'medium', lineHeight: 1.2 }}>
+                            {expense.description}
+                          </Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
+                            <Chip
+                              label={typeConfig.label}
+                              size="small"
+                              sx={{ 
+                                bgcolor: typeConfig.color, 
+                                color: 'white', 
+                                fontSize: '0.65rem',
+                                height: 18
+                              }}
+                            />
+                            <Chip
+                              label={isUpdating ? '更新中...' : expense.reimbursementStatus}
+                              size="small"
+                              color={expense.reimbursementStatus === '已报销' ? 'success' : 'warning'}
+                              variant={expense.reimbursementStatus === '已报销' ? 'filled' : 'outlined'}
+                              sx={{ 
+                                fontSize: '0.65rem',
+                                height: 18,
+                                fontWeight: 'medium'
+                              }}
+                            />
+                          </Box>
+                        </Box>
+                        <Box sx={{ textAlign: 'right' }}>
+                          <Typography variant="body1" sx={{ color: typeConfig.color, fontWeight: 'bold', lineHeight: 1.2 }}>
+                            {formatAmount(expense.amount)}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
                             {format(new Date(expense.date), 'MM-dd HH:mm', { locale: zhCN })}
                           </Typography>
                         </Box>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
-                          <Typography variant="caption" color="text.secondary">
-                            提交人: {expense.operatedBy}
-                          </Typography>
-                          {expense.isApproved && (
-                            <Chip
-                              label="已审核"
-                              size="small"
-                              color="success"
-                              sx={{ fontSize: '0.6rem', height: 16 }}
-                            />
-                          )}
-                        </Box>
+                      </Box>
+                    }
+                    secondary={
+                      <Box sx={{ mt: 0.25 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                          提交人: {expense.operatedBy}
+                        </Typography>
                         {expense.notes && (
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25, fontSize: '0.7rem' }}>
                             备注: {expense.notes}
                           </Typography>
                         )}
                       </Box>
                     }
                   />
+                  
+                  {/* 单个报销按钮已移除，只保留批量操作 */}
                 </ListItem>
                 {index < expenses.length - 1 && <Divider />}
               </React.Fragment>
@@ -503,7 +838,7 @@ const MobileExpenseStatsPage: React.FC = () => {
           )}
 
           {/* 门店信息警告 */}
-          {!storeInfo && (
+          {!storeLoading && !currentStore && (
             <Alert severity="warning" sx={{ mb: 2 }}>
               无法获取门店信息，请检查网络连接
             </Alert>

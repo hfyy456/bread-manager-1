@@ -8,8 +8,10 @@ import { Dashboard } from '@mui/icons-material';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import { useStore } from './StoreContext'; // 引入 useStore
+import { useFeishuAuth } from '../hooks/useFeishuAuth'; // 引入飞书认证
 
-const navConfig = [
+// 基础导航配置
+const baseNavConfig = [
   { title: '数据看板', path: '/dashboard', icon: <Dashboard /> },
   {
     title: '配方管理',
@@ -47,6 +49,16 @@ const navConfig = [
     ]
   },
   { title: '操作指南', path: '/operation-guide' },
+];
+
+// 管理员专用导航项
+const adminNavConfig = [
+  {
+    title: '系统管理',
+    children: [
+      { title: '用户管理', path: '/user-management' },
+    ]
+  },
 ];
 
 const MobileNavItem = ({ item, handleClose }) => {
@@ -143,6 +155,21 @@ const Navbar = () => {
 
   // 从 Context 获取门店信息，包括锁定状态
   const { stores, currentStore, switchStore, loading, error, isStoreLocked } = useStore();
+  
+  // 获取当前用户信息
+  const { user } = useFeishuAuth();
+  
+  // 根据用户角色动态生成导航配置
+  const navConfig = React.useMemo(() => {
+    let config = [...baseNavConfig];
+    
+    // 如果是管理员，添加系统管理菜单
+    if (user?.role === 'admin') {
+      config = [...config, ...adminNavConfig];
+    }
+    
+    return config;
+  }, [user?.role]);
 
   const handleOpenNavMenu = (event) => setAnchorElNav(event.currentTarget);
   const handleCloseNavMenu = () => setAnchorElNav(null);

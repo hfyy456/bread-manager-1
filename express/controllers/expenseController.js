@@ -23,7 +23,7 @@ const createExpense = async (req, res) => {
     }
 
     // 验证支出类型
-    const validTypes = ['operational', 'maintenance', 'purchase', 'other'];
+    const validTypes = ['杂费', '工资', '易耗品', '鸡蛋', '水果净菜', '大货', '运费', '水电', '租金', '市场推广'];
     if (type && !validTypes.includes(type)) {
       return ResponseHelper.error(res, '无效的支出类型', 400);
     }
@@ -234,7 +234,7 @@ const updateExpense = async (req, res) => {
 
     // 验证并设置更新字段
     if (type !== undefined) {
-      const validTypes = ['operational', 'maintenance', 'purchase', 'other'];
+      const validTypes = ['杂费', '工资', '易耗品', '鸡蛋', '水果净菜', '大货', '运费', '水电', '租金', '市场推广'];
       if (!validTypes.includes(type)) {
         return ResponseHelper.error(res, '无效的支出类型', 400);
       }
@@ -332,11 +332,11 @@ const deleteExpense = async (req, res) => {
 };
 
 /**
- * 审核支出记录
+ * 更新支出记录报销状态
  * @param {Object} req - 请求对象
  * @param {Object} res - 响应对象
  */
-const approveExpense = async (req, res) => {
+const updateReimbursementStatus = async (req, res) => {
   try {
     const storeId = req.currentStoreId || req.headers['x-current-store-id'];
     if (!storeId) {
@@ -344,14 +344,22 @@ const approveExpense = async (req, res) => {
     }
 
     const { expenseId } = req.params;
-    const { approvedBy } = req.body;
+    const { reimbursementStatus, reimbursedBy } = req.body;
 
     if (!expenseId) {
       return ResponseHelper.error(res, '支出记录ID是必填参数', 400);
     }
 
-    if (!approvedBy) {
-      return ResponseHelper.error(res, '审核人是必填参数', 400);
+    // 验证报销状态，支持多种编码格式
+    const validStatuses = ['已报销', '未报销', '已報銷', '未報銷'];
+    if (!reimbursementStatus || !validStatuses.includes(reimbursementStatus.trim())) {
+      console.log('收到的报销状态:', JSON.stringify(reimbursementStatus));
+      console.log('有效状态列表:', validStatuses);
+      return ResponseHelper.error(res, '报销状态必须是"已报销"或"未报销"', 400);
+    }
+
+    if (reimbursementStatus === '已报销' && !reimbursedBy) {
+      return ResponseHelper.error(res, '报销状态为"已报销"时，报销人是必填参数', 400);
     }
 
     // 检查支出记录是否存在且属于当前门店
@@ -360,28 +368,145 @@ const approveExpense = async (req, res) => {
       return ResponseHelper.notFound(res, '支出记录');
     }
 
-    if (expense.storeId !== storeId) {
-      return ResponseHelper.error(res, '无权限审核此支出记录', 403);
+    // 比较ObjectId和字符串时需要转换为字符串
+    if (expense.storeId.toString() !== storeId.toString()) {
+      return ResponseHelper.error(res, '无权限修改此支出记录的报销状态', 403);
     }
 
-    if (expense.isApproved) {
-      return ResponseHelper.error(res, '此支出记录已经审核过了', 400);
-    }
+    const updatedExpense = await Expense.updateReimbursementStatus(
+      expenseId, 
+      reimbursementStatus, 
+      reimbursedBy ? reimbursedBy.trim() : null
+    );
 
-    const approvedExpense = await Expense.approveExpense(expenseId, approvedBy.trim());
-
-    logger.info(`支出记录审核成功`, {
+    logger.info(`支出记录报销状态更新成功`, {
       expenseId,
       storeId,
-      approvedBy,
+      reimbursementStatus,
+      reimbursedBy,
       amount: expense.amount
     });
 
-    return ResponseHelper.success(res, approvedExpense, '支出记录审核成功');
+    return ResponseHelper.success(res, updatedExpense, '报销状态更新成功');
 
   } catch (error) {
-    logger.error('审核支出记录失败:', error);
-    return ResponseHelper.error(res, '审核支出记录失败', 500);
+    logger.error('更新报销状态失败:', error);
+    return ResponseHelper.error(res, '更新报销状态失败', 500);
+  }
+};
+
+/**
+ * 批量更新支出记录报销状态
+ * @param {Object} req - 请求对象
+ * @param {Object} res - 响应对象
+ */
+const batchUpdateReimbursementStatus = async (req, res) => {
+  try {
+    console.log('批量更新函数被调用 - 请求体:', JSON.stringify(req.body, null, 2));
+    console.log('批量更新函数被调用 - 请求头:', JSON.stringify(req.headers, null, 2));
+    
+    const storeId = req.currentStoreId || req.headers['x-current-store-id'];
+    if (!storeId) {
+      return ResponseHelper.error(res, '请求头中缺少门店ID', 400);
+    }
+
+    const { expenseIds, reimbursementStatus, reimbursedBy } = req.body;
+    console.log('解构后的参数:', { expenseIds, reimbursementStatus, reimbursedBy });
+
+    if (!expenseIds || !Array.isArray(expenseIds) || expenseIds.length === 0) {
+      return ResponseHelper.error(res, '支出记录ID列表是必填参数', 400);
+    }
+
+    // 验证报销状态，支持多种编码格式
+    const validStatuses = ['已报销', '未报销', '已報銷', '未報銷'];
+    const trimmedStatus = reimbursementStatus ? reimbursementStatus.trim() : null;
+    
+    console.log('批量更新 - 验证报销状态:', {
+      receivedStatus: reimbursementStatus,
+      receivedStatusType: typeof reimbursementStatus,
+      receivedStatusJSON: JSON.stringify(reimbursementStatus),
+      trimmedStatus: trimmedStatus,
+      validStatuses: validStatuses,
+      includes: trimmedStatus ? validStatuses.includes(trimmedStatus) : false
+    });
+    
+    if (!reimbursementStatus || !trimmedStatus || !validStatuses.includes(trimmedStatus)) {
+      logger.error('批量更新 - 报销状态验证失败', {
+        receivedStatus: reimbursementStatus,
+        receivedStatusType: typeof reimbursementStatus,
+        trimmedStatus: trimmedStatus,
+        validStatuses: validStatuses
+      });
+      return ResponseHelper.error(res, '报销状态必须是"已报销"或"未报销"', 400);
+    }
+
+    if (reimbursementStatus === '已报销' && !reimbursedBy) {
+      return ResponseHelper.error(res, '报销状态为"已报销"时，报销人是必填参数', 400);
+    }
+
+    // 验证并转换ObjectId
+    const mongoose = require('mongoose');
+    const validExpenseIds = expenseIds.filter(id => mongoose.Types.ObjectId.isValid(id));
+    
+    if (validExpenseIds.length !== expenseIds.length) {
+      return ResponseHelper.error(res, '部分支出记录ID格式无效', 400);
+    }
+
+    // 检查所有支出记录是否存在且属于当前门店
+    const expenses = await Expense.find({ 
+      _id: { $in: validExpenseIds.map(id => new mongoose.Types.ObjectId(id)) }, 
+      storeId: storeId 
+    });
+
+    if (expenses.length !== validExpenseIds.length) {
+      return ResponseHelper.error(res, '部分支出记录不存在或无权限访问', 403);
+    }
+
+    // 转换为ObjectId数组
+    const objectIds = validExpenseIds.map(id => new mongoose.Types.ObjectId(id));
+
+    // 批量更新报销状态
+    const updateData = {
+      reimbursementStatus
+    };
+    
+    if (reimbursementStatus === '已报销') {
+      updateData.reimbursedAt = new Date();
+      updateData.reimbursedBy = reimbursedBy.trim();
+    } else {
+      updateData.reimbursedAt = null;
+      updateData.reimbursedBy = null;
+    }
+
+    const result = await Expense.updateMany(
+      { _id: { $in: objectIds } },
+      { $set: updateData }
+    );
+
+    // 获取更新后的记录
+    const updatedExpenses = await Expense.find({ _id: { $in: objectIds } });
+    
+    // 计算总金额
+    const totalAmount = updatedExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+
+    logger.info(`批量更新支出记录报销状态成功`, {
+      expenseIds,
+      storeId,
+      reimbursementStatus,
+      reimbursedBy,
+      count: result.modifiedCount,
+      totalAmount
+    });
+
+    return ResponseHelper.success(res, {
+      modifiedCount: result.modifiedCount,
+      totalAmount,
+      expenses: updatedExpenses
+    }, `成功更新${result.modifiedCount}条记录的报销状态`);
+
+  } catch (error) {
+    logger.error('批量更新报销状态失败:', error);
+    return ResponseHelper.error(res, '批量更新报销状态失败', 500);
   }
 };
 
@@ -393,10 +518,16 @@ const approveExpense = async (req, res) => {
 const getExpenseTypes = async (req, res) => {
   try {
     const expenseTypes = [
-      { value: 'operational', label: '运营支出', description: '日常运营相关的支出' },
-      { value: 'maintenance', label: '维护支出', description: '设备维护、店面维修等支出' },
-      { value: 'purchase', label: '采购支出', description: '原材料、设备采购等支出' },
-      { value: 'other', label: '其他支出', description: '其他类型的支出' }
+      { value: '杂费', label: '杂费', description: '各种杂项费用' },
+      { value: '工资', label: '工资', description: '员工工资支出' },
+      { value: '易耗品', label: '易耗品', description: '日常易耗品采购' },
+      { value: '鸡蛋', label: '鸡蛋', description: '鸡蛋采购费用' },
+      { value: '水果净菜', label: '水果净菜', description: '水果净菜采购费用' },
+      { value: '大货', label: '大货', description: '大宗商品采购' },
+      { value: '运费', label: '运费', description: '运输费用' },
+      { value: '水电', label: '水电', description: '水电费用' },
+      { value: '租金', label: '租金', description: '店面租金' },
+      { value: '市场推广', label: '市场推广', description: '营销推广费用' }
     ];
 
     return ResponseHelper.success(res, expenseTypes, '获取支出类型成功');
@@ -414,6 +545,7 @@ module.exports = {
   getExpenseRecords,
   updateExpense,
   deleteExpense,
-  approveExpense,
+  updateReimbursementStatus,
+  batchUpdateReimbursementStatus,
   getExpenseTypes
 };

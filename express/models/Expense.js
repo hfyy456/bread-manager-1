@@ -22,7 +22,7 @@ const expenseSchema = new mongoose.Schema({
     enum: ['杂费', '工资', '易耗品', '鸡蛋', '水果净菜', '大货', '运费', '水电', '租金', '市场推广'],
     default: '杂费',
     required: true,
-  }
+  },
   // 支出金额
   amount: {
     type: Number,
@@ -47,20 +47,9 @@ const expenseSchema = new mongoose.Schema({
     trim: true,
   },
   // 支出分类标签
-
-  // 是否已审核
-  isApproved: {
-    type: Boolean,
-    default: false,
-  },
-  // 审核人
-  approvedBy: {
+  category: {
     type: String,
     trim: true,
-  },
-  // 审核时间
-  approvedAt: {
-    type: Date,
   },
   // 报销状态：已报销、未报销
   reimbursementStatus: {
@@ -272,21 +261,28 @@ expenseSchema.statics.deleteExpense = async function(expenseId) {
 };
 
 /**
- * 审核支出记录
+ * 更新报销状态
  * @param {string} expenseId - 支出记录ID
- * @param {string} approvedBy - 审核人
- * @returns {Promise} 审核后的支出记录
+ * @param {string} reimbursementStatus - 报销状态
+ * @param {string} reimbursedBy - 报销人
+ * @returns {Promise} 更新后的支出记录
  */
-expenseSchema.statics.approveExpense = async function(expenseId, approvedBy) {
+expenseSchema.statics.updateReimbursementStatus = async function(expenseId, reimbursementStatus, reimbursedBy) {
+  const updateData = {
+    reimbursementStatus
+  };
+  
+  if (reimbursementStatus === '已报销') {
+    updateData.reimbursedAt = new Date();
+    updateData.reimbursedBy = reimbursedBy;
+  } else {
+    updateData.reimbursedAt = null;
+    updateData.reimbursedBy = null;
+  }
+  
   return await this.findByIdAndUpdate(
     expenseId,
-    {
-      $set: {
-        isApproved: true,
-        approvedBy,
-        approvedAt: new Date()
-      }
-    },
+    { $set: updateData },
     { new: true }
   );
 };

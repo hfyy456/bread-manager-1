@@ -83,4 +83,38 @@ exports.getStoreById = async (req, res) => {
       message: '服务器错误: ' + error.message 
     });
   }
-}; 
+};
+
+// @desc    获取当前门店信息
+// @route   GET /api/stores/current
+// @access  Public
+exports.getCurrentStore = async (req, res) => {
+  try {
+    // 从 authMiddleware 设置的 currentStoreId 或请求头中获取当前门店ID
+    const storeId = req.currentStoreId || req.headers['x-current-store-id'] || req.user?.currentStoreId;
+    
+    if (!storeId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: '未找到门店ID信息，请确保已选择门店' 
+      });
+    }
+
+    const store = await Store.findById(storeId);
+
+    if (!store) {
+      return res.status(404).json({ 
+        success: false, 
+        message: '门店未找到' 
+      });
+    }
+
+    res.json({ success: true, data: store });
+  } catch (error) {
+    console.error('获取当前门店信息失败:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: '服务器错误: ' + error.message 
+    });
+  }
+};

@@ -20,8 +20,9 @@ const productionPlanRoutes = require('./routes/productionPlanRoutes'); // 引入
 const storeProductRoutes = require('./routes/storeProduct'); // 引入产品上下架路由
 const productionLossRoutes = require('./routes/productionLossRoutes'); // 引入生产报损路由
 const expenseRoutes = require('./routes/expenseRoutes'); // 引入支出路由
+const userRoutes = require('./routes/userRoutes'); // 引入用户管理路由
 
-const authMiddleware = require('./middleware/authMiddleware'); // 引入模拟认证中间件
+const { authenticate } = require('./middleware/authMiddleware'); // 引入认证中间件
 const { performanceMiddleware, startPerformanceReporting } = require('./middleware/performanceMiddleware'); // 性能监控
 const logger = require('./utils/logger'); // 日志工具
 
@@ -37,8 +38,8 @@ app.use(express.json()); // 解析 JSON 请求体
 // 性能监控中间件
 app.use(performanceMiddleware);
 
-// 全局应用模拟认证中间件。所有API请求都将带有一个模拟的 req.user 对象
-app.use('/api', authMiddleware);
+// 全局应用认证中间件。所有API请求都将带有一个认证的 req.user 对象
+app.use('/api', authenticate);
 
 // React应用的构建输出目录 (位于项目根目录下的 build 文件夹)
 const reactBuildDir = path.resolve(__dirname, '..', 'dist');
@@ -54,18 +55,16 @@ app.use('/api/dashboard', dashboardRoutes); // Added dashboardRoutes usage
 app.use('/api/receiving', receivingRoutes); // Use the new route
 app.use('/api/bread-types', breadTypeRoutes);
 app.use('/api/filling-recipes', fillingRecipeRoutes);
-app.use('/api/dough-recipes', authMiddleware, doughRecipeRoutes);
+app.use('/api/dough-recipes', authenticate, doughRecipeRoutes);
 app.use('/api/ingredients', ingredientsCompareRoutes); // 新增对比路由
-app.use('/api/warehouse', authMiddleware, warehouseRoutes); // 2. 注册仓库路由
+app.use('/api/warehouse', authenticate, warehouseRoutes); // 2. 注册仓库路由
 app.use('/api/transfer-requests', transferRequestRoutes); // Register the new route
-app.use('/api/production-plans', authMiddleware, productionPlanRoutes); // 注册生产计划路由
+app.use('/api/production-plans', authenticate, productionPlanRoutes); // 注册生产计划路由
 app.use('/api/store-products', storeProductRoutes); // 注册产品上下架路由
 app.use('/api/production-loss', productionLossRoutes); // 注册生产报损路由
 app.use('/api/expense', expenseRoutes); // 注册支出路由
 app.use('/api/feishu', feishuRoutes);
-// 您可以在这里添加其他路由模块，例如:
-// const userRoutes = require('./routes/userRoutes');
-// app.use('/api/users', userRoutes);
+app.use('/api/users', userRoutes); // 注册用户管理路由
 
 
 // --- 静态文件服务和 React 应用的 Catch-all (仅当构建文件存在时) ---

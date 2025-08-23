@@ -33,6 +33,7 @@ import {
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { useFeishuAuth } from '../../hooks/useFeishuAuth';
+import { useStore } from '../../components/StoreContext';
 
 /**
  * 移动端首页组件
@@ -71,22 +72,15 @@ const MobileHomePage: React.FC = () => {
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [inventoryStats, setInventoryStats] = useState<InventoryStats | null>(null);
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
-  const [storeId, setStoreId] = useState<string | null>(null);
   
   // 飞书认证
   const { user, loading: userLoading, error: userError, isFeishuEnv, checkingEnv } = useFeishuAuth();
+  
+  // 门店信息
+  const storeContext = useStore();
+  const { currentStore, storeLoading } = storeContext || { currentStore: null, storeLoading: true };
 
-  /**
-   * 获取门店ID
-   */
-  useEffect(() => {
-    const urlStoreId = new URLSearchParams(window.location.search).get('store');
-    const lockedStoreId = sessionStorage.getItem('lockedStoreId');
-    const defaultStoreId = localStorage.getItem('defaultStoreId');
-    
-    const currentStoreId = urlStoreId || lockedStoreId || defaultStoreId;
-    setStoreId(currentStoreId);
-  }, []);
+
 
   /**
    * 更新当前时间
@@ -103,7 +97,7 @@ const MobileHomePage: React.FC = () => {
    * 获取仪表板统计数据
    */
   const fetchDashboardStats = async (): Promise<void> => {
-    if (!storeId) return;
+    if (!currentStore?._id) return;
 
     try {
       const today = format(new Date(), 'yyyy-MM-dd');
@@ -111,7 +105,7 @@ const MobileHomePage: React.FC = () => {
         `/api/dashboard/summary?periodType=daily&date=${today}`,
         {
           headers: {
-            'x-current-store-id': storeId,
+            'x-current-store-id': currentStore._id,
           },
         }
       );
@@ -142,12 +136,12 @@ const MobileHomePage: React.FC = () => {
    * 获取库存统计数据
    */
   const fetchInventoryStats = async (): Promise<void> => {
-    if (!storeId) return;
+    if (!currentStore?._id) return;
 
     try {
       const response = await fetch('/api/warehouse/stock', {
         headers: {
-          'x-current-store-id': storeId,
+          'x-current-store-id': currentStore._id,
         },
       });
 
@@ -188,7 +182,7 @@ const MobileHomePage: React.FC = () => {
    */
   useEffect(() => {
     const initData = async (): Promise<void> => {
-      if (!storeId) return;
+      if (!currentStore?._id || storeLoading) return;
       
       setLoading(true);
       setError('');
@@ -206,7 +200,7 @@ const MobileHomePage: React.FC = () => {
     };
 
     initData();
-  }, [storeId]);
+  }, [currentStore, storeLoading]);
 
   /**
    * 刷新数据
@@ -337,11 +331,11 @@ const MobileHomePage: React.FC = () => {
   }
 
   // 门店信息检查
-  if (!storeId) {
+  if (!storeLoading && !currentStore) {
     return (
       <Container maxWidth="sm" sx={{ py: 4 }}>
         <Alert severity="warning">
-          无法获取门店信息，请检查URL参数或重新登录。
+          无法获取门店信息，请检查网络连接。
         </Alert>
       </Container>
     );
@@ -364,7 +358,7 @@ const MobileHomePage: React.FC = () => {
                 {user?.name || '面包管理系统'}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                门店ID: {storeId}
+                门店: {currentStore?.name || '加载中...'}
               </Typography>
               {isFeishuEnv && (
                 <Chip 

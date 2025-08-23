@@ -1,5 +1,8 @@
 const needle = require("needle");
 const config = require("../config/config");
+const { User } = require("../models/User");
+
+
 
 exports.authenticate = async (req, res) => {
     const { code, appID } = req.body;
@@ -10,6 +13,8 @@ exports.authenticate = async (req, res) => {
     if (!code || !appID) {
         return res.status(400).json({ message: '缺少授权码 (code) 或 App ID。' });
     }
+
+
 
     const appConfig = config.feishu[appID];
     if (!appConfig) {
@@ -75,13 +80,84 @@ exports.authenticate = async (req, res) => {
             throw new Error(`获取用户凭证失败: ${userTokenResponse.body.msg || '未知错误'}`);
         }
         
+        // Step 3: Get user profile information
+        console.log("\n--- [Feishu Auth] Step 3: Getting User Profile ---");
+        const userProfileHeaders = {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + userData.access_token,
+        };
+        
+        const userProfileResponse = await needle(
+            "get",
+            config.feishu.FEISHU_HOST + "/open-apis/authen/v1/user_info",
+            {
+                headers: userProfileHeaders,
+                json: true
+            }
+        );
+        
+        console.log("- User Profile Response:", userProfileResponse.body);
+        
+        if (!userProfileResponse.body.data) {
+            console.error("[Feishu Auth Error] Failed to get user profile:", userProfileResponse.body);
+            throw new Error(`获取用户信息失败: ${userProfileResponse.body.msg || '未知错误'}`);
+        }
+        
+        const userProfile = userProfileResponse.body.data;
+        console.log("- Raw userProfile from Feishu:", userProfile);
+        
+        // Step 4: Create or update user in database
+        console.log("\n--- [Feishu Auth] Step 4: User Registration/Login ---");
+        
+        // Validate that we have a valid open_id (Feishu uses open_id as user identifier)
+        if (!userProfile.open_id) {
+            console.error("[Feishu Auth Error] No open_id in userProfile:", userProfile);
+            throw new Error('飞书用户信息中缺少用户ID');
+        }
+        
+        const feishuUserData = {
+            feishuUserId: userProfile.open_id,
+            name: userProfile.name,
+            email: userProfile.email,
+            avatar: userProfile.avatar_url
+        };
+        
+        console.log("- Processing user data:", feishuUserData);
+        console.log("- feishuUserId value:", feishuUserData.feishuUserId);
+        console.log("- feishuUserId type:", typeof feishuUserData.feishuUserId);
+        
+        const { user, isNewUser } = await User.findOrCreateByFeishuId(feishuUserData);
+        
+        if (isNewUser) {
+            console.log(`- New user registered: ${user.name} (${user.feishuUserId})`);
+        } else {
+            console.log(`- Existing user logged in: ${user.name} (${user.feishuUserId})`);
+        }
+        
         console.log("\n--- [Feishu Auth] Success ---");
-        console.log("- Final user data:", userData);
-        // The final user object is in userData
-        res.json(userData);
+        console.log("- Final user object:", {
+            id: user._id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            isNewUser
+        });
+        
+        // 返回用户信息（包含数据库中的用户数据）
+        res.json({
+            userId: user.feishuUserId,
+            name: user.name,
+            email: user.email,
+            avatar: user.avatar,
+            role: user.role,
+            storeId: user.storeId,
+            isNewUser,
+            access_token: userData.access_token, // 保留飞书访问令牌
+            ...userData // 保留其他飞书返回的数据
+        });
 
     } catch (error) {
         console.error("--- [Feishu Auth] Fatal Error ---", error.message);
         res.status(500).json({ message: "飞书认证失败", details: error.message });
     }
-}; 
+};

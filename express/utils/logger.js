@@ -99,7 +99,9 @@ class Logger {
       duration: `${duration}ms`,
       userAgent: req.get('User-Agent'),
       ip: req.ip || req.connection.remoteAddress,
-      storeId: req.currentStoreId
+      storeId: req.currentStoreId,
+      feishuUserId: req.headers['x-feishu-user-id'],
+      userId: req.user?._id || req.user?.id
     };
 
     const message = `${req.method} ${req.originalUrl} - ${res.statusCode} - ${duration}ms`;

@@ -7,9 +7,11 @@ const {
   getExpenseRecords,
   updateExpense,
   deleteExpense,
-  approveExpense,
+  updateReimbursementStatus,
+  batchUpdateReimbursementStatus,
   getExpenseTypes
 } = require('../controllers/expenseController');
+const { requireAdmin } = require('../middleware/authMiddleware');
 
 /**
  * @route POST /api/expense/register
@@ -79,14 +81,27 @@ router.get('/types', getExpenseTypes);
  */
 router.put('/:expenseId', updateExpense);
 
+
+
 /**
- * @route POST /api/expense/:expenseId/approve
- * @desc 审核支出记录
+ * @route PUT /api/expense/batch/reimbursement
+ * @desc 批量更新支出记录报销状态
+ * @body {string[]} expenseIds - 支出记录ID列表
+ * @body {string} reimbursementStatus - 报销状态 ('已报销' | '未报销')
+ * @body {string} reimbursedBy - 报销人 (当状态为'已报销'时必填)
+ * @access Admin Only
+ */
+router.put('/batch/reimbursement', requireAdmin, batchUpdateReimbursementStatus);
+
+/**
+ * @route PUT /api/expense/:expenseId/reimbursement
+ * @desc 更新支出记录报销状态
  * @param {string} expenseId - 支出记录ID
- * @body {string} approvedBy - 审核人
+ * @body {string} reimbursementStatus - 报销状态 ('已报销' | '未报销')
+ * @body {string} reimbursedBy - 报销人 (当状态为'已报销'时必填)
  * @access Public
  */
-router.post('/:expenseId/approve', approveExpense);
+router.put('/:expenseId/reimbursement', updateReimbursementStatus);
 
 /**
  * @route DELETE /api/expense/:expenseId
