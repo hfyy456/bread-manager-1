@@ -1,5 +1,0 @@
-{"timestamp":"2025-08-21T20:15:35.579Z","level":"PERFORMANCE","message":"Performance: Slow API Response took 2371ms","operation":"Slow API Response","duration":"2371ms","method":"POST","url":"/api/ingredients/list","statusCode":200}
-{"timestamp":"2025-08-21T20:27:56.372Z","level":"PERFORMANCE","message":"Performance: Slow API Response took 2395ms","operation":"Slow API Response","duration":"2395ms","method":"POST","url":"/api/ingredients/list","statusCode":200}
-{"timestamp":"2025-08-21T20:27:57.198Z","level":"PERFORMANCE","message":"Performance: Slow API Response took 3620ms","operation":"Slow API Response","duration":"3620ms","method":"POST","url":"/api/ingredients/list","statusCode":200}
-{"timestamp":"2025-08-21T20:27:58.418Z","level":"PERFORMANCE","message":"Performance: Slow API Response took 2035ms","operation":"Slow API Response","duration":"2035ms","method":"GET","url":"/api/inventory/state","statusCode":304}
-{"timestamp":"2025-08-21T20:28:00.614Z","level":"PERFORMANCE","message":"Performance: Slow API Response took 2190ms","operation":"Slow API Response","duration":"2190ms","method":"GET","url":"/api/inventory/state","statusCode":304}

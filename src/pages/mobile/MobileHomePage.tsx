@@ -233,10 +233,9 @@ const MobileHomePage: React.FC = () => {
       description: '进行库存盘点和管理',
       icon: <InventoryIcon />,
       color: '#388e3c',
-      badge: inventoryStats?.lowStockItems || 0,
       onClick: () => {
-        // 在同一页面内显示库存盘点组件
-        alert('库存盘点功能开发中...');
+        // 使用路由导航到库存盘点页面
+        navigate('/mobileHome/inventory-check');
       },
     },
     {

@@ -1,2 +1,0 @@
-{"timestamp":"2025-08-04T07:42:02.841Z","level":"PERFORMANCE","message":"Performance: Slow API Response took 2318ms","operation":"Slow API Response","duration":"2318ms","method":"PUT","url":"/api/filling-recipes/6890511828bf9d9220d3289f","statusCode":200}
-{"timestamp":"2025-08-04T07:51:52.333Z","level":"PERFORMANCE","message":"Performance: Slow API Response took 2804ms","operation":"Slow API Response","duration":"2804ms","method":"POST","url":"/api/ingredients/list","statusCode":200}

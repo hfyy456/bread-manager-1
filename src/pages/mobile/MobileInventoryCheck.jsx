@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Container,
   Typography,
@@ -9,7 +10,6 @@ import {
   Select,
   MenuItem,
   Button,
-  Grid,
   TextField,
   CircularProgress,
   Snackbar,
@@ -26,9 +26,30 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
+  AppBar,
+  Toolbar,
+  LinearProgress,
+  Chip,
+  Divider,
 } from "@mui/material";
-import SaveIcon from "@mui/icons-material/Save";
-import { Add as AddIcon, Remove as RemoveIcon } from "@mui/icons-material";
+import {
+  Save as SaveIcon,
+  ArrowBack as ArrowBackIcon,
+  Inventory as InventoryIcon,
+  Blender as BlenderIcon,
+  Cake as CakeIcon,
+  Build as BuildIcon,
+  LocalFireDepartment as FireIcon,
+  AcUnit as ColdIcon,
+  ShoppingBag as BagIcon,
+  LocalCafe as CafeIcon,
+  Restaurant as RestaurantIcon,
+  Store as StoreIcon,
+  Work as WorkIcon,
+  LocalShipping as LocalShippingIcon,
+  Add as AddIcon,
+  Remove as RemoveIcon,
+} from "@mui/icons-material";
 
 const POSTNAME = {
   1: "搅拌",
@@ -42,11 +63,36 @@ const POSTNAME = {
   9: "小库房",
 };
 
+const POST_ICONS = {
+  1: BlenderIcon,
+  2: CakeIcon,
+  3: BuildIcon,
+  4: FireIcon,
+  5: ColdIcon,
+  6: BagIcon,
+  7: CafeIcon,
+  8: RestaurantIcon,
+  9: StoreIcon,
+};
+
+const POST_COLORS = {
+  1: '#2196f3', // 蓝色 - 搅拌
+  2: '#ff9800', // 橙色 - 丹麦
+  3: '#4caf50', // 绿色 - 整形
+  4: '#f44336', // 红色 - 烤炉
+  5: '#00bcd4', // 青色 - 冷加工
+  6: '#9c27b0', // 紫色 - 收银打包
+  7: '#795548', // 棕色 - 水吧
+  8: '#ff5722', // 深橙 - 馅料
+  9: '#607d8b', // 蓝灰 - 小库房
+};
+
 const Alert = React.forwardRef(function Alert(props, ref) {
   return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
 });
 
 const MobileInventoryCheck = () => {
+  const navigate = useNavigate();
   const [allIngredients, setAllIngredients] = useState([]);
   const [loadingIngredients, setLoadingIngredients] = useState(true);
   const [errorIngredients, setErrorIngredients] = useState(null);
@@ -263,32 +309,94 @@ const MobileInventoryCheck = () => {
   };
 
   const renderIngredientCard = (ing) => {
-    const theoreticalStock =
-      ing.stockByPost?.[selectedPost]?.quantity?.toFixed(2) || "0.00";
+    const hasInput = stockInputs[ing._id] && stockInputs[ing._id] !== "";
+    const unit = ing.unit || ing.baseUnit || ing.min || "g";
+    
     return (
-      <Card key={ing._id} sx={{ mb: 2 }}>
-        <CardContent>
-          <Typography variant="h6" component="div">
-            {ing.name}
-          </Typography>
-          <Typography sx={{ mb: 1.5 }} color="text.secondary">
-            规格: {ing.specs || "N/A"} | 单位:{" "}
-            {ing.unit || ing.baseUnit || ing.min || "g"}
-          </Typography>
-          <Box display="flex" alignItems="center">
+      <Card 
+        key={ing._id} 
+        sx={{ 
+          mb: { xs: 1.5, sm: 2 }, // 响应式间距
+          mx: { xs: 0, sm: 0 },
+          borderRadius: { xs: 2, sm: 3 },
+          border: '1px solid #e0e0e0',
+          boxShadow: 1,
+          transition: 'all 0.3s ease',
+          position: 'relative',
+          overflow: 'visible',
+          // 移动端触摸优化
+          touchAction: 'manipulation'
+        }}
+      >
+
+        
+        <CardContent sx={{ 
+          pb: 1,
+          p: { xs: 2, sm: 3 }, // 响应式内边距
+          '&:last-child': { pb: { xs: 2, sm: 3 } }
+        }}>
+          {/* 原料名称和规格 */}
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="h6" component="div" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+              {ing.name}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              规格: {ing.specs || "N/A"} | 单位: {unit}
+            </Typography>
+          </Box>
+          
+
+          
+          {/* 数量输入区域 */}
+          <Box>
+            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>
+              实际库存录入
+            </Typography>
+            
+
+            
             <TextField
               fullWidth
-              label="实际库存"
+              label="请输入实际库存数量"
               variant="outlined"
               type="number"
               value={stockInputs[ing._id] || ""}
-              onChange={(e) => handleStockInputChange(ing._id, e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                // 输入验证：只允许非负数，最多2位小数
+                if (value === '' || (/^\d*\.?\d{0,2}$/.test(value) && parseFloat(value) >= 0)) {
+                  handleStockInputChange(ing._id, value);
+                }
+              }}
+              onFocus={(e) => {
+                // 移动端优化：聚焦时选中全部文本
+                e.target.select();
+              }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2
+                }
+              }}
               InputProps={{
+                inputProps: {
+                  min: 0,
+                  step: 0.01,
+                  inputMode: 'decimal', // 移动端优化：显示数字键盘
+                  pattern: '[0-9]*\.?[0-9]*' // 移动端优化：数字输入模式
+                },
                 startAdornment: (
                   <InputAdornment position="start">
                     <IconButton
                       onClick={() => handleDecrement(ing._id)}
                       size="small"
+                      sx={{
+                        minWidth: { xs: 40, sm: 44 },
+                        minHeight: { xs: 40, sm: 44 },
+                        touchAction: 'manipulation',
+                        '&:active': {
+                          transform: 'scale(0.95)'
+                        }
+                      }}
                     >
                       <RemoveIcon />
                     </IconButton>
@@ -299,9 +407,21 @@ const MobileInventoryCheck = () => {
                     <IconButton
                       onClick={() => handleIncrement(ing._id)}
                       size="small"
+                      sx={{
+                        minWidth: { xs: 40, sm: 44 },
+                        minHeight: { xs: 40, sm: 44 },
+                        touchAction: 'manipulation',
+                        mr: 1,
+                        '&:active': {
+                          transform: 'scale(0.95)'
+                        }
+                      }}
                     >
                       <AddIcon />
                     </IconButton>
+                    <Typography variant="caption" color="text.secondary">
+                      {unit}
+                    </Typography>
                   </InputAdornment>
                 ),
               }}
@@ -312,89 +432,390 @@ const MobileInventoryCheck = () => {
     );
   };
 
+  // 计算盘点进度
+  const completedCount = useMemo(() => {
+    return postIngredients.filter(ing => 
+      stockInputs[ing._id] && stockInputs[ing._id] !== ""
+    ).length;
+  }, [postIngredients, stockInputs]);
+
+  const progressPercentage = postIngredients.length > 0 
+    ? (completedCount / postIngredients.length) * 100 
+    : 0;
+
   return (
-    <Container sx={{ pb: 8, pt: 2 }}>
-      <FormControl fullWidth sx={{ mb: 2 }}>
-        <InputLabel id="post-select-label">选择岗位</InputLabel>
-        <Select
-          labelId="post-select-label"
-          value={selectedPost}
-          label="选择岗位"
-          onChange={handlePostChange}
-        >
-          <MenuItem value="">
-            <em>请选择...</em>
-          </MenuItem>
-          {Object.entries(POSTNAME).map(([id, name]) => (
-            <MenuItem key={id} value={id}>
-              {name}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-
-      {loadingIngredients && (
-        <Box sx={{ display: "flex", justifyContent: "center", my: 3 }}>
-          <CircularProgress />
-        </Box>
-      )}
-      {errorIngredients && (
-        <Typography color="error" align="center">
-          {errorIngredients}
-        </Typography>
-      )}
-
-      {!selectedPost && (
-        <Typography align="center" color="text.secondary">
-          请先选择一个岗位开始盘点。
-        </Typography>
-      )}
-
-      {selectedPost && !loadingIngredients && postIngredients.length > 0 && (
-        <>
-          <Typography variant="h6" sx={{ mb: 2 }}>
-            找到 {postIngredients.length} 个原料需要盘点
+    <Box sx={{ flexGrow: 1 }}>
+      {/* 页面头部 */}
+      <AppBar position="sticky" elevation={1} sx={{ bgcolor: 'primary.main' }}>
+        <Toolbar>
+          <IconButton
+            edge="start"
+            color="inherit"
+            onClick={() => navigate('/mobileHome')}
+            sx={{ mr: 2 }}
+          >
+            <ArrowBackIcon />
+          </IconButton>
+          <InventoryIcon sx={{ mr: 1 }} />
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+            库存盘点
           </Typography>
-          <List>{postIngredients.map(renderIngredientCard)}</List>
-        </>
-      )}
+          {selectedPost && postIngredients.length > 0 && (
+            <Chip
+              label={`${completedCount}/${postIngredients.length}`}
+              size="small"
+              color={completedCount === postIngredients.length ? "success" : "default"}
+              sx={{ 
+                bgcolor: 'rgba(255,255,255,0.2)', 
+                color: 'white',
+                fontWeight: 'bold'
+              }}
+            />
+          )}
+        </Toolbar>
+        {/* 进度条 */}
+        {selectedPost && postIngredients.length > 0 && (
+          <LinearProgress 
+            variant="determinate" 
+            value={progressPercentage}
+            sx={{
+              height: 3,
+              bgcolor: 'rgba(255,255,255,0.2)',
+              '& .MuiLinearProgress-bar': {
+                bgcolor: completedCount === postIngredients.length ? '#4caf50' : '#fff'
+              }
+            }}
+          />
+        )}
+      </AppBar>
 
-      {selectedPost && !loadingIngredients && postIngredients.length === 0 && (
-        <Typography align="center" color="text.secondary" sx={{ mt: 4 }}>
-          当前岗位下没有需要盘点的物料。
-        </Typography>
-      )}
+      <Container 
+        maxWidth="sm" 
+        sx={{ 
+          pb: 12, 
+          pt: 2,
+          px: { xs: 1, sm: 2 }, // 响应式内边距
+          minHeight: '100vh'
+        }}
+      >
+        {/* 岗位选择器 */}
+        <Paper 
+          elevation={2} 
+          sx={{ 
+            p: { xs: 2, sm: 3 }, // 响应式内边距
+            mb: 3, 
+            borderRadius: 2,
+            background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+            // 移动端触摸优化
+            touchAction: 'manipulation'
+          }}
+        >
+          <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold', color: 'text.primary' }}>
+            <WorkIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+            选择盘点岗位
+          </Typography>
+          <FormControl fullWidth>
+            <InputLabel id="post-select-label">请选择岗位</InputLabel>
+            <Select
+              labelId="post-select-label"
+              value={selectedPost}
+              label="请选择岗位"
+              onChange={handlePostChange}
+              sx={{
+                bgcolor: 'white',
+                borderRadius: 1,
+                minHeight: { xs: 48, sm: 56 }, // 移动端最小触摸目标
+                '& .MuiSelect-select': {
+                  display: 'flex',
+                  alignItems: 'center'
+                },
+                // 触摸反馈
+                '&:active': {
+                  transform: 'scale(0.98)'
+                }
+              }}
+            >
+              <MenuItem value="">
+                <Box sx={{ display: 'flex', alignItems: 'center', color: 'text.secondary' }}>
+                  <WorkIcon sx={{ mr: 1, opacity: 0.5 }} />
+                  <em>请选择岗位...</em>
+                </Box>
+              </MenuItem>
+              {Object.entries(POSTNAME).map(([id, name]) => {
+                const IconComponent = POST_ICONS[id];
+                const color = POST_COLORS[id];
+                return (
+                  <MenuItem key={id} value={id}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <IconComponent sx={{ mr: 1.5, color, fontSize: 20 }} />
+                      <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                        {name}
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                );
+              })}
+            </Select>
+          </FormControl>
+          {selectedPost && (
+            <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
+              <Chip
+                icon={React.createElement(POST_ICONS[selectedPost])}
+                label={`当前岗位: ${POSTNAME[selectedPost]}`}
+                sx={{
+                  bgcolor: POST_COLORS[selectedPost],
+                  color: 'white',
+                  fontWeight: 'bold',
+                  '& .MuiChip-icon': {
+                    color: 'white'
+                  }
+                }}
+              />
+            </Box>
+          )}
+        </Paper>
+
+        {/* 原料列表 */}
+        {loadingIngredients ? (
+          <Box 
+            sx={{ 
+              display: 'flex', 
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              mt: 8,
+              mb: 4
+            }}
+          >
+            <CircularProgress size={60} thickness={4} />
+            <Typography variant="h6" sx={{ mt: 3, color: 'text.secondary' }}>
+              正在加载原料数据...
+            </Typography>
+            <Typography variant="body2" sx={{ mt: 1, color: 'text.disabled' }}>
+              请稍候，正在获取最新库存信息
+            </Typography>
+          </Box>
+        ) : errorIngredients ? (
+          <Paper 
+            sx={{ 
+              p: 4, 
+              mt: 4, 
+              textAlign: 'center',
+              bgcolor: '#fff3e0',
+              border: '1px solid #ffcc02'
+            }}
+          >
+            <WarningIcon sx={{ fontSize: 64, color: 'warning.main', mb: 2 }} />
+            <Typography variant="h6" color="error" sx={{ mb: 2 }}>
+              数据加载失败
+            </Typography>
+            <Typography color="text.secondary" sx={{ mb: 3 }}>
+              {errorIngredients}
+            </Typography>
+            <Button 
+              variant="contained" 
+              onClick={() => fetchIngredients()}
+              startIcon={<InventoryIcon />}
+            >
+              重新加载
+            </Button>
+          </Paper>
+        ) : !selectedPost ? (
+          <Paper 
+            sx={{ 
+              p: 4, 
+              mt: 4, 
+              textAlign: 'center',
+              bgcolor: '#f3f4f6',
+              border: '2px dashed #d1d5db'
+            }}
+          >
+            <WorkIcon sx={{ fontSize: 80, color: 'text.disabled', mb: 2 }} />
+            <Typography variant="h5" sx={{ mb: 2, fontWeight: 'bold', color: 'text.primary' }}>
+              选择工作岗位
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 300, mx: 'auto' }}>
+              请先在上方选择您要进行库存盘点的工作岗位，系统将为您加载对应的原料清单
+            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, flexWrap: 'wrap' }}>
+              {Object.entries(POSTNAME).slice(0, 3).map(([id, name]) => {
+                const IconComponent = POST_ICONS[id];
+                return (
+                  <Chip
+                    key={id}
+                    icon={<IconComponent />}
+                    label={name}
+                    variant="outlined"
+                    sx={{ 
+                      borderColor: POST_COLORS[id],
+                      color: POST_COLORS[id],
+                      '&:hover': {
+                        bgcolor: `${POST_COLORS[id]}20`
+                      }
+                    }}
+                  />
+                );
+              })}
+            </Box>
+          </Paper>
+        ) : postIngredients.length === 0 ? (
+          <Paper 
+            sx={{ 
+              p: 4, 
+              mt: 4, 
+              textAlign: 'center',
+              bgcolor: '#f8f9fa',
+              border: '1px solid #e9ecef'
+            }}
+          >
+            <Box
+              sx={{
+                width: 120,
+                height: 120,
+                mx: 'auto',
+                mb: 3,
+                borderRadius: '50%',
+                bgcolor: '#e3f2fd',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <InventoryIcon sx={{ fontSize: 60, color: 'primary.main' }} />
+            </Box>
+            <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
+              暂无原料数据
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 280, mx: 'auto' }}>
+              {POSTNAME[selectedPost]} 岗位目前没有需要盘点的原料，请联系管理员确认或选择其他岗位
+            </Typography>
+            <Button 
+              variant="outlined" 
+              onClick={() => setSelectedPost('')}
+              startIcon={<WorkIcon />}
+            >
+              重新选择岗位
+            </Button>
+          </Paper>
+        ) : (
+          <>
+            <Typography variant="h6" sx={{ mb: 2 }}>
+              找到 {postIngredients.length} 个原料需要盘点
+            </Typography>
+            <List>{postIngredients.map(renderIngredientCard)}</List>
+            
+            {/* 盘点完成提示 */}
+            {completedCount === postIngredients.length && postIngredients.length > 0 && (
+              <Paper 
+                sx={{ 
+                  p: 3, 
+                  mt: 3, 
+                  textAlign: 'center',
+                  bgcolor: '#e8f5e8',
+                  border: '2px solid #4caf50'
+                }}
+              >
+                <CheckCircleIcon sx={{ fontSize: 48, color: 'success.main', mb: 1 }} />
+                <Typography variant="h6" sx={{ mb: 1, fontWeight: 'bold', color: 'success.main' }}>
+                  盘点完成！
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  所有原料已完成盘点，请点击底部按钮提交数据
+                </Typography>
+              </Paper>
+            )}
+          </>
+        )}
 
       <Paper
-        elevation={3}
+        elevation={6}
         sx={{
           position: "fixed",
-          bottom: 56,
+          bottom: 0,
           left: 0,
           right: 0,
           p: 2,
           zIndex: 1000,
+          borderTop: '1px solid',
+          borderColor: 'divider',
+          boxShadow: '0 -8px 32px rgba(0,0,0,0.12)',
+          background: 'linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,1) 100%)',
+          backdropFilter: 'blur(10px)'
         }}
       >
-        <Button
-          fullWidth
-          variant="contained"
-          color="primary"
-          size="large"
-          onClick={handleSubmitStock}
-          disabled={
-            isSubmitting || !selectedPost || postIngredients.length === 0
-          }
-          startIcon={
-            isSubmitting ? (
-              <CircularProgress size={20} color="inherit" />
-            ) : (
-              <SaveIcon />
-            )
-          }
-        >
-          {isSubmitting ? "正在提交..." : "提交盘点"}
-        </Button>
+        <Container maxWidth="sm" sx={{ p: 0 }}>
+          <Button
+            fullWidth
+            variant="contained"
+            color="primary"
+            size="large"
+            onClick={handleSubmitStock}
+            disabled={
+              isSubmitting || !selectedPost || postIngredients.length === 0
+            }
+            sx={{
+              py: 1.5,
+              borderRadius: 3,
+              fontSize: '1.1rem',
+              fontWeight: 'bold',
+              boxShadow: 4,
+              background: completedCount === postIngredients.length && postIngredients.length > 0
+                ? 'linear-gradient(45deg, #4caf50 30%, #66bb6a 90%)'
+                : 'linear-gradient(45deg, #2196f3 30%, #42a5f5 90%)',
+              '&:hover': {
+                boxShadow: 8,
+                transform: 'translateY(-2px)',
+                transition: 'all 0.3s ease'
+              },
+              '&:disabled': {
+                background: '#e0e0e0',
+                color: '#9e9e9e',
+                transform: 'none'
+              }
+            }}
+            startIcon={
+              isSubmitting ? (
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Box
+                    sx={{
+                      width: 20,
+                      height: 20,
+                      border: '2px solid #fff',
+                      borderTop: '2px solid transparent',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite',
+                      '@keyframes spin': {
+                        '0%': { transform: 'rotate(0deg)' },
+                        '100%': { transform: 'rotate(360deg)' }
+                      }
+                    }}
+                  />
+                </Box>
+              ) : completedCount === postIngredients.length && postIngredients.length > 0 ? (
+                <CheckCircleIcon />
+              ) : (
+                <SaveIcon />
+              )
+            }
+          >
+            {isSubmitting 
+              ? "正在提交..." 
+              : completedCount === postIngredients.length && postIngredients.length > 0
+                ? "盘点完成，提交数据" 
+                : "提交盘点"
+            }
+          </Button>
+          
+          {/* 进度提示 */}
+          {postIngredients.length > 0 && (
+            <Box sx={{ mt: 1, textAlign: 'center' }}>
+              <Typography variant="caption" color="text.secondary">
+                已完成 {completedCount} / {postIngredients.length} 项
+                {completedCount === postIngredients.length ? ' ✓' : ''}
+              </Typography>
+            </Box>
+          )}
+        </Container>
       </Paper>
 
       <Snackbar
@@ -430,7 +851,8 @@ const MobileInventoryCheck = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+      </Container>
+    </Box>
   );
 };
 
