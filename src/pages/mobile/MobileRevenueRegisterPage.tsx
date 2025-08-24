@@ -55,9 +55,17 @@ const getRevenueDateRange = () => {
   const maxDate = REVENUE_DATE_CONFIG.ALLOW_FUTURE_DATES ? 
     new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : today;
   
+  // 使用本地时间格式化日期
+  const formatLocalDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  
   return {
-    min: minDate.toISOString().split('T')[0],
-    max: maxDate.toISOString().split('T')[0],
+    min: formatLocalDate(minDate),
+    max: formatLocalDate(maxDate),
     minDate,
     maxDate
   };
@@ -116,7 +124,13 @@ const MobileRevenueRegisterPage: React.FC = () => {
   
   // 营业数据状态
   const [revenueData, setRevenueData] = useState<RevenueData>({
-    date: new Date().toISOString().split('T')[0],
+    date: (() => {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    })(),
     actualRevenue: 0,
     totalRevenue: 0,
     avgOrderValue: 0,
@@ -293,7 +307,13 @@ const MobileRevenueRegisterPage: React.FC = () => {
         setSuccess('营业数据提交成功！');
         // 新增操作清空表单
         setRevenueData({
-          date: new Date().toISOString().split('T')[0],
+          date: (() => {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+          })(),
           actualRevenue: 0,
           totalRevenue: 0,
           avgOrderValue: 0,
@@ -302,7 +322,8 @@ const MobileRevenueRegisterPage: React.FC = () => {
           douyinRevenue: 0,
           cashRevenue: 0,
           cardRevenue: 0,
-  
+          wechatRevenue: 0,
+          alipayRevenue: 0,
         });
       }
       

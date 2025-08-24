@@ -51,7 +51,7 @@ import {
   ShoppingCart as ShoppingCartIcon,
   LocalDining as DiningIcon,
   Storage as StorageIcon,
-  Yesterday as YesterdayIcon,
+  Event as YesterdayIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
@@ -202,6 +202,13 @@ const MobileStatisticsPage: React.FC = () => {
       default: return type;
     }
   };
+
+  // 设置当前门店ID到localStorage（用于API请求头）
+  useEffect(() => {
+    if (user?.storeId) {
+      localStorage.setItem('currentStoreId', user.storeId);
+    }
+  }, [user?.storeId]);
 
   // 页面加载时获取数据
   useEffect(() => {

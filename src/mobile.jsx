@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
 import MobileRequestPage from './components/MobileRequestPage';
 import './App.css';
 
@@ -33,6 +34,8 @@ window.fetch = function (url, options) {
 // A minimal theme provider or CSS baseline could be added here if needed
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <MobileRequestPage />
+    <BrowserRouter>
+      <MobileRequestPage />
+    </BrowserRouter>
   </React.StrictMode>
-); 
+);

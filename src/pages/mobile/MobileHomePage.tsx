@@ -48,12 +48,7 @@ interface DashboardStats {
   avgDailyAmount: number;
 }
 
-interface InventoryStats {
-  totalItems: number;
-  lowStockItems: number;
-  outOfStockItems: number;
-  totalValue: number;
-}
+
 
 interface QuickAction {
   id: string;
@@ -70,7 +65,6 @@ const MobileHomePage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
-  const [inventoryStats, setInventoryStats] = useState<InventoryStats | null>(null);
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   
   // 飞书认证
@@ -132,50 +126,7 @@ const MobileHomePage: React.FC = () => {
     }
   };
 
-  /**
-   * 获取库存统计数据
-   */
-  const fetchInventoryStats = async (): Promise<void> => {
-    if (!currentStore?._id) return;
 
-    try {
-      const response = await fetch('/api/warehouse/stock', {
-        headers: {
-          'x-current-store-id': currentStore._id,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('获取库存数据失败');
-      }
-
-      const result = await response.json();
-      if (result.success && Array.isArray(result.data)) {
-        const items = result.data;
-        const stats: InventoryStats = {
-          totalItems: items.length,
-          lowStockItems: items.filter((item: any) => {
-            const totalStock = (item.mainWarehouseStock?.quantity || 0) + 
-              Object.values(item.stockByPost || {}).reduce((sum: number, stock: any) => sum + (stock?.quantity || 0), 0);
-            return totalStock > 0 && totalStock <= (item.minStock || 10);
-          }).length,
-          outOfStockItems: items.filter((item: any) => {
-            const totalStock = (item.mainWarehouseStock?.quantity || 0) + 
-              Object.values(item.stockByPost || {}).reduce((sum: number, stock: any) => sum + (stock?.quantity || 0), 0);
-            return totalStock === 0;
-          }).length,
-          totalValue: items.reduce((sum: number, item: any) => {
-            const totalStock = (item.mainWarehouseStock?.quantity || 0) + 
-              Object.values(item.stockByPost || {}).reduce((sum: number, stock: any) => sum + (stock?.quantity || 0), 0);
-            return sum + (totalStock * (item.price || 0));
-          }, 0),
-        };
-        setInventoryStats(stats);
-      }
-    } catch (err) {
-      console.error('获取库存数据失败:', err);
-    }
-  };
 
   /**
    * 初始化数据
@@ -188,10 +139,7 @@ const MobileHomePage: React.FC = () => {
       setError('');
       
       try {
-        await Promise.all([
-          fetchDashboardStats(),
-          fetchInventoryStats(),
-        ]);
+        await fetchDashboardStats();
       } catch (err) {
         setError('数据加载失败，请稍后重试');
       } finally {
@@ -206,38 +154,13 @@ const MobileHomePage: React.FC = () => {
    * 刷新数据
    */
   const handleRefresh = async (): Promise<void> => {
-    await Promise.all([
-      fetchDashboardStats(),
-      fetchInventoryStats(),
-    ]);
+    await fetchDashboardStats();
   };
 
   /**
    * 快捷操作配置
    */
   const quickActions: QuickAction[] = [
-    {
-      id: 'production-stats',
-      title: '生产报损统计',
-      description: '查看生产计划和报损情况',
-      icon: <AssessmentIcon />,
-      color: '#1976d2',
-      onClick: () => {
-        // 使用路由导航到生产报损统计页面
-        navigate('/mobileHome/production-loss');
-      },
-    },
-    {
-      id: 'inventory-check',
-      title: '库存盘点',
-      description: '进行库存盘点和管理',
-      icon: <InventoryIcon />,
-      color: '#388e3c',
-      onClick: () => {
-        // 使用路由导航到库存盘点页面
-        navigate('/mobileHome/inventory-check');
-      },
-    },
     {
       id: 'data-dashboard',
       title: '数据统计',
@@ -250,14 +173,25 @@ const MobileHomePage: React.FC = () => {
       },
     },
     {
-      id: 'request-center',
-      title: '申领中心',
-      description: '物料申领和审批管理',
-      icon: <TrendingUpIcon />,
-      color: '#7b1fa2',
+      id: 'production-stats',
+      title: '生产报损统计',
+      description: '查看生产计划和报损情况',
+      icon: <AssessmentIcon />,
+      color: '#1976d2',
       onClick: () => {
-        // 在同一页面内显示申领中心组件
-        alert('申领中心功能开发中...');
+        // 使用路由导航到生产报损统计页面
+        navigate('/mobileHome/production-loss');
+      },
+    },
+    {
+      id: 'revenue-register',
+      title: '营业数据登记',
+      description: '录入每日营业数据和收入明细',
+      icon: <TrendingUpIcon />,
+      color: '#2e7d32',
+      onClick: () => {
+        // 使用路由导航到营业数据登记页面
+        navigate('/mobileHome/revenue-register');
       },
     },
     {
@@ -272,14 +206,25 @@ const MobileHomePage: React.FC = () => {
       },
     },
     {
-      id: 'revenue-register',
-      title: '营业数据登记',
-      description: '录入每日营业数据和收入明细',
-      icon: <TrendingUpIcon />,
-      color: '#2e7d32',
+      id: 'inventory-check',
+      title: '库存盘点',
+      description: '进行库存盘点和管理',
+      icon: <InventoryIcon />,
+      color: '#388e3c',
       onClick: () => {
-        // 使用路由导航到营业数据登记页面
-        navigate('/mobileHome/revenue-register');
+        // 使用路由导航到库存盘点页面
+        navigate('/mobileHome/inventory-check');
+      },
+    },
+    {
+      id: 'request-center',
+      title: '申领中心',
+      description: '物料申领和审批管理',
+      icon: <TrendingUpIcon />,
+      color: '#7b1fa2',
+      onClick: () => {
+        // 在同一页面内显示申领中心组件
+        alert('申领中心功能开发中...');
       },
     },
   ];
@@ -406,58 +351,11 @@ const MobileHomePage: React.FC = () => {
         </Box>
       </Paper>
 
-      {/* 数据概览 */}
-      {loading ? (
-        <Box display="flex" justifyContent="center" py={4}>
-          <CircularProgress />
-        </Box>
-      ) : error ? (
+      {/* 错误提示 */}
+      {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error}
         </Alert>
-      ) : (
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={6}>
-            <Paper elevation={1} sx={{ p: 2, textAlign: 'center' }}>
-              <Typography variant="h4" color="primary.main" fontWeight="bold">
-                {inventoryStats?.totalItems || 0}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                库存物料
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={6}>
-            <Paper elevation={1} sx={{ p: 2, textAlign: 'center' }}>
-              <Typography variant="h4" color="warning.main" fontWeight="bold">
-                {inventoryStats?.lowStockItems || 0}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                低库存预警
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={6}>
-            <Paper elevation={1} sx={{ p: 2, textAlign: 'center' }}>
-              <Typography variant="h4" color="success.main" fontWeight="bold">
-                ¥{(inventoryStats?.totalValue || 0).toFixed(0)}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                库存总价值
-              </Typography>
-            </Paper>
-          </Grid>
-          <Grid item xs={6}>
-            <Paper elevation={1} sx={{ p: 2, textAlign: 'center' }}>
-              <Typography variant="h4" color="error.main" fontWeight="bold">
-                {inventoryStats?.outOfStockItems || 0}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                缺货物料
-              </Typography>
-            </Paper>
-          </Grid>
-        </Grid>
       )}
 
       {/* 快捷操作 */}

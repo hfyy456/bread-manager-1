@@ -8,6 +8,12 @@ interface FeishuUser {
   avatar?: string;
   userId: string;
   email?: string;
+  storeId?: string;
+  role?: string;
+  _id?: string;
+  feishuUserId?: string;
+  isActive?: boolean;
+  permissions?: string[];
 }
 
 /**
