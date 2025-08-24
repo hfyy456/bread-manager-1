@@ -940,7 +940,7 @@ const MobileRequestPage = () => {
             case 'history':
                 return <HistoryView requests={historyRequests} loading={loading} error={error} user={user} storeId={storeId} />;
             case 'inventory':
-                return <MobileInventoryCheck />;
+                return <MobileInventoryCheck onBack={() => setSelectedView('shop')} />;
             case 'all-requests':
                 return <AllRequestsView storeId={storeId} user={user} />;
             case 'shop':

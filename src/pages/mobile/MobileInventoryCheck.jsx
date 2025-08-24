@@ -91,7 +91,7 @@ const Alert = React.forwardRef(function Alert(props, ref) {
   return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
 });
 
-const MobileInventoryCheck = () => {
+const MobileInventoryCheck = ({ onBack }) => {
   const navigate = useNavigate();
   const [allIngredients, setAllIngredients] = useState([]);
   const [loadingIngredients, setLoadingIngredients] = useState(true);
@@ -451,7 +451,7 @@ const MobileInventoryCheck = () => {
           <IconButton
             edge="start"
             color="inherit"
-            onClick={() => navigate('/mobileHome')}
+            onClick={() => onBack ? onBack() : navigate('/mobileHome')}
             sx={{ mr: 2 }}
           >
             <ArrowBackIcon />
