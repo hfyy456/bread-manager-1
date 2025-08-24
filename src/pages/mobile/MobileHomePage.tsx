@@ -263,12 +263,23 @@ const MobileHomePage: React.FC = () => {
     {
       id: 'expense-stats',
       title: '支出统计',
-      description: '查看门店支出和成本分析',
+      description: '查看支出统计和费用分析',
       icon: <MonetizationOnIcon />,
       color: '#d32f2f',
       onClick: () => {
-        // 导航到支出统计页面
+        // 使用路由导航到支出统计页面
         navigate('/mobileHome/expense-stats');
+      },
+    },
+    {
+      id: 'revenue-register',
+      title: '营业数据登记',
+      description: '录入每日营业数据和收入明细',
+      icon: <TrendingUpIcon />,
+      color: '#2e7d32',
+      onClick: () => {
+        // 使用路由导航到营业数据登记页面
+        navigate('/mobileHome/revenue-register');
       },
     },
   ];

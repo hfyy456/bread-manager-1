@@ -1,0 +1,2 @@
+{"timestamp":"2025-08-24T03:42:32.284Z","level":"PERFORMANCE","message":"Performance: Warehouse Stock Fetch took 178ms","operation":"Warehouse Stock Fetch","duration":"178ms","storeId":"6878def4ae6e08fa4af88e34","ingredientCount":313,"inventoryCount":125}
+{"timestamp":"2025-08-24T03:42:32.408Z","level":"PERFORMANCE","message":"Performance: Warehouse Stock Fetch took 117ms","operation":"Warehouse Stock Fetch","duration":"117ms","storeId":"6878def4ae6e08fa4af88e34","ingredientCount":313,"inventoryCount":125}

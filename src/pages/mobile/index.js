@@ -5,3 +5,4 @@ export { default as MobileHomePage } from './MobileHomePage';
 export { default as MobileProductionStatsPage } from './MobileProductionStatsPage';
 export { default as MobileProductionLossPage } from './MobileProductionLossPage';
 export { default as MobileDataStatsPage } from './MobileDataStatsPage';
+export { default as MobileRevenueRegisterPage } from './MobileRevenueRegisterPage';
