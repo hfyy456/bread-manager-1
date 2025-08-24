@@ -115,16 +115,21 @@ exports.authenticate = async (req, res) => {
             throw new Error('飞书用户信息中缺少用户ID');
         }
         
+        // 从请求头获取当前门店ID
+        const currentStoreId = req.headers['x-current-store-id'];
+        
         const feishuUserData = {
             feishuUserId: userProfile.open_id,
             name: userProfile.name,
             email: userProfile.email,
-            avatar: userProfile.avatar_url
+            avatar: userProfile.avatar_url,
+            storeId: currentStoreId // 添加门店ID
         };
         
         console.log("- Processing user data:", feishuUserData);
         console.log("- feishuUserId value:", feishuUserData.feishuUserId);
         console.log("- feishuUserId type:", typeof feishuUserData.feishuUserId);
+        console.log("- storeId from header:", currentStoreId);
         
         const { user, isNewUser } = await User.findOrCreateByFeishuId(feishuUserData);
         

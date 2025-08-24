@@ -21,6 +21,8 @@ const storeProductRoutes = require('./routes/storeProduct'); // 引入产品上�
 const productionLossRoutes = require('./routes/productionLossRoutes'); // 引入生产报损路由
 const expenseRoutes = require('./routes/expenseRoutes'); // 引入支出路由
 const userRoutes = require('./routes/userRoutes'); // 引入用户管理路由
+const revenueRoutes = require('./routes/revenueRoutes'); // 引入营业数据路由
+const statisticsRoutes = require('./routes/statisticsRoutes'); // 引入统计数据路由
 
 const { authenticate } = require('./middleware/authMiddleware'); // 引入认证中间件
 const { performanceMiddleware, startPerformanceReporting } = require('./middleware/performanceMiddleware'); // 性能监控
@@ -38,7 +40,13 @@ app.use(express.json()); // 解析 JSON 请求体
 // 性能监控中间件
 app.use(performanceMiddleware);
 
-// 全局应用认证中间件。所有API请求都将带有一个认证的 req.user 对象
+// 飞书认证路由 - 无需认证
+app.use('/api/feishu', feishuRoutes);
+
+// 门店信息路由 - 无需认证（用于获取门店列表等基础信息）
+app.use('/api', storeRoutes);
+
+// 全局应用认证中间件。除了上述路由外，所有其他API请求都需要认证
 app.use('/api', authenticate);
 
 // React应用的构建输出目录 (位于项目根目录下的 build 文件夹)
@@ -47,7 +55,7 @@ const indexPath = path.join(reactBuildDir, 'index.html');
 
 // --- API 路由 ---
 // app.use('/api', sampleRoutes); // 移除旧的示例路由使用
-app.use('/api', storeRoutes); // 使用门店路由
+// 门店路由已在认证中间件之前注册
 app.use('/api/ingredients', ingredientRoutes); // 使用原料路由，所有 /api/ingredients/* 的请求将由此处理
 app.use('/api/inventory', inventoryRoutes); // 新增：使用盘点路由，所有 /api/inventory/* 的请求将由此处理
 app.use('/api/daily-reports', dailyReportRoutes); // 使用日报表路由
@@ -63,8 +71,10 @@ app.use('/api/production-plans', authenticate, productionPlanRoutes); // 注册�
 app.use('/api/store-products', storeProductRoutes); // 注册产品上下架路由
 app.use('/api/production-loss', productionLossRoutes); // 注册生产报损路由
 app.use('/api/expense', expenseRoutes); // 注册支出路由
-app.use('/api/feishu', feishuRoutes);
+// 飞书路由已在认证中间件之前注册
 app.use('/api/users', userRoutes); // 注册用户管理路由
+app.use('/api/revenue', revenueRoutes); // 注册营业数据路由
+app.use('/api/statistics', statisticsRoutes); // 注册统计数据路由
 
 
 // --- 静态文件服务和 React 应用的 Catch-all (仅当构建文件存在时) ---

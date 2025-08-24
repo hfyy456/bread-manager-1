@@ -245,8 +245,8 @@ const MobileHomePage: React.FC = () => {
       icon: <BarChartIcon />,
       color: '#f57c00',
       onClick: () => {
-        // 在同一页面内显示数据统计组件
-        alert('数据统计功能开发中...');
+        // 使用路由导航到数据统计页面
+        navigate('/mobileHome/statistics');
       },
     },
     {

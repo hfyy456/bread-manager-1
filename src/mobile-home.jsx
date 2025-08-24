@@ -15,6 +15,7 @@ import MobileExpenseStatsPage from './pages/mobile/MobileExpenseStatsPage';
 import MobileExpenseRegisterPage from './pages/mobile/MobileExpenseRegisterPage';
 import MobileInventoryCheck from './pages/mobile/MobileInventoryCheck';
 import MobileRevenueRegisterPage from './pages/mobile/MobileRevenueRegisterPage';
+import MobileStatisticsPage from './pages/mobile/MobileStatisticsPage';
 import './App.css';
 
 /**
@@ -97,6 +98,7 @@ const MobileHomeApp = () => {
             <Route path="/mobileHome/expense-register" element={<MobileExpenseRegisterPage />} />
             <Route path="/mobileHome/inventory-check" element={<MobileInventoryCheck />} />
             <Route path="/mobileHome/revenue-register" element={<MobileRevenueRegisterPage />} />
+            <Route path="/mobileHome/statistics" element={<MobileStatisticsPage />} />
           </Routes>
         </div>
       </Router>

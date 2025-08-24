@@ -140,7 +140,7 @@ userSchema.methods.updateLastLogin = function() {
  * 静态方法：根据飞书用户ID查找或创建用户
  */
 userSchema.statics.findOrCreateByFeishuId = async function(feishuUserData) {
-  const { feishuUserId, name, email, avatar } = feishuUserData;
+  const { feishuUserId, name, email, avatar, storeId } = feishuUserData;
   
   try {
     // 先尝试查找现有用户
@@ -162,6 +162,7 @@ userSchema.statics.findOrCreateByFeishuId = async function(feishuUserData) {
         email: email,
         avatar: avatar,
         role: USER_ROLES.EMPLOYEE, // 默认角色为普通员工
+        storeId: storeId, // 设置门店ID
         registrationSource: 'feishu',
         lastLoginAt: new Date()
       });
