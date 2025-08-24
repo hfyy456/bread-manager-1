@@ -43,7 +43,7 @@ const REVENUE_DATE_CONFIG = {
   // 最多可选择多少天前的日期
   MAX_DAYS_BACK: 90,
   // 是否允许选择未来日期
-  ALLOW_FUTURE_DATES: false
+  ALLOW_FUTURE_DATES: true
 };
 
 /**
@@ -83,7 +83,7 @@ const validateDateRange = (dateString: string): { isValid: boolean; error?: stri
   const { minDate, maxDate } = getRevenueDateRange();
   
   if (selectedDate > maxDate) {
-    return { isValid: false, error: '不能选择未来日期' };
+    return { isValid: false, error: REVENUE_DATE_CONFIG.ALLOW_FUTURE_DATES ? '不能选择超过30天后的日期' : '不能选择未来日期' };
   }
   
   if (selectedDate < minDate) {

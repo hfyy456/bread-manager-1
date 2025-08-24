@@ -27,6 +27,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import MobileInventoryCheck from '../pages/mobile/MobileInventoryCheck';
 import AllRequestsView from '../pages/mobile/components/AllRequestsView';
 import StoreSelectorView from '../pages/mobile/components/StoreSelectorView'; // 导入门店选择器
+import { getFeishuAppId } from '../utils/urlUtils';
 
 // 未批准库存提示组件
 const PendingRequestsAlert = ({ 
@@ -124,10 +125,10 @@ const useUser = () => {
     const [checkingEnv, setCheckingEnv] = useState(true);
 
     useEffect(() => {
-        const getQueryParam = (param) => new URLSearchParams(window.location.search).get(param);
-        const appId = getQueryParam('appId');
+        const appId = getFeishuAppId();
         console.log("--- [Feishu Auth Hook] Initializing ---");
         console.log(`- appId from URL: ${appId}`);
+        console.log('- Compatible appId retrieval (supports both appId and appID)');
 
         // Poll for the Feishu SDK to be ready
         let checks = 0;

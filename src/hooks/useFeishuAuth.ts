@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getFeishuAppId } from '../utils/urlUtils';
 
 /**
  * 飞书用户信息接口
@@ -68,12 +69,10 @@ export const useFeishuAuth = (): UseFeishuAuthReturn => {
 
 
   useEffect(() => {
-    const getQueryParam = (param: string): string | null => 
-      new URLSearchParams(window.location.search).get(param);
-    
-    const appId = getQueryParam('appId');
+    const appId = getFeishuAppId();
     console.log('--- [Feishu Auth Hook] Initializing ---');
     console.log(`- appId from URL: ${appId}`);
+    console.log('- Compatible appId retrieval (supports both appId and appID)');
 
     // 轮询检查飞书SDK是否就绪
     let checks = 0;

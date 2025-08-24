@@ -147,16 +147,28 @@ productionLossSchema.statics.getByDate = function(storeId, date, type = null) {
  */
 productionLossSchema.statics.getStats = function(storeId, startDate, endDate, type = null) {
   // 处理日期时区问题，确保使用本地时间范围
+  // 将本地日期转换为UTC时间进行查询
   const start = new Date(startDate + 'T00:00:00+08:00');
   const end = new Date(endDate + 'T23:59:59+08:00');
+  
+  // 转换为UTC时间
+  const startUTC = new Date(start.getTime() - 8 * 60 * 60 * 1000);
+  const endUTC = new Date(end.getTime() - 8 * 60 * 60 * 1000);
   
   const matchQuery = {
     storeId,
     date: {
-      $gte: start,
-      $lte: end
+      $gte: startUTC,
+      $lte: endUTC
     }
   };
+  
+  // 调试日志（可在生产环境中移除）
+    // console.log('=== MongoDB查询条件 ===');
+    // console.log('原始日期范围:', startDate, '到', endDate);
+    // console.log('本地时间范围:', start, '到', end);
+    // console.log('UTC时间范围:', startUTC, '到', endUTC);
+    // console.log('查询条件:', JSON.stringify(matchQuery, null, 2));
   
   if (type && type !== 'all') {
     matchQuery.type = type;
@@ -246,6 +258,19 @@ productionLossSchema.statics.getStats = function(storeId, startDate, endDate, ty
         },
         // 计算报损率：报损金额/出货金额
         lossRate: {
+          $cond: [
+            { $gt: ['$shipmentValue', 0] },
+            {
+              $divide: [
+                { $add: ['$productionValue', '$tastingValue', '$closingValue', '$otherValue'] },
+                '$shipmentValue'
+              ]
+            },
+            0
+          ]
+        },
+        // 计算出货报损率：所有报损金额/出货登记金额
+        shipmentLossRate: {
           $cond: [
             { $gt: ['$shipmentValue', 0] },
             {
