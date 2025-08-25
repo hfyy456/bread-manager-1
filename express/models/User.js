@@ -18,8 +18,7 @@ const userSchema = new mongoose.Schema({
   feishuUserId: {
     type: String,
     required: [true, '飞书用户ID是必填项'],
-    unique: true,
-    index: true
+    unique: true
   },
   
   // 用户基本信息
@@ -101,7 +100,7 @@ const userSchema = new mongoose.Schema({
 /**
  * 索引优化
  */
-userSchema.index({ feishuUserId: 1 });
+// feishuUserId 已在 schema 定义中设置为 unique，无需重复索引
 userSchema.index({ email: 1 });
 userSchema.index({ role: 1 });
 userSchema.index({ storeId: 1 });
