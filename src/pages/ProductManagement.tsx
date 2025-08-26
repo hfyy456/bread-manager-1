@@ -32,12 +32,15 @@ import {
   FormControl,
   InputLabel
 } from '@mui/material';
+
 import {
   Add as AddIcon,
   Edit as EditIcon,
   History as HistoryIcon,
   Store as StoreIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon
 } from '@mui/icons-material';
 import { useSnackbar } from '@components/SnackbarProvider.jsx';
 
@@ -64,6 +67,7 @@ interface StoreProduct {
   description: string;
   price: number;
   storeStatus: StoreStatus;
+  sortOrder?: number;
 }
 
 interface Store {
@@ -77,6 +81,171 @@ interface ProductOperation {
   isActive: boolean;
   notes?: string;
 }
+
+/**
+ * 可拖拽的产品行组件
+ */
+interface ProductRowProps {
+  product: StoreProduct;
+  batchMode: boolean;
+  selectedProducts: Set<string>;
+  onProductSelect: (breadTypeId: string, selected: boolean) => void;
+  onQuickSort: (product: StoreProduct, direction: 'up' | 'down') => void;
+  onOpenSortDialog: (product: StoreProduct) => void;
+  onOpenOperationDialog: (product: StoreProduct) => void;
+  onSortOrderChange: (product: StoreProduct, newSortOrder: number) => void;
+  showSnackbar: (message: string, severity: 'success' | 'error' | 'warning' | 'info') => void;
+}
+
+const ProductRow: React.FC<ProductRowProps> = ({
+  product,
+  batchMode,
+  selectedProducts,
+  onProductSelect,
+  onQuickSort,
+  onOpenSortDialog,
+  onOpenOperationDialog,
+  onSortOrderChange,
+  showSnackbar
+}) => {
+  const [sortOrderInput, setSortOrderInput] = useState<string>(product.sortOrder?.toString() || '1');
+
+  /**
+   * 处理排序值输入框的变化
+   */
+  const handleSortOrderInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setSortOrderInput(value);
+  };
+
+  /**
+   * 处理排序值输入框失去焦点事件
+   */
+  const handleSortOrderBlur = () => {
+    const newSortOrder = parseInt(sortOrderInput, 10);
+    if (!isNaN(newSortOrder) && newSortOrder >= 1 && newSortOrder !== product.sortOrder) {
+      onSortOrderChange(product, newSortOrder);
+    } else {
+      // 如果输入无效，恢复原值
+      setSortOrderInput(product.sortOrder?.toString() || '1');
+    }
+  };
+
+  /**
+   * 处理排序值输入框按键事件
+   */
+  const handleSortOrderKeyPress = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      handleSortOrderBlur();
+      (event.target as HTMLInputElement).blur();
+    }
+  };
+
+  // 当产品的sortOrder发生变化时，更新输入框的值
+  React.useEffect(() => {
+    setSortOrderInput(product.sortOrder?.toString() || '1');
+  }, [product.sortOrder]);
+
+  return (
+    <TableRow key={product.breadTypeId}>
+      {batchMode && (
+        <TableCell padding="checkbox">
+          <Switch
+            checked={selectedProducts.has(product.breadTypeId)}
+            onChange={(e) => onProductSelect(product.breadTypeId, e.target.checked)}
+            size="small"
+          />
+        </TableCell>
+      )}
+
+      
+      <TableCell>
+        <Typography variant="subtitle2">
+          {product.name}
+        </Typography>
+      </TableCell>
+      <TableCell>
+        <Typography variant="body2" color="text.secondary">
+          {product.description || '-'}
+        </Typography>
+      </TableCell>
+      <TableCell>
+        ¥{product.price.toFixed(2)}
+      </TableCell>
+      <TableCell>
+        <Chip
+          label={product.storeStatus.isActive ? '已上架' : '已下架'}
+          color={product.storeStatus.isActive ? 'success' : 'default'}
+          size="small"
+        />
+      </TableCell>
+      <TableCell>
+        {product.storeStatus.isActive ? (
+          <TextField
+            size="small"
+            type="number"
+            value={sortOrderInput}
+            onChange={handleSortOrderInputChange}
+            onBlur={handleSortOrderBlur}
+            onKeyPress={handleSortOrderKeyPress}
+            inputProps={{
+              min: 1,
+              style: { textAlign: 'center' }
+            }}
+            sx={{
+              width: '80px',
+              '& .MuiOutlinedInput-root': {
+                height: '32px'
+              }
+            }}
+          />
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            -
+          </Typography>
+        )}
+      </TableCell>
+      <TableCell>
+        <Typography variant="body2">
+          {product.storeStatus.updatedAt
+            ? new Date(product.storeStatus.updatedAt).toLocaleString()
+            : '-'
+          }
+        </Typography>
+      </TableCell>
+      <TableCell>
+        <Typography variant="body2">
+          {product.storeStatus.operatedBy || '-'}
+        </Typography>
+      </TableCell>
+      <TableCell>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Tooltip title={product.storeStatus.isActive ? '下架产品' : '上架产品'}>
+            <IconButton
+              size="small"
+              onClick={() => onOpenOperationDialog(product)}
+              color={product.storeStatus.isActive ? 'error' : 'success'}
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          
+          <Tooltip title="查看操作历史">
+            <IconButton
+              size="small"
+              onClick={() => {
+                // TODO: 实现历史记录查看
+                showSnackbar('历史记录功能开发中', 'info');
+              }}
+            >
+              <HistoryIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      </TableCell>
+    </TableRow>
+  );
+};
 
 /**
  * 产品管理页面组件
@@ -96,6 +265,9 @@ const ProductManagement: React.FC = () => {
   const [operationNotes, setOperationNotes] = useState('');
   const [batchMode, setBatchMode] = useState(false);
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+  const [sortOrder, setSortOrder] = useState<number>(1);
+  const [sortDialogOpen, setSortDialogOpen] = useState(false);
+  const [sortingProduct, setSortingProduct] = useState<StoreProduct | null>(null);
   
   // 获取门店列表
   const fetchStores = async () => {
@@ -139,21 +311,27 @@ const ProductManagement: React.FC = () => {
   };
   
   // 更新单个产品状态
-  const updateProductStatus = async (breadTypeId: string, isActive: boolean, notes: string = '') => {
+  const updateProductStatus = async (breadTypeId: string, isActive: boolean, notes: string = '', sortOrder?: number) => {
     if (!selectedStoreId) return;
     
     try {
+      const requestBody: any = {
+        breadTypeId,
+        isActive,
+        operatedBy: '系统管理员', // 这里应该从用户上下文获取
+        notes
+      };
+      
+      if (sortOrder !== undefined) {
+        requestBody.sortOrder = sortOrder;
+      }
+      
       const response = await fetch(`/api/store-products/store/${selectedStoreId}/product`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          breadTypeId,
-          isActive,
-          operatedBy: '系统管理员', // 这里应该从用户上下文获取
-          notes
-        })
+        body: JSON.stringify(requestBody)
       });
       
       const data = await response.json();
@@ -166,6 +344,71 @@ const ProductManagement: React.FC = () => {
     } catch (error) {
       console.error('更新产品状态失败:', error);
       showSnackbar('操作失败', 'error');
+    }
+  };
+  
+  /**
+   * 更新产品排序
+   * @param breadTypeId 产品ID
+   * @param newSortOrder 新的排序值
+   */
+  const updateProductSort = async (breadTypeId: string, newSortOrder: number) => {
+    if (!selectedStoreId) return;
+    
+    try {
+      const response = await fetch(`/api/store-products/store/${selectedStoreId}/sort`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          breadTypeId,
+          sortOrder: newSortOrder,
+          operatedBy: '系统管理员' // 添加操作人参数
+        })
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        showSnackbar('排序更新成功', 'success');
+        await fetchStoreProducts(selectedStoreId);
+      } else {
+        showSnackbar(data.message || '排序更新失败', 'error');
+      }
+    } catch (error) {
+      console.error('更新排序失败:', error);
+      showSnackbar('排序更新失败', 'error');
+    }
+  };
+  
+  /**
+   * 批量更新产品排序
+   * @param sortUpdates 排序更新数组
+   */
+  const batchUpdateSort = async (sortUpdates: Array<{breadTypeId: string, sortOrder: number}>) => {
+    if (!selectedStoreId || sortUpdates.length === 0) return;
+    
+    try {
+      const response = await fetch(`/api/store-products/store/${selectedStoreId}/batch-sort`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sortUpdates
+        })
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        showSnackbar(`批量排序更新成功，共处理 ${sortUpdates.length} 个产品`, 'success');
+        await fetchStoreProducts(selectedStoreId);
+      } else {
+        showSnackbar(data.message || '批量排序更新失败', 'error');
+      }
+    } catch (error) {
+      console.error('批量更新排序失败:', error);
+      showSnackbar('批量排序更新失败', 'error');
     }
   };
   
@@ -231,7 +474,7 @@ const ProductManagement: React.FC = () => {
   };
   
   // 打开操作对话框
-  const openOperationDialog = (product: StoreProduct) => {
+  const handleOpenOperationDialog = (product: StoreProduct) => {
     setSelectedProduct(product);
     setOperationNotes('');
     setDialogOpen(true);
@@ -242,21 +485,96 @@ const ProductManagement: React.FC = () => {
     if (!selectedProduct) return;
     
     const newStatus = !selectedProduct.storeStatus.isActive;
-    await updateProductStatus(selectedProduct.breadTypeId, newStatus, operationNotes);
+    const sortOrderValue = newStatus ? sortOrder : undefined;
+    await updateProductStatus(selectedProduct.breadTypeId, newStatus, operationNotes, sortOrderValue);
     setDialogOpen(false);
     setSelectedProduct(null);
     setOperationNotes('');
+    setSortOrder(1);
   };
   
-  // 过滤产品
+  /**
+   * 打开排序对话框
+   * @param product 要排序的产品
+   */
+  const openSortDialog = (product: StoreProduct) => {
+    setSortingProduct(product);
+    setSortOrder(product.sortOrder || 1);
+    setSortDialogOpen(true);
+  };
+  
+  /**
+   * 确认排序操作
+   */
+  const handleConfirmSort = async () => {
+    if (!sortingProduct) return;
+    
+    await updateProductSort(sortingProduct.breadTypeId, sortOrder);
+    setSortDialogOpen(false);
+    setSortingProduct(null);
+    setSortOrder(1);
+  };
+  
+  /**
+   * 快速调整产品排序
+   * @param product 产品
+   * @param direction 方向：'up' 或 'down'
+   */
+  const handleQuickSort = async (product: StoreProduct, direction: 'up' | 'down') => {
+    const currentSort = product.sortOrder || 0;
+    const newSort = direction === 'up' ? currentSort - 1 : currentSort + 1;
+    
+    if (newSort < 1) {
+      showSnackbar('排序值不能小于1', 'warning');
+      return;
+    }
+    
+    await updateProductSort(product.breadTypeId, newSort);
+  };
+
+  /**
+   * 处理排序值直接输入更改
+   * @param product 产品
+   * @param newSortOrder 新的排序值
+   */
+  const handleSortOrderChange = async (product: StoreProduct, newSortOrder: number) => {
+    await updateProductSort(product.breadTypeId, newSortOrder);
+  };
+  
+
+  
+  // 过滤和排序产品
   const getFilteredProducts = () => {
+    let filtered: StoreProduct[];
+    
     switch (tabValue) {
       case 1: // 已上架
-        return products.filter(p => p.storeStatus.isActive);
+        filtered = products.filter(p => p.storeStatus.isActive);
+        // 已上架产品按sortOrder升序排列（数值小的在前面）
+        return filtered.sort((a, b) => {
+          const sortA = a.sortOrder || 999999; // 没有sortOrder的排在最后
+          const sortB = b.sortOrder || 999999;
+          return sortA - sortB;
+        });
       case 2: // 已下架
         return products.filter(p => !p.storeStatus.isActive);
       default: // 全部
-        return products;
+        filtered = [...products];
+        // 全部产品：已上架的按sortOrder排序在前，已下架的在后
+        return filtered.sort((a, b) => {
+          // 先按是否上架排序
+          if (a.storeStatus.isActive !== b.storeStatus.isActive) {
+            return b.storeStatus.isActive ? 1 : -1; // 上架的在前
+          }
+          // 如果都是上架状态，按sortOrder排序
+          if (a.storeStatus.isActive && b.storeStatus.isActive) {
+            const sortA = a.sortOrder || 999999;
+            const sortB = b.sortOrder || 999999;
+            return sortA - sortB;
+          }
+          // 下架产品保持原顺序
+          return 0;
+        });
     }
   };
   
@@ -387,6 +705,7 @@ const ProductManagement: React.FC = () => {
                 <TableCell>描述</TableCell>
                 <TableCell>价格</TableCell>
                 <TableCell>状态</TableCell>
+                <TableCell>排序</TableCell>
                 <TableCell>最后操作时间</TableCell>
                 <TableCell>操作人</TableCell>
                 <TableCell>操作</TableCell>
@@ -394,75 +713,18 @@ const ProductManagement: React.FC = () => {
             </TableHead>
             <TableBody>
               {filteredProducts.map((product) => (
-                <TableRow key={product.breadTypeId}>
-                  {batchMode && (
-                    <TableCell padding="checkbox">
-                      <Switch
-                        checked={selectedProducts.has(product.breadTypeId)}
-                        onChange={(e) => handleProductSelect(product.breadTypeId, e.target.checked)}
-                        size="small"
-                      />
-                    </TableCell>
-                  )}
-                  <TableCell>
-                    <Typography variant="subtitle2">
-                      {product.name}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" color="text.secondary">
-                      {product.description || '-'}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    ¥{product.price.toFixed(2)}
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={product.storeStatus.isActive ? '已上架' : '已下架'}
-                      color={product.storeStatus.isActive ? 'success' : 'default'}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">
-                      {product.storeStatus.updatedAt
-                        ? new Date(product.storeStatus.updatedAt).toLocaleString()
-                        : '-'
-                      }
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">
-                      {product.storeStatus.operatedBy || '-'}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Tooltip title={product.storeStatus.isActive ? '下架产品' : '上架产品'}>
-                        <IconButton
-                          size="small"
-                          onClick={() => openOperationDialog(product)}
-                          color={product.storeStatus.isActive ? 'error' : 'success'}
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      
-                      <Tooltip title="查看操作历史">
-                        <IconButton
-                          size="small"
-                          onClick={() => {
-                            // TODO: 实现历史记录查看
-                            showSnackbar('历史记录功能开发中', 'info');
-                          }}
-                        >
-                          <HistoryIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
-                  </TableCell>
-                </TableRow>
+                <ProductRow
+                   key={product.breadTypeId}
+                   product={product}
+                   batchMode={batchMode}
+                   selectedProducts={selectedProducts}
+                   onProductSelect={handleProductSelect}
+                   onQuickSort={handleQuickSort}
+                   onOpenSortDialog={openSortDialog}
+                   onOpenOperationDialog={handleOpenOperationDialog}
+                   onSortOrderChange={handleSortOrderChange}
+                   showSnackbar={showSnackbar}
+                 />
               ))}
             </TableBody>
           </Table>
@@ -485,6 +747,19 @@ const ProductManagement: React.FC = () => {
             确定要{selectedProduct?.storeStatus.isActive ? '下架' : '上架'}产品 "{selectedProduct?.name}" 吗？
           </Typography>
           
+          {!selectedProduct?.storeStatus.isActive && (
+            <TextField
+              fullWidth
+              type="number"
+              label="排序值"
+              value={sortOrder}
+              onChange={(e) => setSortOrder(Math.max(1, parseInt(e.target.value) || 1))}
+              sx={{ mt: 2 }}
+              helperText="数值越小排序越靠前，最小值为1"
+              inputProps={{ min: 1 }}
+            />
+          )}
+          
           <TextField
             fullWidth
             multiline
@@ -504,6 +779,44 @@ const ProductManagement: React.FC = () => {
             color={selectedProduct?.storeStatus.isActive ? 'error' : 'success'}
           >
             确认{selectedProduct?.storeStatus.isActive ? '下架' : '上架'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* 排序设置对话框 */}
+      <Dialog open={sortDialogOpen} onClose={() => setSortDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          设置产品排序
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            设置产品 "{sortingProduct?.name}" 的排序值
+          </Typography>
+          
+          <TextField
+            fullWidth
+            type="number"
+            label="排序值"
+            value={sortOrder}
+            onChange={(e) => setSortOrder(Math.max(1, parseInt(e.target.value) || 1))}
+            sx={{ mt: 2 }}
+            helperText="数值越小排序越靠前，最小值为1"
+            inputProps={{ min: 1 }}
+            autoFocus
+          />
+          
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+            当前排序值：{sortingProduct?.sortOrder || '未设置'}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSortDialogOpen(false)}>取消</Button>
+          <Button
+            onClick={handleConfirmSort}
+            variant="contained"
+            color="primary"
+          >
+            确认设置
           </Button>
         </DialogActions>
       </Dialog>

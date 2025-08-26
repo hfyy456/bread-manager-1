@@ -67,7 +67,8 @@ const getStoreProducts = async (req, res) => {
         deactivatedAt: sp.deactivatedAt,
         operatedBy: sp.operatedBy,
         notes: sp.notes,
-        updatedAt: sp.updatedAt
+        updatedAt: sp.updatedAt,
+        sortOrder: sp.sortOrder
       };
     });
 
@@ -83,8 +84,10 @@ const getStoreProducts = async (req, res) => {
         deactivatedAt: null,
         operatedBy: null,
         notes: null,
-        updatedAt: null
-      }
+        updatedAt: null,
+        sortOrder: null
+      },
+      sortOrder: productStatusMap[breadType.id]?.sortOrder || null
     }));
 
     // 根据状态过滤结果
@@ -116,7 +119,7 @@ const getStoreProducts = async (req, res) => {
 const updateProductStatus = async (req, res) => {
   try {
     const { storeId } = req.params;
-    const { breadTypeId, isActive, operatedBy, notes } = req.body;
+    const { breadTypeId, isActive, operatedBy, notes, sortOrder } = req.body;
     
     if (!storeId || !breadTypeId || typeof isActive !== 'boolean') {
       return ResponseHelper.error(res, '门店ID、产品ID和状态是必填参数', 400);
@@ -136,7 +139,7 @@ const updateProductStatus = async (req, res) => {
 
     let result;
     if (isActive) {
-      result = await StoreProduct.activateProduct(storeId, breadTypeId, operatedBy, notes);
+      result = await StoreProduct.activateProduct(storeId, breadTypeId, operatedBy, notes, sortOrder);
       logger.info(`产品上架成功: 门店 ${storeId}, 产品 ${breadTypeId}, 操作人 ${operatedBy}`);
     } else {
       result = await StoreProduct.deactivateProduct(storeId, breadTypeId, operatedBy, notes);
@@ -150,6 +153,7 @@ const updateProductStatus = async (req, res) => {
       isActive,
       operatedBy,
       notes,
+      sortOrder: result.sortOrder,
       updatedAt: result.updatedAt
     }, `产品${isActive ? '上架' : '下架'}成功`);
   } catch (error) {
@@ -262,10 +266,103 @@ const getProductHistory = async (req, res) => {
   }
 };
 
+/**
+ * 更新产品排序
+ * @param {Object} req - 请求对象
+ * @param {Object} res - 响应对象
+ */
+const updateProductSort = async (req, res) => {
+  try {
+    const { storeId } = req.params;
+    const { breadTypeId, sortOrder, operatedBy } = req.body;
+    
+    if (!storeId || !breadTypeId || typeof sortOrder !== 'number') {
+      return ResponseHelper.error(res, '门店ID、产品ID和排序顺序是必填参数', 400);
+    }
+
+    // 验证门店是否存在
+    const store = await Store.findOne({ _id: storeId });
+    if (!store) {
+      return ResponseHelper.notFound(res, '门店');
+    }
+
+    // 验证面包类型是否存在
+    const breadType = await BreadType.findOne({ id: breadTypeId });
+    if (!breadType) {
+      return ResponseHelper.notFound(res, '产品');
+    }
+
+    const result = await StoreProduct.updateProductSort(storeId, breadTypeId, sortOrder, operatedBy);
+    
+    if (!result) {
+      return ResponseHelper.notFound(res, '产品记录');
+    }
+
+    logger.info(`产品排序更新成功: 门店 ${storeId}, 产品 ${breadTypeId}, 排序 ${sortOrder}, 操作人 ${operatedBy}`);
+    
+    return ResponseHelper.success(res, {
+      storeId,
+      breadTypeId,
+      breadTypeName: breadType.name,
+      sortOrder: result.sortOrder,
+      operatedBy,
+      updatedAt: result.updatedAt
+    }, '产品排序更新成功');
+  } catch (error) {
+    logger.error('更新产品排序失败:', error);
+    return ResponseHelper.error(res, '更新产品排序失败', 500, error.message);
+  }
+};
+
+/**
+ * 批量更新产品排序
+ * @param {Object} req - 请求对象
+ * @param {Object} res - 响应对象
+ */
+const batchUpdateProductSort = async (req, res) => {
+  try {
+    const { storeId } = req.params;
+    const { sortUpdates, operatedBy } = req.body;
+    
+    if (!storeId || !Array.isArray(sortUpdates) || sortUpdates.length === 0) {
+      return ResponseHelper.error(res, '门店ID和排序更新列表是必填参数', 400);
+    }
+
+    // 验证门店是否存在
+    const store = await Store.findOne({ _id: storeId });
+    if (!store) {
+      return ResponseHelper.notFound(res, '门店');
+    }
+
+    // 验证排序更新数据格式
+    for (const update of sortUpdates) {
+      if (!update.breadTypeId || typeof update.sortOrder !== 'number') {
+        return ResponseHelper.error(res, '排序更新数据格式不正确', 400);
+      }
+    }
+
+    const results = await StoreProduct.batchUpdateSort(storeId, sortUpdates, operatedBy);
+    
+    logger.info(`批量更新产品排序成功: 门店 ${storeId}, 更新 ${results.length} 个产品, 操作人 ${operatedBy}`);
+    
+    return ResponseHelper.success(res, {
+      storeId,
+      storeName: store.name,
+      totalUpdates: results.length,
+      results
+    }, '批量更新产品排序成功');
+  } catch (error) {
+    logger.error('批量更新产品排序失败:', error);
+    return ResponseHelper.error(res, '批量更新产品排序失败', 500, error.message);
+  }
+};
+
 module.exports = {
   getAllBreadTypes,
   getStoreProducts,
   updateProductStatus,
   batchUpdateProductStatus,
+  updateProductSort,
+  batchUpdateProductSort,
   getProductHistory
 };

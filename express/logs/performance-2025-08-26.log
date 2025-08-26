@@ -1,0 +1,1 @@
+{"timestamp":"2025-08-26T08:46:45.935Z","level":"PERFORMANCE","message":"Performance: Slow API Response took 2284ms","operation":"Slow API Response","duration":"2284ms","method":"POST","url":"/api/ingredients/list","statusCode":200}

@@ -268,10 +268,11 @@ const getActiveProducts = async (req, res) => {
       return ResponseHelper.notFound(res, '门店');
     }
 
-    // 获取门店上架的产品
+    // 获取门店上架的产品（按排序顺序）
     const StoreProduct = require('../models/StoreProduct');
     const activeStoreProducts = await StoreProduct.find({ storeId, isActive: true })
-      .select('breadTypeId')
+      .select('breadTypeId sortOrder')
+      .sort({ sortOrder: 1, activatedAt: -1 })
       .lean();
 
     if (activeStoreProducts.length === 0) {
@@ -284,15 +285,28 @@ const getActiveProducts = async (req, res) => {
       .select('id name description price category unit')
       .lean();
 
-    // 转换数据格式
-    const products = breadTypes.map(bt => ({
-      _id: bt.id,
-      name: bt.name,
-      description: bt.description,
-      price: bt.price,
-      category: bt.category,
-      unit: bt.unit || '个'
-    }));
+    // 创建面包类型映射
+    const breadTypeMap = {};
+    breadTypes.forEach(bt => {
+      breadTypeMap[bt.id] = bt;
+    });
+
+    // 按排序顺序转换数据格式
+    const products = activeStoreProducts
+      .map(sp => {
+        const bt = breadTypeMap[sp.breadTypeId];
+        if (!bt) return null;
+        return {
+          _id: bt.id,
+          name: bt.name,
+          description: bt.description,
+          price: bt.price,
+          category: bt.category,
+          unit: bt.unit || '个',
+          sortOrder: sp.sortOrder || 0
+        };
+      })
+      .filter(product => product !== null);
 
     logger.info(`获取门店 ${storeId} 上架产品列表成功，共 ${products.length} 个产品`);
     return ResponseHelper.success(res, products, '获取上架产品列表成功');

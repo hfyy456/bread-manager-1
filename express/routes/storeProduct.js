@@ -5,6 +5,8 @@ const {
   getStoreProducts,
   updateProductStatus,
   batchUpdateProductStatus,
+  updateProductSort,
+  batchUpdateProductSort,
   getProductHistory
 } = require('../controllers/storeProductController');
 
@@ -45,6 +47,27 @@ router.put('/store/:storeId/product', updateProductStatus);
  * @access Public
  */
 router.put('/store/:storeId/batch', batchUpdateProductStatus);
+
+/**
+ * @route PUT /api/store-products/store/:storeId/sort
+ * @desc 更新单个产品排序
+ * @param {string} storeId - 门店ID
+ * @body {string} breadTypeId - 产品ID
+ * @body {number} sortOrder - 排序顺序
+ * @body {string} operatedBy - 操作人
+ * @access Public
+ */
+router.put('/store/:storeId/sort', updateProductSort);
+
+/**
+ * @route PUT /api/store-products/store/:storeId/batch-sort
+ * @desc 批量更新产品排序
+ * @param {string} storeId - 门店ID
+ * @body {Array} sortUpdates - 排序更新列表
+ * @body {string} operatedBy - 操作人
+ * @access Public
+ */
+router.put('/store/:storeId/batch-sort', batchUpdateProductSort);
 
 /**
  * @route GET /api/store-products/store/:storeId/product/:breadTypeId/history

@@ -40,13 +40,20 @@ const storeProductSchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
+  // 排序顺序（数值越小排序越靠前）
+  sortOrder: {
+    type: Number,
+    default: 0,
+    min: [0, '排序顺序不能为负数'],
+  },
 }, { 
   timestamps: true,
   // 创建复合索引，确保同一门店的同一产品只有一条记录
   index: [
     { storeId: 1, breadTypeId: 1 },
     { storeId: 1, isActive: 1 },
-    { breadTypeId: 1, isActive: 1 }
+    { breadTypeId: 1, isActive: 1 },
+    { storeId: 1, isActive: 1, sortOrder: 1 }
   ]
 });
 
@@ -64,7 +71,7 @@ storeProductSchema.index(
 storeProductSchema.statics.getActiveProducts = function(storeId) {
   return this.find({ storeId, isActive: true })
     .populate('breadTypeId')
-    .sort({ activatedAt: -1 });
+    .sort({ sortOrder: 1, activatedAt: -1 });
 };
 
 /**
@@ -84,18 +91,26 @@ storeProductSchema.statics.getInactiveProducts = function(storeId) {
  * @param {string} breadTypeId - 面包类型ID
  * @param {string} operatedBy - 操作人员
  * @param {string} notes - 备注
+ * @param {number} sortOrder - 排序顺序（可选）
  * @returns {Promise<Object>} 操作结果
  */
-storeProductSchema.statics.activateProduct = async function(storeId, breadTypeId, operatedBy, notes) {
+storeProductSchema.statics.activateProduct = async function(storeId, breadTypeId, operatedBy, notes, sortOrder) {
+  const updateData = {
+    isActive: true,
+    activatedAt: new Date(),
+    deactivatedAt: null,
+    operatedBy,
+    notes
+  };
+  
+  // 如果提供了排序顺序，则更新排序
+  if (typeof sortOrder === 'number') {
+    updateData.sortOrder = sortOrder;
+  }
+  
   const result = await this.findOneAndUpdate(
     { storeId, breadTypeId },
-    {
-      isActive: true,
-      activatedAt: new Date(),
-      deactivatedAt: null,
-      operatedBy,
-      notes
-    },
+    updateData,
     { 
       upsert: true, 
       new: true,
@@ -128,6 +143,50 @@ storeProductSchema.statics.deactivateProduct = async function(storeId, breadType
     }
   );
   return result;
+};
+
+/**
+ * 静态方法：更新产品排序
+ * @param {string} storeId - 门店ID
+ * @param {string} breadTypeId - 面包类型ID
+ * @param {number} sortOrder - 新的排序顺序
+ * @param {string} operatedBy - 操作人员
+ * @returns {Promise<Object>} 操作结果
+ */
+storeProductSchema.statics.updateProductSort = async function(storeId, breadTypeId, sortOrder, operatedBy) {
+  const result = await this.findOneAndUpdate(
+    { storeId, breadTypeId },
+    {
+      sortOrder,
+      operatedBy
+    },
+    { 
+      new: true,
+      runValidators: true
+    }
+  );
+  return result;
+};
+
+/**
+ * 静态方法：批量更新产品排序
+ * @param {string} storeId - 门店ID
+ * @param {Array} sortUpdates - 排序更新列表 [{ breadTypeId, sortOrder }]
+ * @param {string} operatedBy - 操作人员
+ * @returns {Promise<Array>} 操作结果列表
+ */
+storeProductSchema.statics.batchUpdateSort = async function(storeId, sortUpdates, operatedBy) {
+  const results = [];
+  
+  for (const update of sortUpdates) {
+    const { breadTypeId, sortOrder } = update;
+    const result = await this.updateProductSort(storeId, breadTypeId, sortOrder, operatedBy);
+    if (result) {
+      results.push(result);
+    }
+  }
+  
+  return results;
 };
 
 /**
