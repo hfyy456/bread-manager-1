@@ -238,7 +238,6 @@ const ApprovalPage = () => {
                     <Table>
                         <TableHead>
                             <TableRow>
-                                <TableCell>申请门店</TableCell>
                                 <TableCell>申领人</TableCell>
                                 <TableCell>申请时间</TableCell>
                                 <TableCell>物料详情</TableCell>
@@ -249,7 +248,6 @@ const ApprovalPage = () => {
                         <TableBody>
                             {requests.map((req) => (
                                 <TableRow key={req._id}>
-                                    <TableCell>{req.storeId?.name || '未知门店'}</TableCell>
                                     <TableCell>{req.requestedBy}</TableCell>
                                     <TableCell>{new Date(req.createdAt).toLocaleString()}</TableCell>
                                     <TableCell>
