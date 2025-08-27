@@ -72,8 +72,14 @@ exports.getRequestsByStore = async (req, res) => {
     }
 
     const requests = await TransferRequest.find(filter)
+      .populate("storeId", "name") // Populate store name
+      .populate({
+        path: "items.ingredientId",
+        select: "price", // Only select the price field
+      })
       .sort({ createdAt: -1 }) // Show latest requests first
-      .limit(200); // Limit to a reasonable number
+      .limit(200) // Limit to a reasonable number
+      .lean(); // Use lean for better performance
 
     res.json(requests);
   } catch (error) {

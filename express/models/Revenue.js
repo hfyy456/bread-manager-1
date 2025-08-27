@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const TimezoneUtils = require('../utils/timezone');
 
 /**
  * 营业数据模型
@@ -146,27 +147,36 @@ revenueSchema.pre('save', function(next) {
 
 // 静态方法：根据门店和日期查找营业数据
 revenueSchema.statics.findByStoreAndDate = function(storeId, date) {
-  // 确保日期使用本地时间而不是UTC时间
-  const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
-  const startOfDay = new Date(dateStr + 'T00:00:00');
-  const endOfDay = new Date(dateStr + 'T23:59:59.999Z');
+  // 使用统一的时区处理工具类
+  const dateRange = TimezoneUtils.getDayRangeUTC(date);
+  
+  if (!dateRange) {
+    throw new Error('无效的日期');
+  }
   
   return this.findOne({
     storeId,
     date: {
-      $gte: startOfDay,
-      $lte: endOfDay
+      $gte: dateRange.startUTC,
+      $lte: dateRange.endUTC
     }
   });
 };
 
 // 静态方法：获取门店指定时间范围的营业数据
 revenueSchema.statics.findByStoreAndDateRange = function(storeId, startDate, endDate) {
+  // 使用统一的时区处理工具类
+  const dateRange = TimezoneUtils.getDateRangeUTC(startDate, endDate);
+  
+  if (!dateRange) {
+    throw new Error('无效的日期范围');
+  }
+  
   return this.find({
     storeId,
     date: {
-      $gte: new Date(startDate),
-      $lte: new Date(endDate)
+      $gte: dateRange.startUTC,
+      $lte: dateRange.endUTC
     }
   }).sort({ date: -1 });
 };

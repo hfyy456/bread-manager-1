@@ -23,6 +23,7 @@ import {
 } from "date-fns";
 import * as dateFnsTz from "date-fns-tz";
 import { zhCN } from "date-fns/locale";
+import { TIMEZONE_CONFIG } from '../config/constants.js';
 
 // Re-export date-fns functions that are used elsewhere in the application
 export {
@@ -45,8 +46,41 @@ export {
   getWeek,
 };
 
-// 北京时区偏移
+// 默认时区配置
+const DEFAULT_TIMEZONE = TIMEZONE_CONFIG.DEFAULT_TIMEZONE;
 const BEIJING_TIMEZONE = "Asia/Shanghai";
+
+/**
+ * 获取当前配置的默认时区
+ * @returns {string} 时区标识符
+ */
+export const getDefaultTimezone = () => {
+  return DEFAULT_TIMEZONE;
+};
+
+/**
+ * 检测用户当前时区
+ * @returns {string} 用户当前时区标识符
+ */
+export const detectUserTimezone = () => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch (error) {
+    console.warn('无法检测用户时区，使用默认时区:', DEFAULT_TIMEZONE);
+    return DEFAULT_TIMEZONE;
+  }
+};
+
+/**
+ * 获取实际使用的时区
+ * @returns {string} 时区标识符
+ */
+export const getActiveTimezone = () => {
+  if (TIMEZONE_CONFIG.AUTO_DETECT_TIMEZONE) {
+    return detectUserTimezone();
+  }
+  return DEFAULT_TIMEZONE;
+};
 
 /**
  * 格式化日期为指定格式
@@ -91,6 +125,53 @@ export const getCurrentBJTime = () => {
 export const toBJTime = (date) => {
   const dateObj = typeof date === "string" ? parseISO(date) : date;
   return dateFnsTz.toZonedTime(dateObj, BEIJING_TIMEZONE);
+};
+
+/**
+ * 将UTC时间转换为本地时区时间
+ * @param {Date|string} utcDate - UTC时间
+ * @param {string} timezone - 目标时区，默认为北京时间
+ * @returns {Date} 本地时区的Date对象
+ */
+export const utcToLocalTime = (utcDate, timezone = getActiveTimezone()) => {
+  const dateObj = typeof utcDate === "string" ? parseISO(utcDate) : utcDate;
+  return dateFnsTz.toZonedTime(dateObj, timezone);
+};
+
+/**
+ * 将本地时间转换为UTC时间
+ * @param {Date|string} localDate - 本地时间
+ * @param {string} timezone - 源时区，默认为北京时间
+ * @returns {Date} UTC时间的Date对象
+ */
+export const localTimeToUTC = (localDate, timezone = getActiveTimezone()) => {
+  const dateObj = typeof localDate === "string" ? parseISO(localDate) : localDate;
+  return dateFnsTz.fromZonedTime(dateObj, timezone);
+};
+
+/**
+ * 将本地日期字符串转换为UTC时间（用于与后端API交互）
+ * @param {string} localDateStr - 本地日期字符串 (YYYY-MM-DD)
+ * @param {string} timezone - 源时区，默认为北京时间
+ * @returns {Date} UTC时间的Date对象
+ */
+export const localDateToUTC = (localDateStr, timezone = getActiveTimezone()) => {
+  // 将日期字符串转换为本地时间的开始时刻
+  const localDateTime = new Date(localDateStr + 'T00:00:00');
+  return dateFnsTz.fromZonedTime(localDateTime, timezone);
+};
+
+/**
+ * 格式化UTC时间为本地时区显示
+ * @param {Date|string} utcDate - UTC时间
+ * @param {string} formatStr - 格式字符串，默认 'yyyy-MM-dd HH:mm:ss'
+ * @param {string} timezone - 目标时区，默认为北京时间
+ * @returns {string} 格式化后的本地时间字符串
+ */
+export const formatUTCToLocal = (utcDate, formatStr = "yyyy-MM-dd HH:mm:ss", timezone = getActiveTimezone()) => {
+  if (!utcDate) return "-";
+  const localTime = utcToLocalTime(utcDate, timezone);
+  return format(localTime, formatStr, { locale: zhCN });
 };
 
 /**

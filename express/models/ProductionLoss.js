@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const TimezoneUtils = require('../utils/timezone');
 
 /**
  * 生产报损记录模型
@@ -115,18 +116,18 @@ productionLossSchema.index(
  * @returns {Promise<Object|null>} 报损记录
  */
 productionLossSchema.statics.getByDate = function(storeId, date, type = null) {
-  // 创建日期范围查询，解决时区问题
-  const startDate = new Date(date);
-  startDate.setHours(0, 0, 0, 0);
+  // 使用统一的时区处理工具类
+  const dateRange = TimezoneUtils.getDayRangeUTC(date);
   
-  const endDate = new Date(date);
-  endDate.setHours(23, 59, 59, 999);
+  if (!dateRange) {
+    throw new Error('无效的日期');
+  }
   
   const query = { 
     storeId, 
     date: {
-      $gte: startDate,
-      $lte: endDate
+      $gte: dateRange.startUTC,
+      $lte: dateRange.endUTC
     }
   };
   
@@ -146,29 +147,26 @@ productionLossSchema.statics.getByDate = function(storeId, date, type = null) {
  * @returns {Promise<Array>} 统计结果
  */
 productionLossSchema.statics.getStats = function(storeId, startDate, endDate, type = null) {
-  // 处理日期时区问题，确保使用本地时间范围
-  // 将本地日期转换为UTC时间进行查询
-  const start = new Date(startDate + 'T00:00:00+08:00');
-  const end = new Date(endDate + 'T23:59:59+08:00');
+  // 使用统一的时区处理工具类
+  const dateRange = TimezoneUtils.getDateRangeUTC(startDate, endDate);
   
-  // 转换为UTC时间
-  const startUTC = new Date(start.getTime() - 8 * 60 * 60 * 1000);
-  const endUTC = new Date(end.getTime() - 8 * 60 * 60 * 1000);
+  if (!dateRange) {
+    throw new Error('无效的日期范围');
+  }
   
   const matchQuery = {
     storeId,
     date: {
-      $gte: startUTC,
-      $lte: endUTC
+      $gte: dateRange.startUTC,
+      $lte: dateRange.endUTC
     }
   };
   
   // 调试日志（可在生产环境中移除）
-    // console.log('=== MongoDB查询条件 ===');
-    // console.log('原始日期范围:', startDate, '到', endDate);
-    // console.log('本地时间范围:', start, '到', end);
-    // console.log('UTC时间范围:', startUTC, '到', endUTC);
-    // console.log('查询条件:', JSON.stringify(matchQuery, null, 2));
+  // console.log('=== MongoDB查询条件 ===');
+  // console.log('原始日期范围:', startDate, '到', endDate);
+  // console.log('UTC时间范围:', dateRange.startUTC, '到', dateRange.endUTC);
+  // console.log('查询条件:', JSON.stringify(matchQuery, null, 2));
   
   if (type && type !== 'all') {
     matchQuery.type = type;
@@ -296,19 +294,19 @@ productionLossSchema.statics.getStats = function(storeId, startDate, endDate, ty
  * @returns {Promise<Object>} 操作结果
  */
 productionLossSchema.statics.createOrUpdate = async function(storeId, date, type, data) {
-  // 创建日期范围查询，解决时区问题
-  const startDate = new Date(date);
-  startDate.setHours(0, 0, 0, 0);
+  // 使用TimezoneUtils获取正确的UTC日期范围
+  const dateRange = TimezoneUtils.getDayRangeUTC(date);
   
-  const endDate = new Date(date);
-  endDate.setHours(23, 59, 59, 999);
+  if (!dateRange) {
+    throw new Error('无效的日期');
+  }
   
   // 查找现有记录
   const existingRecord = await this.findOne({ 
     storeId, 
     date: {
-      $gte: startDate,
-      $lte: endDate
+      $gte: dateRange.startUTC,
+      $lte: dateRange.endUTC
     },
     type 
   });
@@ -326,8 +324,8 @@ productionLossSchema.statics.createOrUpdate = async function(storeId, date, type
       { 
         storeId, 
         date: {
-          $gte: startDate,
-          $lte: endDate
+          $gte: dateRange.startUTC,
+          $lte: dateRange.endUTC
         },
         type 
       },
@@ -345,16 +343,13 @@ productionLossSchema.statics.createOrUpdate = async function(storeId, date, type
     );
     return result;
   } else {
-    // 创建新记录 - 使用标准化的日期（当天00:00:00）
-    const normalizedDate = new Date(date);
-    normalizedDate.setHours(0, 0, 0, 0);
-    
+    // 创建新记录 - 使用UTC时间的开始时间作为标准化日期
     const result = await this.findOneAndUpdate(
-      { storeId, date: normalizedDate, type },
+      { storeId, date: dateRange.startUTC, type },
       {
         ...data,
         storeId,
-        date: normalizedDate,
+        date: dateRange.startUTC,
         type
       },
       { 
@@ -385,20 +380,15 @@ productionLossSchema.statics.getRecords = function(storeId, options = {}) {
   const query = { storeId };
   
   if (startDate && endDate) {
-    // 将本地日期转换为UTC时间范围
-    const start = new Date(startDate);
-    // 本地日期的00:00:00对应UTC的前一天16:00:00（GMT+8时区）
-    const utcStart = new Date(start.getTime() - 8 * 60 * 60 * 1000);
+    // 使用统一的时区处理工具类
+    const dateRange = TimezoneUtils.getDateRangeUTC(startDate, endDate);
     
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
-    // 本地日期的23:59:59对应UTC的当天15:59:59（GMT+8时区）
-    const utcEnd = new Date(end.getTime() - 8 * 60 * 60 * 1000);
-    
-    query.date = {
-      $gte: utcStart,
-      $lte: utcEnd
-    };
+    if (dateRange) {
+      query.date = {
+        $gte: dateRange.startUTC,
+        $lte: dateRange.endUTC
+      };
+    }
   }
   
   if (type && type !== 'all') {

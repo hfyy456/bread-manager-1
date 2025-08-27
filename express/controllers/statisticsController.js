@@ -9,89 +9,47 @@ const logger = require('../utils/logger');
 const BreadType = require('../models/BreadType');
 const DoughRecipe = require('../models/DoughRecipe');
 const FillingRecipe = require('../models/FillingRecipe');
+const TimezoneUtils = require('../utils/timezone');
 
 /**
- * 获取日期范围的开始和结束时间
+ * 获取日期范围的开始和结束时间（UTC格式）
  * @param {string} period - 时间周期：'today', 'yesterday', 'week', 'lastWeek', 'month', 'lastMonth'
  * @param {string} timezone - 时区，默认为 'Asia/Shanghai'
- * @returns {Object} 包含startDate和endDate的对象
+ * @returns {Object} 包含startDate和endDate的UTC时间对象
  */
 const getDateRange = (period, timezone = 'Asia/Shanghai') => {
-  const now = new Date();
-  let startDate, endDate;
-
+  const moment = require('moment-timezone');
+  
   switch (period) {
     case 'today':
-      // 当天：从00:00:00到23:59:59
-      startDate = new Date(now);
-      startDate.setHours(0, 0, 0, 0);
-      
-      endDate = new Date(now);
-      endDate.setHours(23, 59, 59, 999);
-      break;
+      const today = moment.tz(timezone).format('YYYY-MM-DD');
+      const todayRange = TimezoneUtils.getDayRangeUTC(today, timezone);
+      return { startDate: todayRange.startUTC, endDate: todayRange.endUTC };
     
     case 'yesterday':
-      // 昨日：从昨天00:00:00到昨天23:59:59
-      const yesterday = new Date(now);
-      yesterday.setDate(now.getDate() - 1);
-      
-      startDate = new Date(yesterday);
-      startDate.setHours(0, 0, 0, 0);
-      
-      endDate = new Date(yesterday);
-      endDate.setHours(23, 59, 59, 999);
-      break;
+      const yesterday = moment.tz(timezone).subtract(1, 'day').format('YYYY-MM-DD');
+      const yesterdayRange = TimezoneUtils.getDayRangeUTC(yesterday, timezone);
+      return { startDate: yesterdayRange.startUTC, endDate: yesterdayRange.endUTC };
     
     case 'week':
-      // 本周：从周一00:00:00到当前时间
-      const dayOfWeek = now.getDay();
-      const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 周日为0，需要特殊处理
-      
-      startDate = new Date(now);
-      startDate.setDate(now.getDate() - daysToMonday);
-      startDate.setHours(0, 0, 0, 0);
-      
-      endDate = new Date(now);
-      break;
+      const weekRange = TimezoneUtils.getPeriodRangeUTC('week', timezone);
+      return { startDate: weekRange.startUTC, endDate: weekRange.endUTC };
     
     case 'lastWeek':
-      // 上周：从上周一00:00:00到上周日23:59:59
-      const currentDayOfWeek = now.getDay();
-      const daysToLastMonday = currentDayOfWeek === 0 ? 13 : currentDayOfWeek + 6; // 周日为0，需要特殊处理
-      
-      startDate = new Date(now);
-      startDate.setDate(now.getDate() - daysToLastMonday);
-      startDate.setHours(0, 0, 0, 0);
-      
-      endDate = new Date(startDate);
-      endDate.setDate(startDate.getDate() + 6);
-      endDate.setHours(23, 59, 59, 999);
-      break;
+      const lastWeekRange = TimezoneUtils.getPeriodRangeUTC('lastWeek', timezone);
+      return { startDate: lastWeekRange.startUTC, endDate: lastWeekRange.endUTC };
     
     case 'month':
-      // 本月：从1号00:00:00到当前时间
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      startDate.setHours(0, 0, 0, 0);
-      
-      endDate = new Date(now);
-      break;
+      const monthRange = TimezoneUtils.getPeriodRangeUTC('month', timezone);
+      return { startDate: monthRange.startUTC, endDate: monthRange.endUTC };
     
     case 'lastMonth':
-      // 上月：从上月1号00:00:00到上月最后一天23:59:59
-      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      startDate = new Date(lastMonth);
-      startDate.setHours(0, 0, 0, 0);
-      
-      // 上月最后一天
-      endDate = new Date(now.getFullYear(), now.getMonth(), 0);
-      endDate.setHours(23, 59, 59, 999);
-      break;
+      const lastMonthRange = TimezoneUtils.getPeriodRangeUTC('lastMonth', timezone);
+      return { startDate: lastMonthRange.startUTC, endDate: lastMonthRange.endUTC };
     
     default:
       throw new Error('无效的时间周期参数');
   }
-
-  return { startDate, endDate };
 };
 
 /**
@@ -139,11 +97,12 @@ const getRevenueStats = async (storeId, startDate, endDate) => {
     // 并行获取营业数据和出货登记数据
     const [revenueResult, shipmentStats] = await Promise.all([
       Revenue.aggregate(pipeline),
-      ProductionLoss.getStats(storeId, startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0], 'shipment')
+      ProductionLoss.getStats(storeId, TimezoneUtils.utcToLocalDate(startDate), TimezoneUtils.utcToLocalDate(endDate), 'shipment')
     ]);
     
     // 获取出货登记金额
-    const totalShipmentValue = shipmentStats.length > 0 ? shipmentStats[0].shipmentValue || 0 : 0;
+    // ProductionLoss.getStats返回数组，需要访问第一个元素的shipmentValue
+    const totalShipmentValue = shipmentStats && shipmentStats.length > 0 ? (shipmentStats[0].shipmentValue || 0) : 0;
     
     if (revenueResult.length === 0) {
       return {
@@ -184,11 +143,9 @@ const getProductionLossStats = async (storeId, startDate, endDate) => {
     // 使用ProductionLoss模型的getStats方法获取完整统计数据
     const stringStoreId = storeId.toString();
     
-    // 修复时区问题：使用本地日期而不是UTC日期
-    const startDateLocal = new Date(startDate.getTime() - startDate.getTimezoneOffset() * 60000);
-    const endDateLocal = new Date(endDate.getTime() - endDate.getTimezoneOffset() * 60000);
-    const startDateStr = startDateLocal.toISOString().split('T')[0];
-    const endDateStr = endDateLocal.toISOString().split('T')[0];
+    // 将UTC时间转换为北京时间的日期字符串，因为模型内部会重新转换为UTC
+    const startDateStr = TimezoneUtils.utcToLocalDate(startDate, 'Asia/Shanghai', 'YYYY-MM-DD');
+    const endDateStr = TimezoneUtils.utcToLocalDate(endDate, 'Asia/Shanghai', 'YYYY-MM-DD');
     
     // 调试：打印查询参数（可在生产环境中移除）
     // console.log('=== 报损数据查询调试 ===');

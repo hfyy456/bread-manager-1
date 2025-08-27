@@ -2,6 +2,7 @@ const Expense = require('../models/Expense');
 const Store = require('../models/Store');
 const ResponseHelper = require('../utils/responseHelper');
 const logger = require('../utils/logger');
+const TimezoneUtils = require('../utils/timezone');
 
 /**
  * 创建支出记录
@@ -43,7 +44,7 @@ const createExpense = async (req, res) => {
     const expenseData = {
       storeId,
       type: type || 'operational',
-      date: new Date(date),
+      date: TimezoneUtils.localDateToUTC(date),
       amount,
       description: description.trim(),
       notes: notes ? notes.trim() : '',
@@ -86,7 +87,7 @@ const getExpenseByDate = async (req, res) => {
       return ResponseHelper.error(res, '日期参数是必填的', 400);
     }
 
-    const queryDate = new Date(date);
+    const queryDate = TimezoneUtils.localDateToUTC(date);
     if (isNaN(queryDate.getTime())) {
       return ResponseHelper.error(res, '无效的日期格式', 400);
     }
@@ -118,8 +119,8 @@ const getExpenseStats = async (req, res) => {
       return ResponseHelper.error(res, '开始日期和结束日期是必填参数', 400);
     }
 
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    const start = TimezoneUtils.localDateToUTC(startDate);
+    const end = TimezoneUtils.localDateToUTC(endDate);
     
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       return ResponseHelper.error(res, '无效的日期格式', 400);
@@ -180,10 +181,10 @@ const getExpenseRecords = async (req, res) => {
     };
 
     if (startDate) {
-      options.startDate = new Date(startDate);
+      options.startDate = TimezoneUtils.localDateToUTC(startDate);
     }
     if (endDate) {
-      options.endDate = new Date(endDate);
+      options.endDate = TimezoneUtils.localDateToUTC(endDate);
     }
     if (type) {
       options.type = type;

@@ -27,6 +27,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import MobileInventoryCheck from './components/MobileInventoryCheck';
 import AllRequestsView from './components/AllRequestsView';
 import StoreSelectorView from './components/StoreSelectorView'; // 导入门店选择器
+import { formatUTCToLocal, DATE_FORMATS } from '../../utils/dateUtils';
 
 // 未批准库存提示组件
 const PendingRequestsAlert = ({ 
@@ -99,7 +100,7 @@ const PendingRequestsAlert = ({
                                 申请单 #{req._id.slice(-6)} - {req.requestedBy || '未知用户'}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
-                                {req.items.length} 个物料 | {new Date(req.createdAt).toLocaleDateString()}
+                                {req.items.length} 个物料 | {formatUTCToLocal(req.createdAt, DATE_FORMATS.DATE)}
                             </Typography>
                         </Box>
                     ))}
@@ -714,7 +715,7 @@ const HistoryView = ({ requests, loading, error, user, storeId }) => {
                                             </Typography>
                                         )}
                                         <Typography variant="caption" color="text.secondary" display="block">
-                                            {new Date(req.createdAt).toLocaleString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                            {formatUTCToLocal(req.createdAt, DATE_FORMATS.DATETIME)}
                                         </Typography>
                                     </Box>
                                     <Chip label={STATUS_MAP[req.status] || req.status} color={getStatusChipColor(req.status)} size="small" sx={{ mt: 0.5 }}/>

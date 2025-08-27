@@ -61,6 +61,7 @@ import { zhCN } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import { useFeishuAuth } from '../../hooks/useFeishuAuth';
 import { useStore } from '../../components/StoreContext';
+import { formatUTCToLocal, localDateToUTC, formatDate, DATE_FORMATS } from '../../utils/dateUtils';
 
 // 支出统计数据接口
 interface ExpenseStats {
@@ -172,8 +173,8 @@ const MobileExpenseStatsPage: React.FC = () => {
       setError(null);
       
       const params = new URLSearchParams({
-        startDate: format(startDate, 'yyyy-MM-dd'),
-        endDate: format(endDate, 'yyyy-MM-dd'),
+        startDate: localDateToUTC(format(startDate, 'yyyy-MM-dd')).toISOString().split('T')[0],
+        endDate: localDateToUTC(format(endDate, 'yyyy-MM-dd')).toISOString().split('T')[0],
       });
       
       if (type !== 'all') {
@@ -208,8 +209,8 @@ const MobileExpenseStatsPage: React.FC = () => {
   const fetchExpenseRecords = useCallback(async (startDate: Date, endDate: Date, type: ExpenseType, reimbursementStatus: ReimbursementStatus) => {
     try {
       const params = new URLSearchParams({
-        startDate: format(startDate, 'yyyy-MM-dd'),
-        endDate: format(endDate, 'yyyy-MM-dd'),
+        startDate: localDateToUTC(format(startDate, 'yyyy-MM-dd')).toISOString().split('T')[0],
+        endDate: localDateToUTC(format(endDate, 'yyyy-MM-dd')).toISOString().split('T')[0],
         limit: '50',
       });
       
@@ -240,7 +241,7 @@ const MobileExpenseStatsPage: React.FC = () => {
   const fetchDailyExpenses = useCallback(async (date: Date, type: ExpenseType, reimbursementStatus: ReimbursementStatus) => {
     try {
       const params = new URLSearchParams({
-        date: format(date, 'yyyy-MM-dd'),
+        date: localDateToUTC(format(date, 'yyyy-MM-dd')).toISOString().split('T')[0],
       });
       
       if (type !== 'all') {

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>测试要货审批数据</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .request { border: 1px solid #ccc; margin: 10px 0; padding: 10px; }
+        .item { margin: 5px 0; }
+        .total { font-weight: bold; color: #007bff; }
+    </style>
+</head>
+<body>
+    <h1>要货审批数据测试</h1>
+    <div id="content">加载中...</div>
+
+    <script>
+        async function testApprovalData() {
+            try {
+                const response = await fetch('/api/transfer-requests/all');
+                const requests = await response.json();
+                
+                console.log('Total requests:', requests.length);
+                console.log('First request:', requests[0]);
+                
+                let html = `<h2>总申请数: ${requests.length}</h2>`;
+                
+                // 计算总金额
+                const totalAmount = requests.reduce((acc, req) => {
+                    const requestTotal = req.items.reduce((reqAcc, item) => {
+                        const price = item.ingredientId?.price || 0;
+                        console.log(`Item: ${item.name}, Price: ${price}, Quantity: ${item.quantity}`);
+                        return reqAcc + (item.quantity * price);
+                    }, 0);
+                    return acc + requestTotal;
+                }, 0);
+                
+                html += `<div class="total">总金额: ¥${totalAmount.toFixed(2)}</div>`;
+                
+                // 显示前5个申请
+                html += '<h3>前5个申请:</h3>';
+                requests.slice(0, 5).forEach((req, index) => {
+                    const requestTotal = req.items.reduce((acc, item) => {
+                        const price = item.ingredientId?.price || 0;
+                        return acc + (item.quantity * price);
+                    }, 0);
+                    
+                    html += `
+                        <div class="request">
+                            <h4>申请 ${index + 1}</h4>
+                            <p><strong>门店:</strong> ${req.storeId?.name || '未知门店'}</p>
+                            <p><strong>申领人:</strong> ${req.requestedBy}</p>
+                            <p><strong>状态:</strong> ${req.status}</p>
+                            <p><strong>申请金额:</strong> ¥${requestTotal.toFixed(2)}</p>
+                            <div><strong>物料详情:</strong></div>
+                            ${req.items.map(item => `
+                                <div class="item">
+                                    ${item.name}: ${item.quantity} ${item.unit} 
+                                    (单价: ¥${item.ingredientId?.price || 0}, 小计: ¥${((item.quantity * (item.ingredientId?.price || 0))).toFixed(2)})
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                });
+                
+                document.getElementById('content').innerHTML = html;
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('content').innerHTML = `<p style="color: red;">错误: ${error.message}</p>`;
+            }
+        }
+        
+        testApprovalData();
+    </script>
+</body>
+</html>

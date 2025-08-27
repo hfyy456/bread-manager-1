@@ -22,6 +22,7 @@ import {
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useFeishuAuth } from '../../hooks/useFeishuAuth';
+import { formatUTCToLocal, localDateToUTC, formatDate, DATE_FORMATS } from '../../utils/dateUtils';
 import {
   ArrowBack as ArrowBackIcon,
   Save as SaveIcon,
@@ -193,7 +194,7 @@ const MobileRevenueRegisterPage: React.FC = () => {
           const calculatedActualRevenue = meituanRevenue + douyinRevenue + cashRevenue + cardRevenue + wechatRevenue + alipayRevenue;
           
           setRevenueData({
-            date: existingData.date.split('T')[0], // 转换为YYYY-MM-DD格式
+            date: formatUTCToLocal(existingData.date, DATE_FORMATS.DATE), // 使用UTC到本地时间转换
             actualRevenue: calculatedActualRevenue,
             totalRevenue: existingData.totalRevenue || 0,
             avgOrderValue: existingData.avgOrderValue || 0,
@@ -279,6 +280,7 @@ const MobileRevenueRegisterPage: React.FC = () => {
     try {
       const submitData = {
         ...revenueData,
+        date: localDateToUTC(revenueData.date).toISOString(), // 将本地日期转换为UTC时间
         storeId,
         submittedBy: user?.name || '未知用户',
         submittedAt: new Date().toISOString(),

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const TimezoneUtils = require('../utils/timezone');
 
 /**
  * 支出记录模型
@@ -95,11 +96,18 @@ const expenseSchema = new mongoose.Schema({
  * @returns {Promise} 支出记录
  */
 expenseSchema.statics.getByDate = function(storeId, date, type = null, reimbursementStatus = null) {
+  // 使用统一的时区处理工具类
+  const dateRange = TimezoneUtils.getDayRangeUTC(date);
+  
+  if (!dateRange) {
+    throw new Error('无效的日期');
+  }
+  
   const query = {
     storeId,
     date: {
-      $gte: new Date(date.getFullYear(), date.getMonth(), date.getDate()),
-      $lt: new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1)
+      $gte: dateRange.startUTC,
+      $lte: dateRange.endUTC
     }
   };
   
@@ -123,11 +131,18 @@ expenseSchema.statics.getByDate = function(storeId, date, type = null, reimburse
  * @returns {Promise} 统计数据
  */
 expenseSchema.statics.getStats = function(storeId, startDate, endDate, type = null, reimbursementStatus = null) {
+  // 使用统一的时区处理工具类
+  const dateRange = TimezoneUtils.getDateRangeUTC(startDate, endDate);
+  
+  if (!dateRange) {
+    throw new Error('无效的日期范围');
+  }
+  
   const matchStage = {
     storeId,
     date: {
-      $gte: startDate,
-      $lte: endDate
+      $gte: dateRange.startUTC,
+      $lte: dateRange.endUTC
     }
   };
   
@@ -193,10 +208,15 @@ expenseSchema.statics.getRecords = function(storeId, options = {}) {
   const query = { storeId };
   
   if (startDate && endDate) {
-    query.date = {
-      $gte: startDate,
-      $lte: endDate
-    };
+    // 使用统一的时区处理工具类
+    const dateRange = TimezoneUtils.getDateRangeUTC(startDate, endDate);
+    
+    if (dateRange) {
+      query.date = {
+        $gte: dateRange.startUTC,
+        $lte: dateRange.endUTC
+      };
+    }
   }
   
   if (type && type !== 'all') {

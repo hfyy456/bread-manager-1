@@ -1,6 +1,7 @@
 const Revenue = require('../models/Revenue');
 const Store = require('../models/Store');
 const ResponseHelper = require('../utils/responseHelper');
+const TimezoneUtils = require('../utils/timezone');
 const logger = require('../utils/logger');
 
 /**
@@ -83,11 +84,11 @@ const registerRevenue = async (req, res) => {
       logger.info(`营业数据更新成功: 门店 ${storeId}, 日期 ${date}, 操作人 ${submittedBy}`);
     } else {
       // 创建新记录
-      // 确保日期使用本地时间而不是UTC时间
-      const localDate = new Date(date + 'T00:00:00');
+      // 使用统一的时区处理工具类将本地日期转换为UTC时间存储
+      const utcDate = TimezoneUtils.localDateToUTC(date);
       const revenueData = new Revenue({
         storeId,
-        date: localDate,
+        date: utcDate,
         actualRevenue: finalActualRevenue,
         totalRevenue,
         avgOrderValue,
