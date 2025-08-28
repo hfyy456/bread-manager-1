@@ -304,7 +304,10 @@ const MobileRevenueRegisterPage: React.FC = () => {
       // 根据是否为更新操作显示不同的成功消息
       if (result.data && result.data.isUpdate) {
         setSuccess('营业数据更新成功！');
-        // 更新操作不清空表单，保持当前数据
+        // 更新操作后重新获取当前日期的数据
+        if (storeId) {
+          fetchExistingRevenueData(storeId, revenueData.date);
+        }
       } else {
         setSuccess('营业数据提交成功！');
         // 新增操作清空表单
@@ -327,6 +330,15 @@ const MobileRevenueRegisterPage: React.FC = () => {
           wechatRevenue: 0,
           alipayRevenue: 0,
         });
+        // 新增操作后也重新获取当前日期的数据（可能有其他用户同时提交的数据）
+        if (storeId) {
+          const today = new Date();
+          const year = today.getFullYear();
+          const month = String(today.getMonth() + 1).padStart(2, '0');
+          const day = String(today.getDate()).padStart(2, '0');
+          const todayStr = `${year}-${month}-${day}`;
+          fetchExistingRevenueData(storeId, todayStr);
+        }
       }
       
       // 3秒后跳转回首页

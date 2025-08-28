@@ -156,9 +156,9 @@ export const localTimeToUTC = (localDate, timezone = getActiveTimezone()) => {
  * @returns {Date} UTC时间的Date对象
  */
 export const localDateToUTC = (localDateStr, timezone = getActiveTimezone()) => {
-  // 将日期字符串转换为本地时间的开始时刻
-  const localDateTime = new Date(localDateStr + 'T00:00:00');
-  return dateFnsTz.fromZonedTime(localDateTime, timezone);
+  // 直接使用UTC日期，不进行时区转换
+  // 这样可以确保日期在数据库中保存为正确的日期
+  return new Date(localDateStr + 'T00:00:00.000Z');
 };
 
 /**

@@ -84,8 +84,8 @@ const registerRevenue = async (req, res) => {
       logger.info(`营业数据更新成功: 门店 ${storeId}, 日期 ${date}, 操作人 ${submittedBy}`);
     } else {
       // 创建新记录
-      // 使用统一的时区处理工具类将本地日期转换为UTC时间存储
-      const utcDate = TimezoneUtils.localDateToUTC(date);
+      // 前端已经将本地日期转换为UTC时间字符串，直接使用
+      const utcDate = new Date(date);
       const revenueData = new Revenue({
         storeId,
         date: utcDate,
