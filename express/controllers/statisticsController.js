@@ -338,8 +338,9 @@ const calculateBusinessMetrics = (revenueStats, productionLossStats) => {
   console.log('================================');
   
   // 营业额报损率 = 总报损金额 / 营业额 * 100%
+  // 注意：应该使用totalLossValue（不包括出货金额），而不是totalValue（包括出货金额）
   metrics.revenue.revenueLossRate = revenueStats.totalRevenue > 0 && productionLossStats.total
-    ? parseFloat(((productionLossStats.total.totalValue / revenueStats.totalRevenue) * 100).toFixed(2))
+    ? parseFloat(((productionLossStats.total.totalLossValue / revenueStats.totalRevenue) * 100).toFixed(2))
     : 0;
 
   return metrics;

@@ -126,8 +126,9 @@ revenueSchema.index({ storeId: 1, date: 1 }, { unique: true });
 
 // 数据验证中间件
 revenueSchema.pre('save', function(next) {
-  // 验证收入构成是否合理
-  const totalPayments = this.meituanRevenue + this.douyinRevenue + this.cashRevenue + this.cardRevenue;
+  // 验证收入构成是否合理 - 包含所有收入项目
+  const totalPayments = this.meituanRevenue + this.douyinRevenue + this.cashRevenue + 
+                       this.cardRevenue + this.wechatRevenue + this.alipayRevenue;
   
   // 允许一定的误差范围（1元以内）
   if (Math.abs(totalPayments - this.actualRevenue) > 1) {

@@ -8,7 +8,7 @@
 /build
 # testing
 /coverage
-
+/express/logs/
 # production
 /build
 
