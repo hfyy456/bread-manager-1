@@ -286,6 +286,128 @@ productionLossSchema.statics.getStats = function(storeId, startDate, endDate, ty
 };
 
 /**
+ * 静态方法：获取产品报损率统计
+ * @param {string} storeId - 门店ID
+ * @param {string} startDate - 开始日期
+ * @param {string} endDate - 结束日期
+ * @returns {Promise<Array>} 产品报损率统计结果
+ */
+productionLossSchema.statics.getProductLossRateStats = function(storeId, startDate, endDate) {
+  // 使用统一的时区处理工具类
+  const dateRange = TimezoneUtils.getDateRangeUTC(startDate, endDate);
+  
+  if (!dateRange) {
+    throw new Error('无效的日期范围');
+  }
+  
+  const matchQuery = {
+    storeId,
+    date: {
+      $gte: dateRange.startUTC,
+      $lte: dateRange.endUTC
+    }
+  };
+
+  return this.aggregate([
+    { $match: matchQuery },
+    // 展开items数组，按产品分组统计
+    { $unwind: '$items' },
+    {
+      $group: {
+        _id: {
+          productId: '$items.productId',
+          productName: '$items.productName',
+          type: '$type'
+        },
+        totalQuantity: { $sum: '$items.quantity' },
+        totalValue: { $sum: '$items.totalValue' }
+      }
+    },
+    {
+      $group: {
+        _id: {
+          productId: '$_id.productId',
+          productName: '$_id.productName'
+        },
+        // 统计三种报损类型的数量和金额（排除其他报损）
+        lossQuantity: {
+          $sum: {
+            $cond: [
+              { $in: ['$_id.type', ['production', 'tasting', 'closing']] },
+              '$totalQuantity',
+              0
+            ]
+          }
+        },
+        lossValue: {
+          $sum: {
+            $cond: [
+              { $in: ['$_id.type', ['production', 'tasting', 'closing']] },
+              '$totalValue',
+              0
+            ]
+          }
+        },
+        // 统计出货数量和金额
+        shipmentQuantity: {
+          $sum: {
+            $cond: [
+              { $eq: ['$_id.type', 'shipment'] },
+              '$totalQuantity',
+              0
+            ]
+          }
+        },
+        shipmentValue: {
+          $sum: {
+            $cond: [
+              { $eq: ['$_id.type', 'shipment'] },
+              '$totalValue',
+              0
+            ]
+          }
+        }
+      }
+    },
+    {
+      $project: {
+        _id: 0,
+        productId: '$_id.productId',
+        productName: '$_id.productName',
+        lossQuantity: 1,
+        lossValue: 1,
+        shipmentQuantity: 1,
+        shipmentValue: 1,
+        // 计算报损率：报损数量/出货数量
+        lossRate: {
+          $cond: [
+            { $gt: ['$shipmentQuantity', 0] },
+            {
+              $divide: ['$lossQuantity', '$shipmentQuantity']
+            },
+            0
+          ]
+        },
+        // 计算报损金额率：报损金额/出货金额
+        lossValueRate: {
+          $cond: [
+            { $gt: ['$shipmentValue', 0] },
+            {
+              $divide: ['$lossValue', '$shipmentValue']
+            },
+            0
+          ]
+        }
+      }
+    },
+    // 只返回有出货记录的产品
+    { $match: { shipmentQuantity: { $gt: 0 } } },
+    // 按报损率降序排列
+    { $sort: { lossRate: -1 } }
+  ]);
+};
+
+/**
  * 静态方法：创建或更新报损记录
  * @param {string} storeId - 门店ID
  * @param {string} date - 日期

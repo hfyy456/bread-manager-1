@@ -98,6 +98,16 @@ interface StatisticsData {
     };
     total: { totalQuantity: number; totalValue: number; recordCount: number };
   };
+  productLossRates: {
+    productId: string;
+    productName: string;
+    lossQuantity: number;
+    lossValue: number;
+    shipmentQuantity: number;
+    shipmentValue: number;
+    lossRate: number;
+    lossValueRate: number;
+  }[];
   inventory: {
     totalItems: number;
     lowStockItems: number;
@@ -1156,7 +1166,112 @@ const MobileStatisticsPage: React.FC = () => {
                 </CardContent>
               </Card>
 
-
+            {/* 产品报损率统计 */}
+            <Card sx={{ 
+                mb: 3, 
+                borderRadius: 3,
+                background: 'rgba(255, 255, 255, 0.95)',
+                backdropFilter: 'blur(10px)',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
+              }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ 
+                    color: '#f57c00',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1
+                  }}>
+                    <WarningIcon />
+                    产品报损率分析
+                  </Typography>
+                  
+                  {statisticsData.productLossRates && statisticsData.productLossRates.length > 0 ? (
+                    <Box sx={{ mt: 2 }}>
+                      {/* 报损率排行榜 */}
+                      <Typography variant="subtitle2" sx={{ mb: 2, color: '#666' }}>
+                        按报损率排序（前10名）
+                      </Typography>
+                      
+                      {statisticsData.productLossRates.slice(0, 10).map((product, index) => (
+                        <Paper key={product.productId} sx={{ 
+                          p: 2, 
+                          mb: 1.5, 
+                          bgcolor: index < 3 ? '#fff3e0' : '#f5f5f5',
+                          border: index < 3 ? '1px solid #ffb74d' : 'none'
+                        }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Chip 
+                                label={`#${index + 1}`} 
+                                size="small" 
+                                sx={{ 
+                                  bgcolor: index < 3 ? '#ff9800' : '#757575',
+                                  color: 'white',
+                                  fontWeight: 600,
+                                  minWidth: '32px'
+                                }}
+                              />
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                {product.productName}
+                              </Typography>
+                            </Box>
+                            <Typography variant="h6" sx={{ 
+                              color: product.lossRate > 0.2 ? '#d32f2f' : product.lossRate > 0.1 ? '#f57c00' : '#388e3c',
+                              fontWeight: 600
+                            }}>
+                              {(product.lossRate * 100).toFixed(1)}%
+                            </Typography>
+                          </Box>
+                          
+                          <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                            <Grid item xs={6}>
+                              <Typography variant="caption" color="text.secondary">
+                                报损数量: {product.lossQuantity}
+                              </Typography>
+                            </Grid>
+                            <Grid item xs={6}>
+                              <Typography variant="caption" color="text.secondary">
+                                出货数量: {product.shipmentQuantity}
+                              </Typography>
+                            </Grid>
+                            <Grid item xs={6}>
+                              <Typography variant="caption" color="text.secondary">
+                                报损金额: ¥{product.lossValue.toFixed(2)}
+                              </Typography>
+                            </Grid>
+                            <Grid item xs={6}>
+                              <Typography variant="caption" color="text.secondary">
+                                金额报损率: {(product.lossValueRate * 100).toFixed(1)}%
+                              </Typography>
+                            </Grid>
+                          </Grid>
+                        </Paper>
+                      ))}
+                      
+                      {/* 统计说明 */}
+                      <Box sx={{ mt: 3, p: 2, bgcolor: '#f3e5f5', borderRadius: 2 }}>
+                        <Typography variant="body2" sx={{ color: '#7b1fa2', mb: 1, fontWeight: 600 }}>
+                          <InfoIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'middle' }} />
+                          报损率计算说明
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#7b1fa2', lineHeight: 1.6 }}>
+                          • 数量报损率 = 报损数量 ÷ 出货数量 × 100%<br/>
+                          • 金额报损率 = 报损金额 ÷ 出货金额 × 100%<br/>
+                          • 仅显示有出货记录的产品<br/>
+                          • 按数量报损率降序排列
+                        </Typography>
+                      </Box>
+                    </Box>
+                  ) : (
+                    <Box sx={{ textAlign: 'center', py: 4 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        暂无产品报损率数据
+                      </Typography>
+                    </Box>
+                  )}
+                </CardContent>
+              </Card>
 
             {/* 刷新按钮 */}
             <Button

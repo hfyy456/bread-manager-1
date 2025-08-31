@@ -225,6 +225,31 @@ const getProductionLossStats = async (storeId, startDate, endDate) => {
 };
 
 /**
+ * 获取产品报损率统计
+ * @param {string} storeId - 门店ID
+ * @param {Date} startDate - 开始日期
+ * @param {Date} endDate - 结束日期
+ * @returns {Array} 产品报损率统计结果
+ */
+const getProductLossRateStats = async (storeId, startDate, endDate) => {
+  try {
+    // 确保storeId是字符串类型
+    const stringStoreId = storeId.toString();
+    
+    // 转换为北京时间的日期字符串
+    const startDateStr = TimezoneUtils.utcToLocalDate(startDate);
+    const endDateStr = TimezoneUtils.utcToLocalDate(endDate);
+    
+    const result = await ProductionLoss.getProductLossRateStats(stringStoreId, startDateStr, endDateStr);
+    
+    return result || [];
+  } catch (error) {
+    logger.error('获取产品报损率统计失败:', error);
+    throw error;
+  }
+};
+
+/**
  * 获取库存数据统计
  * @param {string} storeId - 门店ID
  * @returns {Object} 库存数据统计结果
@@ -384,10 +409,11 @@ const getStatistics = async (req, res) => {
     // console.log('========================');
 
     // 并行获取各项统计数据
-    const [revenueStats, productionLossStats, inventoryStats] = await Promise.all([
+    const [revenueStats, productionLossStats, inventoryStats, productLossRateStats] = await Promise.all([
       getRevenueStats(storeId, startDate, endDate),
       getProductionLossStats(storeId, startDate, endDate),
-      getInventoryStats(storeId)
+      getInventoryStats(storeId),
+      getProductLossRateStats(storeId, startDate, endDate)
     ]);
 
     // 计算额外的业务指标
@@ -411,6 +437,7 @@ const getStatistics = async (req, res) => {
         ...productionLossStats,
         ...businessMetrics.productionLoss
       },
+      productLossRates: productLossRateStats,
       inventory: inventoryStats,
       generatedAt: new Date()
     };
@@ -842,6 +869,7 @@ module.exports = {
   getDateRange,
   getRevenueStats,
   getProductionLossStats,
+  getProductLossRateStats,
   getInventoryStats,
   calculateBusinessMetrics,
   getGrossProfitStats,
