@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
-import { StoreProvider } from '@components/StoreContext';
+import { StoreProvider } from './components/StoreContext';
 
 // --- Global Fetch Override ---
 const originalFetch = window.fetch;

@@ -40,7 +40,9 @@ import {
   Store as StoreIcon,
   Refresh as RefreshIcon,
   ArrowUpward as ArrowUpwardIcon,
-  ArrowDownward as ArrowDownwardIcon
+  ArrowDownward as ArrowDownwardIcon,
+  Save as SaveIcon,
+  Undo as UndoIcon
 } from '@mui/icons-material';
 import { useSnackbar } from '@components/SnackbarProvider.jsx';
 
@@ -83,6 +85,16 @@ interface ProductOperation {
 }
 
 /**
+ * 排序更改接口
+ */
+interface SortChange {
+  breadTypeId: string;
+  originalSortOrder: number;
+  newSortOrder: number;
+  productName: string;
+}
+
+/**
  * 可拖拽的产品行组件
  */
 interface ProductRowProps {
@@ -95,6 +107,8 @@ interface ProductRowProps {
   onOpenOperationDialog: (product: StoreProduct) => void;
   onSortOrderChange: (product: StoreProduct, newSortOrder: number) => void;
   showSnackbar: (message: string, severity: 'success' | 'error' | 'warning' | 'info') => void;
+  pendingSortChanges: Map<string, SortChange>;
+  currentSortOrder: number;
 }
 
 const ProductRow: React.FC<ProductRowProps> = ({
@@ -106,9 +120,11 @@ const ProductRow: React.FC<ProductRowProps> = ({
   onOpenSortDialog,
   onOpenOperationDialog,
   onSortOrderChange,
-  showSnackbar
+  showSnackbar,
+  pendingSortChanges,
+  currentSortOrder
 }) => {
-  const [sortOrderInput, setSortOrderInput] = useState<string>(product.sortOrder?.toString() || '1');
+  const [sortOrderInput, setSortOrderInput] = useState<string>(currentSortOrder.toString());
 
   /**
    * 处理排序值输入框的变化
@@ -123,11 +139,11 @@ const ProductRow: React.FC<ProductRowProps> = ({
    */
   const handleSortOrderBlur = () => {
     const newSortOrder = parseInt(sortOrderInput, 10);
-    if (!isNaN(newSortOrder) && newSortOrder >= 1 && newSortOrder !== product.sortOrder) {
+    if (!isNaN(newSortOrder) && newSortOrder >= 1 && newSortOrder !== currentSortOrder) {
       onSortOrderChange(product, newSortOrder);
     } else {
       // 如果输入无效，恢复原值
-      setSortOrderInput(product.sortOrder?.toString() || '1');
+      setSortOrderInput(currentSortOrder.toString());
     }
   };
 
@@ -141,10 +157,10 @@ const ProductRow: React.FC<ProductRowProps> = ({
     }
   };
 
-  // 当产品的sortOrder发生变化时，更新输入框的值
+  // 当当前排序值发生变化时，更新输入框的值
   React.useEffect(() => {
-    setSortOrderInput(product.sortOrder?.toString() || '1');
-  }, [product.sortOrder]);
+    setSortOrderInput(currentSortOrder.toString());
+  }, [currentSortOrder]);
 
   return (
     <TableRow key={product.breadTypeId}>
@@ -181,24 +197,35 @@ const ProductRow: React.FC<ProductRowProps> = ({
       </TableCell>
       <TableCell>
         {product.storeStatus.isActive ? (
-          <TextField
-            size="small"
-            type="number"
-            value={sortOrderInput}
-            onChange={handleSortOrderInputChange}
-            onBlur={handleSortOrderBlur}
-            onKeyPress={handleSortOrderKeyPress}
-            inputProps={{
-              min: 1,
-              style: { textAlign: 'center' }
-            }}
-            sx={{
-              width: '80px',
-              '& .MuiOutlinedInput-root': {
-                height: '32px'
-              }
-            }}
-          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <TextField
+              size="small"
+              type="number"
+              value={sortOrderInput}
+              onChange={handleSortOrderInputChange}
+              onBlur={handleSortOrderBlur}
+              onKeyPress={handleSortOrderKeyPress}
+              inputProps={{
+                min: 1,
+                style: { textAlign: 'center' }
+              }}
+              sx={{
+                width: '80px',
+                '& .MuiOutlinedInput-root': {
+                  height: '32px',
+                  backgroundColor: pendingSortChanges.has(product.breadTypeId) ? '#fff3e0' : 'transparent'
+                }
+              }}
+            />
+            {pendingSortChanges.has(product.breadTypeId) && (
+              <Chip
+                label="待提交"
+                size="small"
+                color="warning"
+                variant="outlined"
+              />
+            )}
+          </Box>
         ) : (
           <Typography variant="body2" color="text.secondary">
             -
@@ -268,6 +295,10 @@ const ProductManagement: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<number>(1);
   const [sortDialogOpen, setSortDialogOpen] = useState(false);
   const [sortingProduct, setSortingProduct] = useState<StoreProduct | null>(null);
+  
+  // 待提交的排序更改
+  const [pendingSortChanges, setPendingSortChanges] = useState<Map<string, SortChange>>(new Map());
+  const [sortSubmitting, setSortSubmitting] = useState(false);
   
   // 获取门店列表
   const fetchStores = async () => {
@@ -516,12 +547,12 @@ const ProductManagement: React.FC = () => {
   };
   
   /**
-   * 快速调整产品排序
+   * 快速调整产品排序（添加到待提交列表）
    * @param product 产品
    * @param direction 方向：'up' 或 'down'
    */
-  const handleQuickSort = async (product: StoreProduct, direction: 'up' | 'down') => {
-    const currentSort = product.sortOrder || 0;
+  const handleQuickSort = (product: StoreProduct, direction: 'up' | 'down') => {
+    const currentSort = getCurrentSortOrder(product);
     const newSort = direction === 'up' ? currentSort - 1 : currentSort + 1;
     
     if (newSort < 1) {
@@ -529,18 +560,80 @@ const ProductManagement: React.FC = () => {
       return;
     }
     
-    await updateProductSort(product.breadTypeId, newSort);
+    handleSortOrderChange(product, newSort);
   };
 
   /**
-   * 处理排序值直接输入更改
+   * 处理排序值直接输入更改（添加到待提交列表）
    * @param product 产品
    * @param newSortOrder 新的排序值
    */
-  const handleSortOrderChange = async (product: StoreProduct, newSortOrder: number) => {
-    await updateProductSort(product.breadTypeId, newSortOrder);
-  };
-  
+  const handleSortOrderChange = (product: StoreProduct, newSortOrder: number) => {
+    const originalSortOrder = product.sortOrder || 1;
+    
+    if (newSortOrder === originalSortOrder) {
+      // 如果新值等于原值，从待提交列表中移除
+      const newPendingChanges = new Map(pendingSortChanges);
+      newPendingChanges.delete(product.breadTypeId);
+      setPendingSortChanges(newPendingChanges);
+    } else {
+      // 添加到待提交列表
+      const sortChange: SortChange = {
+        breadTypeId: product.breadTypeId,
+        originalSortOrder,
+        newSortOrder,
+        productName: product.name
+      };
+      
+      const newPendingChanges = new Map(pendingSortChanges);
+      newPendingChanges.set(product.breadTypeId, sortChange);
+      setPendingSortChanges(newPendingChanges);
+    }
+   };
+   
+   /**
+    * 获取产品当前的排序值（考虑待提交的更改）
+    * @param product 产品
+    * @returns 当前排序值
+    */
+   const getCurrentSortOrder = (product: StoreProduct): number => {
+     const pendingChange = pendingSortChanges.get(product.breadTypeId);
+     return pendingChange ? pendingChange.newSortOrder : (product.sortOrder || 1);
+   };
+   
+   /**
+    * 提交所有待提交的排序更改
+    */
+   const handleSubmitSortChanges = async () => {
+     if (pendingSortChanges.size === 0) {
+       showSnackbar('没有待提交的排序更改', 'info');
+       return;
+     }
+     
+     setSortSubmitting(true);
+     try {
+       const sortUpdates = Array.from(pendingSortChanges.values()).map(change => ({
+         breadTypeId: change.breadTypeId,
+         sortOrder: change.newSortOrder
+       }));
+       
+       await batchUpdateSort(sortUpdates);
+       setPendingSortChanges(new Map()); // 清空待提交列表
+     } catch (error) {
+       console.error('提交排序更改失败:', error);
+       showSnackbar('提交排序更改失败', 'error');
+     } finally {
+       setSortSubmitting(false);
+     }
+   };
+   
+   /**
+    * 撤销所有待提交的排序更改
+    */
+   const handleCancelSortChanges = () => {
+     setPendingSortChanges(new Map());
+     showSnackbar('已撤销所有排序更改', 'info');
+   };
 
   
   // 过滤和排序产品
@@ -667,6 +760,32 @@ const ProductManagement: React.FC = () => {
                     </Button>
                   </>
                 )}
+                
+                {/* 排序更改提交按钮 */}
+                {pendingSortChanges.size > 0 && (
+                  <>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      onClick={handleSubmitSortChanges}
+                      disabled={sortSubmitting}
+                      startIcon={<SaveIcon />}
+                      size="small"
+                    >
+                      {sortSubmitting ? '提交中...' : `提交排序更改 (${pendingSortChanges.size})`}
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="secondary"
+                      onClick={handleCancelSortChanges}
+                      disabled={sortSubmitting}
+                      startIcon={<UndoIcon />}
+                      size="small"
+                    >
+                      撤销更改
+                    </Button>
+                  </>
+                )}
               </Box>
             </Grid>
           </Grid>
@@ -724,6 +843,8 @@ const ProductManagement: React.FC = () => {
                    onOpenOperationDialog={handleOpenOperationDialog}
                    onSortOrderChange={handleSortOrderChange}
                    showSnackbar={showSnackbar}
+                   pendingSortChanges={pendingSortChanges}
+                   currentSortOrder={getCurrentSortOrder(product)}
                  />
               ))}
             </TableBody>
